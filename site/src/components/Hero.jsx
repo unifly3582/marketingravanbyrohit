@@ -14,6 +14,21 @@ import RavanHead from './RavanHead.jsx'
  * Hovering the panel freezes the clock so the current head stays on stage.
  */
 
+/* which personality model presents each capability (by heads.js icon key) */
+const MODEL_FOR_ICON = {
+  agent: 'head-engineer',
+  sdr: 'head-closer',
+  voice: 'head-orator',
+  geo: 'head-sage',
+  erp: 'head-engineer',
+  ads: 'head-showman',
+  bi: 'head-sage',
+  uiux: 'head-showman',
+  api: 'head-engineer',
+  shield: 'head-orator',
+}
+const modelFor = (head) => `/models/${MODEL_FOR_ICON[head.icon] ?? 'ravan-head2'}-web.glb`
+
 const START = -18    // entry angle (off the right edge)
 const HOLD = -100    // where a head pauses, top of the arc
 const EXIT = -232    // fully gone past the bottom-left
@@ -42,6 +57,10 @@ export default function Hero() {
   const pausedRef = useRef(false)
   const [shown, setShown] = useState(HEADS[0]) // head being presented
   const [cardVisible, setCardVisible] = useState(false)
+  const [hostSrcs, setHostSrcs] = useState([
+    modelFor(HEADS[0]),
+    modelFor(HEADS[1]),
+  ])
 
   useEffect(() => {
     const panel = panelRef.current
@@ -128,6 +147,7 @@ export default function Hero() {
     let last = performance.now()
     let lastTickAt = last
     let presentedSlot = -1
+    const hostSlot = [0, 1] // which timeline slot each host currently serves
 
     function tick(now) {
       const dt = Math.min(0.05, (now - last) / 1000)
@@ -142,7 +162,17 @@ export default function Hero() {
       const assigned = [null, null]
       for (const k of [kNow - 1, kNow]) {
         if (k < 0) continue
-        assigned[k % 2] = angleAt(clock - k * PERIOD)
+        const h = k % 2
+        assigned[h] = angleAt(clock - k * PERIOD)
+        if (hostSlot[h] !== k) {
+          // this host just took over slot k — give it that head's model
+          hostSlot[h] = k
+          setHostSrcs((prev) => {
+            const next = [...prev]
+            next[h] = modelFor(HEADS[k % HEADS.length])
+            return next
+          })
+        }
       }
       place(hosts[0], assigned[0])
       place(hosts[1], assigned[1])
@@ -195,10 +225,10 @@ export default function Hero() {
 
           {/* two alternating 3D heads riding the arc */}
           <div ref={hostARef} className="absolute left-0 top-0 z-[5] will-change-transform">
-            <RavanHead className="h-full w-full" />
+            <RavanHead src={hostSrcs[0]} className="h-full w-full" />
           </div>
           <div ref={hostBRef} className="absolute left-0 top-0 z-[5] will-change-transform">
-            <RavanHead className="h-full w-full" />
+            <RavanHead src={hostSrcs[1]} className="h-full w-full" />
           </div>
 
           {/* capability card on the inner side of the arc */}

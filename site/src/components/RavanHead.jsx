@@ -1,16 +1,33 @@
 import { useEffect, useRef, useState } from 'react'
 
 /*
- * Interactive Ravan head for the hero: loads the Meshy-generated,
- * Blender-optimized GLB and turns it toward the cursor on desktop.
- * On touch devices it follows touch drags and otherwise sways idly.
- * three.js is imported dynamically so it lands in its own chunk.
+ * Interactive 3D Ravan head. Boots one persistent renderer, then swaps the
+ * model whenever `src` changes — loads are cached module-wide and scenes are
+ * cloned, so the two arc hosts flip between personality heads instantly.
+ * Turns toward the cursor on desktop, follows touch on mobile, sways idly.
  */
-export default function RavanHead({ className = '' }) {
+
+const FALLBACK_SRC = '/models/ravan-head2-web.glb'
+
+// src -> Promise<gltf>; shared across instances so each file loads once
+const gltfCache = new Map()
+function loadCached(loader, src) {
+  if (!gltfCache.has(src)) {
+    const p = loader.loadAsync(src)
+    p.catch(() => gltfCache.delete(src)) // let a failed load retry later
+    gltfCache.set(src, p)
+  }
+  return gltfCache.get(src)
+}
+
+export default function RavanHead({ src = FALLBACK_SRC, className = '' }) {
   const hostRef = useRef(null)
+  const apiRef = useRef(null)
+  const [booted, setBooted] = useState(false)
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
 
+  // boot the renderer, lights, camera and loop once
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
@@ -52,31 +69,31 @@ export default function RavanHead({ className = '' }) {
         const loader = new GLTFLoader()
         loader.setDRACOLoader(draco)
 
-        const gltf = await loader.loadAsync('/models/ravan-head2-web.glb')
-        if (disposed) return
-
-        // pivot group so the head yaws/pitches around its own center
         const pivot = new THREE.Group()
-        const model = gltf.scene
-        const box = new THREE.Box3().setFromObject(model)
-        const size = box.getSize(new THREE.Vector3())
-        const center = box.getCenter(new THREE.Vector3())
-        model.position.sub(center)
-        pivot.add(model)
         scene.add(pivot)
+        let sizeY = 1
 
-        camera.position.set(0, size.y * 0.05, size.y * 2.1)
-        camera.lookAt(0, 0, 0)
+        const setModel = (model) => {
+          pivot.clear()
+          const box = new THREE.Box3().setFromObject(model)
+          const size = box.getSize(new THREE.Vector3())
+          const center = box.getCenter(new THREE.Vector3())
+          model.position.sub(center)
+          pivot.add(model)
+          sizeY = size.y
+          camera.position.set(0, sizeY * 0.05, sizeY * 2.1)
+          camera.lookAt(0, 0, 0)
+        }
+
+        apiRef.current = { THREE, loader, setModel }
 
         // pointer / touch tracking
         let tx = 0, ty = 0
         let lastMove = 0
         const track = (clientX, clientY) => {
           const r = host.getBoundingClientRect()
-          const cx = r.left + r.width / 2
-          const cy = r.top + r.height / 2
-          tx = Math.max(-1, Math.min(1, (clientX - cx) / (r.width * 0.9)))
-          ty = Math.max(-1, Math.min(1, (clientY - cy) / (r.height * 0.9)))
+          tx = Math.max(-1, Math.min(1, (clientX - (r.left + r.width / 2)) / (r.width * 0.9)))
+          ty = Math.max(-1, Math.min(1, (clientY - (r.top + r.height / 2)) / (r.height * 0.9)))
           lastMove = performance.now()
         }
         const onPointer = (e) => track(e.clientX, e.clientY)
@@ -100,18 +117,17 @@ export default function RavanHead({ className = '' }) {
         let raf
         const tick = (now) => {
           const t = now / 1000
-          // follow the cursor/finger; sway regally when idle
           const idle = now - lastMove > 2800 || reduced
           const gx = idle ? Math.sin(t * 0.5) * 0.4 : tx
           const gy = idle ? Math.sin(t * 0.3) * 0.12 : ty
           pivot.rotation.y += (gx * 0.7 - pivot.rotation.y) * 0.07
           pivot.rotation.x += (gy * 0.3 - pivot.rotation.x) * 0.07
-          pivot.position.y = Math.sin(t * 0.8) * size.y * 0.012 // gentle breathe-bob
+          pivot.position.y = Math.sin(t * 0.8) * sizeY * 0.012
           renderer.render(scene, camera)
           raf = requestAnimationFrame(tick)
         }
         raf = requestAnimationFrame(tick)
-        setReady(true)
+        setBooted(true)
 
         cleanup = () => {
           cancelAnimationFrame(raf)
@@ -122,19 +138,11 @@ export default function RavanHead({ className = '' }) {
           draco.dispose()
           renderer.dispose()
           renderer.domElement.remove()
-          scene.traverse((o) => {
-            if (o.geometry) o.geometry.dispose()
-            if (o.material) {
-              const mats = Array.isArray(o.material) ? o.material : [o.material]
-              mats.forEach((m) => {
-                Object.values(m).forEach((v) => v?.isTexture && v.dispose())
-                m.dispose()
-              })
-            }
-          })
+          // cached gltf assets are shared between instances; only the
+          // renderer-local resources are torn down here
         }
       } catch (err) {
-        console.error('RavanHead failed:', err)
+        console.error('RavanHead boot failed:', err)
         setFailed(true)
       }
     })()
@@ -144,6 +152,33 @@ export default function RavanHead({ className = '' }) {
       cleanup()
     }
   }, [])
+
+  // load / swap the model whenever src changes
+  useEffect(() => {
+    if (!booted) return
+    const api = apiRef.current
+    let stale = false
+    ;(async () => {
+      try {
+        const gltf = await loadCached(api.loader, src)
+        if (stale) return
+        api.setModel(gltf.scene.clone(true))
+        setReady(true)
+      } catch (err) {
+        console.warn(`RavanHead: ${src} failed, using fallback`, err)
+        try {
+          const gltf = await loadCached(api.loader, FALLBACK_SRC)
+          if (stale) return
+          api.setModel(gltf.scene.clone(true))
+          setReady(true)
+        } catch (err2) {
+          console.error('RavanHead: fallback failed too', err2)
+          setFailed(true)
+        }
+      }
+    })()
+    return () => { stale = true }
+  }, [booted, src])
 
   if (failed) return null
 
