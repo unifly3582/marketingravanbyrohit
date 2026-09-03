@@ -1,0 +1,279 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ground: #0D0907;
+  --color-surface: #16100C;
+  --color-card: #1D1510;
+  --color-card2: #241A12;
+  --color-cream: #F4EADB;
+  --color-muted: #A3937F;
+  --color-gold: #F0A32F;
+  --color-ember: #E2571E;
+  --color-maroon: #8E1F1F;
+  --color-line: rgba(244, 234, 219, 0.09);
+
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --font-deva: "Yatra One", "Segoe UI", system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-ground);
+  color: var(--color-cream);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--color-ember);
+  color: var(--color-cream);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+}
+
+/* ---------- scoped light theme (beew-style light-in-dark rhythm) ----------
+   Wrap any section in .theme-light and every token-driven color flips. */
+.theme-light {
+  --color-ground: #F5F0E6;
+  --color-surface: #EDE6D8;
+  --color-card: #FFFFFF;
+  --color-card2: #F7F2E8;
+  --color-cream: #201812;
+  --color-muted: #6F6354;
+  --color-line: rgba(32, 24, 18, 0.12);
+  background: var(--color-ground);
+  color: var(--color-cream);
+}
+
+/* ---------- aurora light theme (Case: Aurora Robotics) ----------
+   Applied to <html> while the Aurora case page is mounted; flips the whole
+   viewport — nav included — to an arctic white/cyan system matching the robot. */
+.theme-aurora {
+  --color-ground: #F2F7FC;
+  --color-surface: #E9F1F9;
+  --color-card: #FFFFFF;
+  --color-card2: #EDF4FA;
+  --color-cream: #12263A;
+  --color-muted: #5B7188;
+  --color-gold: #1E9BE9;
+  --color-ember: #2ec4de;
+  --color-maroon: #7FB8E0;
+  --color-line: rgba(18, 38, 58, 0.12);
+  background: var(--color-ground);
+  color: var(--color-cream);
+}
+.theme-aurora ::selection {
+  background: #1E9BE9;
+  color: #ffffff;
+}
+.theme-aurora .btn-primary {
+  color: #ffffff;
+  box-shadow: 0 10px 32px rgba(30, 155, 233, 0.3);
+}
+.theme-aurora .btn-primary:hover {
+  box-shadow: 0 16px 40px rgba(30, 155, 233, 0.42);
+}
+.theme-aurora .btn-ghost:hover {
+  border-color: rgba(30, 155, 233, 0.5);
+  background: rgba(30, 155, 233, 0.06);
+}
+
+/* ---------- shared primitives ---------- */
+
+.container-x {
+  max-width: 76rem;
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--color-gold);
+  text-transform: uppercase;
+}
+.eyebrow::before {
+  content: "";
+  width: 1.6rem;
+  height: 1px;
+  background: linear-gradient(90deg, var(--color-ember), var(--color-gold));
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: linear-gradient(120deg, var(--color-gold), var(--color-ember));
+  color: #1a0d05;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  padding: 0.95rem 1.6rem;
+  border-radius: 999px;
+  border: 0;
+  cursor: pointer;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  box-shadow: 0 10px 32px rgba(226, 87, 30, 0.28);
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px rgba(226, 87, 30, 0.4);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: transparent;
+  color: var(--color-cream);
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  padding: 0.95rem 1.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+  cursor: pointer;
+  transition: border-color 0.25s ease, background 0.25s ease;
+}
+.btn-ghost:hover {
+  border-color: rgba(240, 163, 47, 0.5);
+  background: rgba(240, 163, 47, 0.06);
+}
+
+.btn-primary:focus-visible,
+.btn-ghost:focus-visible,
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 3px;
+}
+
+.chip {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  white-space: nowrap;
+}
+
+/* ---------- hero chute ---------- */
+
+.chute-band,
+.chute-shade {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.chute-ghost {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, #E2571E 0%, #8E2E0E 60%, transparent 100%);
+  pointer-events: none;
+  will-change: transform;
+}
+.chute-badge {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 26%, #3a1c0b, #1c0d05 78%);
+  border: 1px solid rgba(240, 163, 47, 0.55);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 24px rgba(226, 87, 30, 0.3);
+  cursor: pointer;
+  will-change: transform;
+}
+.chute-badge img {
+  position: absolute;
+  inset: 5%;
+  width: 90%;
+  height: 90%;
+  border-radius: 50%;
+  object-fit: cover;
+  pointer-events: none;
+}
+.chute-badge .fn {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: rgba(20, 10, 4, 0.88);
+  border: 1px solid rgba(240, 163, 47, 0.4);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--color-gold);
+}
+
+/* ---------- marquee ---------- */
+
+@keyframes marquee-x {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: flex;
+  gap: 2.5rem;
+  width: max-content;
+  animation: marquee-x 36s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* ---------- stacked head cards ---------- */
+
+.head-card {
+  position: sticky;
+  border-radius: 1.5rem;
+  border: 1px solid var(--color-line);
+  overflow: hidden;
+  will-change: transform;
+}
+
+/* ---------- faq ---------- */
+
+.faq-item summary {
+  list-style: none;
+  cursor: pointer;
+}
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+.faq-item[open] .faq-plus {
+  transform: rotate(45deg);
+}
+.faq-plus {
+  transition: transform 0.25s ease;
+}
+
+/* ---------- reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+    flex-wrap: wrap;
+    width: auto;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}

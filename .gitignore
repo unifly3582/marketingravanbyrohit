@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+*.env
+!deploy/*.service
+scripts/*-key.txt
+*.wav
+*.blend
+*.blend1
+__pycache__/
+.DS_Store
+meshy-sources/

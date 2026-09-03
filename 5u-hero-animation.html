@@ -1,0 +1,416 @@
+<title>5U AI Hero Animation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap">
+<style>
+  :root{
+    --stage:#101321;
+    --sand-hi:#F4F2ED;
+    --sand-lo:#E8E4DB;
+    --band:#DFD9CD;
+    --ink:#1B1B18;
+    --muted:#6E6C64;
+    --navy:#232A4D;
+    --navy-deep:#161B36;
+    --red:#D9472B;
+    --pink-bg:#F7E0DB;
+    --pink-tx:#C25039;
+    --card:#FFFFFF;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{
+    background:var(--stage);
+    color:var(--ink);
+    font-family:'Hanken Grotesk',system-ui,'Segoe UI',Arial,sans-serif;
+    min-height:100vh;
+    display:grid;
+    place-items:center;
+    padding:28px 16px;
+  }
+  .wrap{width:min(1080px,97vw)}
+  .frame{
+    border-radius:22px;
+    overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.55);
+    display:flex;
+    flex-direction:column;
+    background:var(--sand-lo);
+  }
+  .hero{
+    position:relative;
+    height:clamp(430px,58vw,600px);
+    background:linear-gradient(175deg,var(--sand-hi) 8%,var(--sand-lo) 90%);
+    overflow:hidden;
+  }
+
+  /* ---- mini nav ---- */
+  .nav{
+    position:relative;z-index:5;
+    display:flex;align-items:center;gap:26px;
+    padding:26px 34px 0;
+  }
+  .logo5u{
+    width:38px;height:38px;border-radius:50%;
+    background:var(--navy);color:#fff;
+    display:grid;place-items:center;
+    font-weight:800;font-size:13px;letter-spacing:.02em;
+    font-style:italic;
+  }
+  .nav a{
+    color:var(--ink);text-decoration:none;
+    font-size:11px;font-weight:700;letter-spacing:.09em;
+  }
+  .nav a:focus-visible,.pillbtn:focus-visible,.cta:focus-visible{outline:2px solid var(--navy);outline-offset:3px;border-radius:4px}
+  .nav .spacer{flex:1}
+  .newsbit{display:flex;align-items:center;gap:9px;font-size:11px;font-weight:700;letter-spacing:.07em}
+  .newschip{background:var(--pink-bg);color:var(--pink-tx);padding:3px 7px;border-radius:4px;font-size:10px}
+  .pillbtn{
+    background:#fff;color:var(--ink);
+    border:0;border-radius:999px;
+    padding:12px 22px;
+    font:700 11px/1 'Hanken Grotesk',sans-serif;letter-spacing:.09em;
+    box-shadow:0 6px 18px rgba(27,27,24,.10);
+    cursor:pointer;
+  }
+
+  /* ---- arc layer (band + badges, JS-positioned) ---- */
+  .arcLayer{position:absolute;inset:0;z-index:1;pointer-events:none}
+  .band,.bandShade{position:absolute;border-radius:50%}
+  .ghost{position:absolute;border-radius:50%;background:#1E2440;will-change:transform}
+  .badge{
+    position:absolute;border-radius:50%;
+    display:grid;place-items:center;
+    background:radial-gradient(circle at 34% 28%,#333B66,#1D2240 78%);
+    box-shadow:0 10px 24px rgba(23,27,54,.35);
+    will-change:transform;
+  }
+  .badge svg{width:52%;height:52%}
+  .badge.teams{background:radial-gradient(circle at 34% 28%,#5A63C8,#3A408F 80%)}
+  .badge.outlook{background:radial-gradient(circle at 34% 28%,#2E86E0,#123E80 82%)}
+  .badge.teams svg,.badge.outlook svg{width:58%;height:58%}
+
+  /* ---- copy column ---- */
+  .copy{position:relative;z-index:4;padding:34px 34px 0;max-width:56%}
+  .fromchip{
+    display:inline-block;
+    background:var(--pink-bg);color:var(--pink-tx);
+    font-size:10px;font-weight:700;letter-spacing:.14em;
+    padding:6px 11px;border-radius:5px;
+    margin-bottom:18px;
+  }
+  h1{
+    font-size:clamp(26px,3.6vw,40px);
+    line-height:1.14;
+    font-weight:700;
+    letter-spacing:-.015em;
+    text-wrap:balance;
+  }
+  .sub{
+    margin-top:16px;
+    color:#3E3D38;
+    font-size:clamp(12px,1.35vw,14.5px);
+    line-height:1.55;
+    max-width:34ch;
+  }
+  .cta{
+    margin-top:22px;
+    background:var(--red);color:#fff;
+    border:0;border-radius:6px;
+    padding:13px 20px;
+    font:700 11px/1 'Hanken Grotesk',sans-serif;letter-spacing:.11em;
+    cursor:pointer;
+    box-shadow:0 8px 20px rgba(217,71,43,.28);
+  }
+  .cta:hover{background:#c33d23}
+
+  .teamlabel{
+    margin-top:34px;
+    font-size:10px;font-weight:700;letter-spacing:.16em;
+    color:var(--muted);
+  }
+  .botcard{
+    position:relative;z-index:4;
+    margin-top:10px;
+    background:var(--card);
+    width:min(300px,80%);
+    border-radius:10px;
+    padding:17px 19px 15px;
+    box-shadow:0 18px 40px rgba(27,27,24,.13);
+  }
+  .botcard h3{font-size:12.5px;font-weight:800;letter-spacing:.08em}
+  .botcard p{margin-top:7px;font-size:11.5px;line-height:1.45;color:#55534C;max-width:24ch}
+  .tags{display:flex;gap:6px;margin-top:12px}
+  .tags span{
+    background:#EFEDE6;color:#45443E;
+    font-size:9px;font-weight:700;letter-spacing:.08em;
+    padding:4px 7px;border-radius:4px;
+  }
+
+  /* faint word scatter behind the card */
+  .scatter{position:absolute;z-index:3;left:0;bottom:0;width:46%;height:46%;pointer-events:none}
+  .scatter i{
+    position:absolute;
+    font-style:normal;font-weight:700;
+    color:rgba(27,27,24,.11);
+    letter-spacing:.12em;font-size:11px;
+    white-space:nowrap;
+  }
+
+  /* ---- stats ---- */
+  .stats{
+    position:absolute;z-index:4;
+    right:4.2%;bottom:9%;
+    display:flex;flex-direction:column;gap:17px;
+  }
+  .stat b{
+    display:block;
+    font-size:clamp(19px,2.4vw,27px);
+    font-weight:800;letter-spacing:-.01em;
+    font-variant-numeric:tabular-nums;
+  }
+  .stat small{font-size:10.5px;color:var(--muted);font-weight:600}
+
+  /* ---- logo bar ---- */
+  .logobar{
+    background:var(--navy-deep);
+    display:flex;align-items:center;justify-content:space-between;
+    gap:18px;
+    padding:26px 44px;
+  }
+  .logobar span{
+    color:rgba(255,255,255,.72);
+    font-size:13px;font-weight:700;letter-spacing:.02em;
+    display:flex;align-items:center;gap:7px;
+    white-space:nowrap;
+  }
+  .logobar .lm{font-size:15px;opacity:.85}
+  .logobar .caps{letter-spacing:.22em;font-weight:600;font-size:11px}
+
+  .caption{
+    margin-top:16px;text-align:center;
+    color:rgba(235,236,245,.5);
+    font-size:12px;letter-spacing:.02em;
+  }
+
+  @media (max-width:720px){
+    .nav a.hideS,.newsbit{display:none}
+    .copy{max-width:72%}
+    .stats{display:none}
+    .logobar span:nth-child(n+4){display:none}
+  }
+</style>
+
+<div class="wrap">
+  <div class="frame">
+    <div class="hero" id="hero">
+      <div class="arcLayer" id="arcLayer" aria-hidden="true"></div>
+
+      <nav class="nav">
+        <div class="logo5u">5U</div>
+        <a href="#">ABOUT</a>
+        <a href="#" class="hideS">PRODUCT</a>
+        <a href="#" class="hideS">USE CASES</a>
+        <a href="#" class="hideS">BLOG</a>
+        <div class="spacer"></div>
+        <div class="newsbit"><span class="newschip">NEWS</span> 5U AI PUBLISHED <span>›</span></div>
+        <button class="pillbtn">BOOK A DEMO</button>
+      </nav>
+
+      <div class="copy">
+        <span class="fromchip">FROM INBOX TO INVOICE</span>
+        <h1>AI Workforce.<br>Built for Freight Teams.</h1>
+        <p class="sub">They read, write and act across TMS, email and chats so your ops staff don't have to.</p>
+        <button class="cta">CONTACT US</button>
+        <div class="teamlabel">YOUR AI TEAM</div>
+        <div class="botcard">
+          <h3>SALESBOT</h3>
+          <p>Assists sales teams with smart automation</p>
+          <div class="tags"><span>LEADS</span><span>CRM</span><span>FOLLOW-UP</span></div>
+        </div>
+      </div>
+
+      <div class="scatter" aria-hidden="true">
+        <i style="left:6%;bottom:64%;transform:rotate(90deg)">DOCS</i>
+        <i style="left:1%;bottom:38%;transform:rotate(75deg)">PILOT</i>
+        <i style="left:12%;bottom:6%;">OPS</i>
+        <i style="left:20%;bottom:0%;transform:rotate(-8deg)">EFFICIENCY</i>
+        <i style="left:15%;bottom:30%;transform:rotate(90deg)">KNOWLEDGE</i>
+        <i style="left:26%;bottom:52%;transform:rotate(12deg);opacity:.6">ORGANIZE</i>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><b>100%</b><small>Response rate</small></div>
+        <div class="stat"><b>120x</b><small>ROI</small></div>
+        <div class="stat"><b>10x</b><small>Cost reduction</small></div>
+      </div>
+    </div>
+
+    <div class="logobar" aria-hidden="true">
+      <span><span class="lm">✳</span>logoipsum</span>
+      <span>LO<span class="lm">◯</span>O</span>
+      <span class="caps"><span class="lm">▞</span> LOGOIPSUM</span>
+      <span><span class="lm">⊛</span>logo–ipsum</span>
+      <span style="font-style:italic">LOGO!PSUM</span>
+      <span><span class="lm">◖</span>logoipsum°</span>
+    </div>
+  </div>
+
+  <p class="caption">Recreation of the 5U AI case-study hero animation (as seen on beew.studio)</p>
+</div>
+
+<script>
+(function(){
+  const hero  = document.getElementById('hero');
+  const layer = document.getElementById('arcLayer');
+
+  /* ---------------- icon artwork ---------------- */
+  const S = (inner)=>'<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'+inner+'</svg>';
+
+  const pin = [0,90,180,270].map(a=>
+    '<g transform="rotate('+a+' 12 12)"><rect x="13.2" y="1.6" width="4.2" height="9.2" rx="2.1" fill="#fff"/>'+
+    '<circle cx="8.9" cy="6.2" r="2.1" fill="#fff"/></g>').join('');
+
+  const ICONS = [
+    { k:'slack',   cls:'', svg:S(pin) },
+    { k:'dashes',  cls:'', svg:S(
+        '<g stroke="#fff" stroke-width="2.5" stroke-linecap="round" transform="rotate(-32 12 12)">'+
+        '<path d="M4 7h3.4M11 7h2.6M17 7h2.6"/>'+
+        '<path d="M4 12h2.6M10 12h3.4M17 12h3"/>'+
+        '<path d="M4 17h3M10.4 17h2.6M16.4 17h3.2"/></g>') },
+    { k:'gmail',   cls:'', svg:S(
+        '<path fill="#fff" d="M3.2 18.6V7l8.8 6.2L20.8 7v11.6h-3.3v-6.4l-5.5 3.9-5.5-3.9v6.4z"/>') },
+    { k:'sigma',   cls:'', svg:S(
+        '<path fill="#fff" d="M6.4 4.8h11.2v3h-6.6l4.9 4.2-4.9 4.2h6.6v3H6.4v-2.4l5.7-4.8-5.7-4.8z"/>') },
+    { k:'teams',   cls:'teams', svg:S(
+        '<circle cx="17.6" cy="8.2" r="2.7" fill="#C6CBF5"/>'+
+        '<path d="M13.6 12.2h8v4.6c0 2.4-1.8 4.3-4 4.3s-4-1.9-4-4.3z" fill="#9BA2EE"/>'+
+        '<rect x="3" y="6.4" width="11" height="11" rx="2.2" fill="#fff"/>'+
+        '<path d="M5.4 9.4h6.2v2.2H9.5v5.4H7.3v-5.4H5.4z" fill="#4A52B5"/>') },
+    { k:'lines',   cls:'', svg:S(
+        '<g fill="#fff"><rect x="8.6" y="5.6" width="10.4" height="2.6" rx="1.3"/><circle cx="5.4" cy="6.9" r="1.5"/>'+
+        '<rect x="5" y="10.7" width="10.4" height="2.6" rx="1.3"/><circle cx="18.6" cy="12" r="1.5"/>'+
+        '<rect x="8.6" y="15.8" width="10.4" height="2.6" rx="1.3"/><circle cx="5.4" cy="17.1" r="1.5"/></g>') },
+    { k:'outlook', cls:'outlook', svg:S(
+        '<rect x="9.4" y="4.6" width="10.6" height="14.4" rx="2" fill="#31A6E8"/>'+
+        '<rect x="9.4" y="4.6" width="10.6" height="7" rx="2" fill="#63D2FF"/>'+
+        '<rect x="3" y="7.6" width="11.6" height="11.4" rx="2.2" fill="#0A55A8"/>'+
+        '<circle cx="8.8" cy="13.3" r="3.1" fill="none" stroke="#fff" stroke-width="2.2"/>') }
+  ];
+
+  /* ---------------- geometry ---------------- */
+  let W=0,H=0,cx=0,cy=0,r=0,bandIn=0,bandOut=0,bs=0;
+  let bandEl=null, shadeEl=null;
+
+  function buildBand(){
+    if(!bandEl){
+      bandEl  = document.createElement('div'); bandEl.className='band';
+      shadeEl = document.createElement('div'); shadeEl.className='bandShade';
+      layer.appendChild(bandEl); layer.appendChild(shadeEl);
+    }
+    const o = bandOut;
+    for(const el of [bandEl, shadeEl]){
+      el.style.width = el.style.height = (2*o)+'px';
+      el.style.left = (cx-o)+'px';
+      el.style.top  = (cy-o)+'px';
+    }
+    bandEl.style.background =
+      'radial-gradient(circle closest-side, rgba(0,0,0,0) '+(bandIn-2)+'px, '+
+      'var(--band) '+bandIn+'px '+(bandOut-2)+'px, rgba(0,0,0,0) '+bandOut+'px)';
+    shadeEl.style.background =
+      'radial-gradient(circle closest-side, rgba(0,0,0,0) '+(bandIn-2)+'px, '+
+      'rgba(35,42,77,.08) '+(bandIn+2)+'px, rgba(0,0,0,0) '+(bandIn + (bandOut-bandIn)*0.5)+'px, '+
+      'rgba(255,255,255,.16) '+(bandOut-10)+'px, rgba(0,0,0,0) '+bandOut+'px)';
+  }
+
+  function measure(){
+    W = hero.clientWidth; H = hero.clientHeight;
+    cx = 0.95*W;  cy = 0.845*H;
+    r  = 0.365*W;
+    bandIn  = r - 0.118*W;
+    bandOut = r + 0.118*W;
+    bs = Math.max(46, 0.088*W);
+    buildBand();
+  }
+
+  /* ---------------- badges ---------------- */
+  const SPEED   = 50;     // deg per second (≈1.6 s across the visible arc)
+  const SPAWN   = 0.75;   // seconds between entries
+  const ENTER   = -58;    // enters off the top-right edge
+  const EXIT    = -218;   // fully gone past bottom-left
+  const GHOSTS  = 7;
+
+  const active = [];
+  let iconIdx = 0;
+
+  function makeBadge(angle){
+    const icon = ICONS[iconIdx++ % ICONS.length];
+    const ghosts = [];
+    for(let i=GHOSTS;i>=1;i--){
+      const g = document.createElement('div');
+      g.className='ghost';
+      g.style.opacity = (0.40*(1-i/(GHOSTS+2))).toFixed(3);
+      g.style.filter  = 'blur('+(5+i*1.7)+'px)';
+      ghosts.push(g); layer.appendChild(g);
+    }
+    const el = document.createElement('div');
+    el.className='badge '+icon.cls;
+    el.innerHTML = icon.svg;
+    layer.appendChild(el);
+    active.push({el, ghosts, angle});
+  }
+
+  function place(el, ang, size){
+    const rad = ang*Math.PI/180;
+    el.style.width = el.style.height = size+'px';
+    el.style.transform = 'translate('+(cx + r*Math.cos(rad) - size/2)+'px,'+
+                                      (cy + r*Math.sin(rad) - size/2)+'px)';
+  }
+
+  function render(){
+    for(const b of active){
+      place(b.el, b.angle, bs);
+      b.ghosts.forEach((g,j)=>{
+        const i = GHOSTS-j;                    // farthest ghost first in DOM
+        place(g, b.angle + i*4.4, bs*(1-0.035*i));
+      });
+    }
+  }
+
+  function cull(){
+    for(let i=active.length-1;i>=0;i--){
+      if(active[i].angle < EXIT){
+        active[i].el.remove();
+        active[i].ghosts.forEach(g=>g.remove());
+        active.splice(i,1);
+      }
+    }
+  }
+
+  measure();
+  addEventListener('resize', ()=>{ measure(); render(); });
+
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if(reduced){
+    [-100,-140,-180].forEach(a=>makeBadge(a));
+    active.forEach(b=>b.ghosts.forEach(g=>g.style.opacity=0));
+    render();
+    return;
+  }
+
+  /* pre-seed the arc so it starts mid-loop, like the recording */
+  for(let k=3;k>=0;k--) makeBadge(ENTER - SPEED*SPAWN*k);
+  // seeded list was created newest-first; fix order so angles map correctly
+  active.forEach((b,i)=>{ b.angle = ENTER - SPEED*SPAWN*(3-i); });
+
+  let last = performance.now(), sinceSpawn = 0;
+  function tick(now){
+    const dt = Math.min(0.05,(now-last)/1000); last = now;
+    for(const b of active) b.angle -= SPEED*dt;
+    sinceSpawn += dt;
+    if(sinceSpawn >= SPAWN){ sinceSpawn -= SPAWN; makeBadge(ENTER); }
+    cull(); render();
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
