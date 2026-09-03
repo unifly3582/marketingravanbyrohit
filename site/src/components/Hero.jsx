@@ -35,16 +35,20 @@ const EXIT = -228      // fully gone past the bottom-left
 const T_SLIDE = 0.9    // seconds: slide in to the waiting corner
 const T_MOVE = 1.4     // seconds: corner -> center, growing
 const T_HOLD = 4.6     // seconds: presenting at center
-const T_EXIT = 2.0     // seconds: center -> gone
+const T_GLIDE = 1.2    // seconds: center -> far corner, shrinking
+const T_DEPART = 0.9   // seconds: far corner -> gone past the bottom-left
 const PERIOD = T_MOVE + T_HOLD // a new head takes the stage every PERIOD
-const WAIT_SCALE = 0.55
+// a finished head rests small at the far end of the arc until its host is
+// needed again for the head three slots later
+const REST_END = 3 * PERIOD - T_HOLD - T_DEPART - 0.1
+const WAIT_SCALE = 0.55       // desktop; halved on narrow screens in measure()
 
 const easeOutCubic = (p) => 1 - (1 - p) ** 3
 const easeInQuad = (p) => p * p
 const easeInOutCubic = (p) => (p < 0.5 ? 4 * p ** 3 : 1 - (-2 * p + 2) ** 3 / 2)
 
 /* pose the parent feeds each head: facing right on stage, toward it waiting */
-const YAW = { wait: -0.35, move: 0.1, present: 0.55, exit: 0.3 }
+const YAW = { wait: -0.35, move: 0.1, present: 0.55, exit: 0.3, rest: 0.35 }
 
 export default function Hero() {
   const panelRef = useRef(null)
@@ -52,7 +56,6 @@ export default function Hero() {
   const hostRefs = [useRef(null), useRef(null), useRef(null)]
   const poseRefs = useRef([{ baseYaw: 0 }, { baseYaw: 0 }, { baseYaw: 0 }])
   const cardRef = useRef(null)
-  const pausedRef = useRef(false)
   const [shown, setShown] = useState(HEADS[0]) // head being presented
   const [hostSrcs, setHostSrcs] = useState([
     modelFor(HEADS[0]),
@@ -69,7 +72,7 @@ export default function Hero() {
 
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
     let W = 0, H = 0, cx = 0, cy = 0, r = 0, bandIn = 0, bandOut = 0, bs = 0
-    let CORNER = -103, CENTER = -140
+    let CORNER = -103, CENTER = -140, RESTC = -160, WS = WAIT_SCALE
     let bandEl = null, shadeEl = null
     let raf = 0
 
@@ -100,15 +103,18 @@ export default function Hero() {
       W = panel.clientWidth
       H = panel.clientHeight
       if (W < 768) {
-        // narrow screens: a slim arc hugging the bottom-right corner
-        cx = 1.18 * W
-        cy = 1.0 * H
-        r = 0.55 * W
-        bandIn = r - 0.075 * W
-        bandOut = r + 0.075 * W
-        bs = Math.max(80, 0.24 * W)
-        CORNER = -112
-        CENTER = -150
+        // narrow screens: a big sweeping arc across the lower half, heads
+        // riding high enough that the info card can nest inside the curve
+        cx = 1.15 * W
+        cy = 1.08 * H
+        r = 0.9 * W
+        bandIn = r - 0.09 * W
+        bandOut = r + 0.09 * W
+        bs = Math.max(100, 0.3 * W)
+        CORNER = -103
+        CENTER = -119
+        RESTC = -156
+        WS = WAIT_SCALE / 2
       } else {
         // slim ring pushed to the right edge, clear of the copy
         cx = 1.04 * W
@@ -119,8 +125,12 @@ export default function Hero() {
         bs = Math.min(Math.max(90, 0.15 * W), 170)
         CORNER = -103
         CENTER = -140
+        RESTC = -163
+        WS = WAIT_SCALE
       }
       for (const h of hosts) h.style.width = h.style.height = bs + 'px'
+      // narrow screens: horizontal drags scrub the arc, vertical still scrolls
+      panel.style.touchAction = W < 768 ? 'pan-y' : ''
       buildBand()
     }
 
@@ -141,21 +151,28 @@ export default function Hero() {
       if (u < waitStart) return null
       if (u < waitStart + T_SLIDE) {
         const p = easeOutCubic((u - waitStart) / T_SLIDE)
-        return { angle: START + (CORNER - START) * p, scale: WAIT_SCALE, phase: 'wait' }
+        return { angle: START + (CORNER - START) * p, scale: WS, phase: 'wait' }
       }
-      if (u < 0) return { angle: CORNER, scale: WAIT_SCALE, phase: 'wait' }
+      if (u < 0) return { angle: CORNER, scale: WS, phase: 'wait' }
       if (u < T_MOVE) {
         const p = easeInOutCubic(u / T_MOVE)
         return {
           angle: CORNER + (CENTER - CORNER) * p,
-          scale: WAIT_SCALE + (1 - WAIT_SCALE) * p,
+          scale: WS + (1 - WS) * p,
           phase: 'move',
         }
       }
       if (u < T_MOVE + T_HOLD) return { angle: CENTER, scale: 1, phase: 'present' }
-      if (u < T_MOVE + T_HOLD + T_EXIT) {
-        const p = easeInQuad((u - T_MOVE - T_HOLD) / T_EXIT)
-        return { angle: CENTER + (EXIT - CENTER) * p, scale: 1 - 0.15 * p, phase: 'exit' }
+      if (u < T_MOVE + T_HOLD + T_GLIDE) {
+        // done presenting: shrink and glide to the far end of the arc
+        const p = easeInOutCubic((u - T_MOVE - T_HOLD) / T_GLIDE)
+        return { angle: CENTER + (RESTC - CENTER) * p, scale: 1 + (WS - 1) * p, phase: 'exit' }
+      }
+      if (u < REST_END) return { angle: RESTC, scale: WS, phase: 'rest' }
+      if (u < REST_END + T_DEPART) {
+        // its host is needed for a fresh head: slip away down the arc
+        const p = easeInQuad((u - REST_END) / T_DEPART)
+        return { angle: RESTC + (EXIT - RESTC) * p, scale: WS, phase: 'exit' }
       }
       return null
     }
@@ -193,32 +210,44 @@ export default function Hero() {
     if (reduced) {
       place(hosts[0], CENTER, 1)
       poseRefs.current[0].baseYaw = YAW.present
-      place(hosts[1], CORNER, WAIT_SCALE)
+      place(hosts[1], CORNER, WS)
       poseRefs.current[1].baseYaw = YAW.wait
-      place(hosts[2], null, 1)
+      place(hosts[2], RESTC, WS)
+      poseRefs.current[2].baseYaw = YAW.rest
       card.style.opacity = '1'
       card.style.transform = 'none'
       return () => window.removeEventListener('resize', onResize)
     }
 
-    // stateless timeline: everything derives from the paused-aware clock,
-    // so a dropped frame or restarted loop can never wedge the animation.
+    // stateless timeline: everything derives from the clock, so a dropped
+    // frame or restarted loop can never wedge the animation.
     let clock = 0
     let last = performance.now()
     let lastTickAt = last
     let presentedSlot = -1
     const hostSlot = [0, 1, 2]
 
+    // drag-to-scrub state: while a finger drags along the arc the clock
+    // follows it; on release the flick velocity carries on and friction
+    // eases the rate back to normal auto-play (1 clock-second per second)
+    let dragging = false
+    let dragMoved = false
+    let rate = 1
+
     function tick(now) {
       const dt = Math.min(0.05, (now - last) / 1000)
       last = now
       lastTickAt = now
-      if (!pausedRef.current) clock += dt
+      if (!dragging) {
+        rate += (1 - rate) * Math.min(1, dt * 2.5)
+        clock = Math.max(0, clock + dt * rate)
+      }
 
-      // heads k-1 (exiting), k (presenting), k+1 (waiting) can share the stage
+      // heads k-2 (resting), k-1 (exiting), k (presenting), k+1 (waiting)
+      // can share the stage; oldest first so a newcomer wins its host
       const kNow = Math.floor(clock / PERIOD)
       const assigned = [null, null, null]
-      for (const k of [kNow - 1, kNow, kNow + 1]) {
+      for (const k of [kNow - 2, kNow - 1, kNow, kNow + 1]) {
         if (k < 0) continue
         const st = stateAt(clock - k * PERIOD)
         if (!st) continue
@@ -248,7 +277,14 @@ export default function Hero() {
         presentedSlot = presenting
         if (presenting >= 0) {
           setShown(HEADS[presenting % HEADS.length])
-          flyCardIn()
+          if (dragging || Math.abs(rate - 1) > 0.6) {
+            // mid-scrub: swap the card in place, no springy fly-in
+            card.style.transition = 'opacity 0.25s ease-out'
+            card.style.transform = 'translate(0px, 0px) scale(1)'
+            card.style.opacity = '1'
+          } else {
+            flyCardIn()
+          }
         } else if (wasPresenting) {
           fadeCardOut()
         }
@@ -266,10 +302,63 @@ export default function Hero() {
       }
     }, 1500)
 
+    // ---- drag the heads along the arc (narrow layout) ----
+    // finger angle around the arc's center maps to timeline seconds, so the
+    // heads track the finger along the curve; a flick hands its velocity to
+    // `rate`, which friction then eases back to normal speed in tick()
+    const SCRUB = 0.08 // timeline seconds per degree of arc
+    let startX = 0, startY = 0, lastAngle = 0, lastMoveT = 0, scrubVel = 0
+
+    const angleAt = (e) => {
+      const pr = panel.getBoundingClientRect()
+      return (Math.atan2(e.clientY - pr.top - cy, e.clientX - pr.left - cx) * 180) / Math.PI
+    }
+    const onDown = (e) => {
+      if (W >= 768) return
+      if (e.target.closest('a,button')) return
+      const pr = panel.getBoundingClientRect()
+      if (e.clientY - pr.top < 0.45 * H) return // only the arc zone
+      dragging = true
+      dragMoved = false
+      startX = e.clientX
+      startY = e.clientY
+      lastAngle = angleAt(e)
+      lastMoveT = performance.now()
+      scrubVel = 0
+    }
+    const onMove = (e) => {
+      if (!dragging) return
+      if (!dragMoved && Math.hypot(e.clientX - startX, e.clientY - startY) < 6) return
+      dragMoved = true
+      let d = angleAt(e) - lastAngle
+      if (d > 180) d -= 360
+      else if (d < -180) d += 360
+      const now = performance.now()
+      const dc = -d * SCRUB // counterclockwise along the arc = forward in time
+      clock = Math.max(0, clock + dc)
+      const dts = Math.max(0.016, (now - lastMoveT) / 1000)
+      scrubVel = scrubVel * 0.7 + (dc / dts) * 0.3
+      lastAngle = angleAt(e)
+      lastMoveT = now
+    }
+    const onUp = () => {
+      if (!dragging) return
+      dragging = false
+      if (dragMoved) rate = Math.max(-6, Math.min(6, scrubVel))
+    }
+    panel.addEventListener('pointerdown', onDown)
+    window.addEventListener('pointermove', onMove, { passive: true })
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+
     return () => {
       cancelAnimationFrame(raf)
       clearInterval(watchdog)
       window.removeEventListener('resize', onResize)
+      panel.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
       layer.innerHTML = ''
       bandEl = null
     }
@@ -281,9 +370,7 @@ export default function Hero() {
       {/* full-width hero panel */}
       <div
         ref={panelRef}
-        className="theme-light relative min-h-[560px] overflow-hidden rounded-3xl border border-line lg:h-[82vh] lg:max-h-[820px]"
-        onPointerEnter={() => { pausedRef.current = true }}
-        onPointerLeave={() => { pausedRef.current = false }}
+        className="theme-light relative min-h-[640px] overflow-hidden rounded-3xl border border-line md:min-h-[560px] lg:h-[82vh] lg:max-h-[820px]"
       >
           <ShaderGrain className="absolute inset-0 z-0 h-full w-full" />
           <div ref={layerRef} className="absolute inset-0 z-0" aria-hidden="true" />
@@ -300,29 +387,29 @@ export default function Hero() {
             ref={cardRef}
             aria-live="polite"
             style={{ opacity: 0 }}
-            className="absolute bottom-[5%] right-[4%] z-[6] w-[62%] max-w-[300px] md:bottom-[7%] md:right-[5%] md:w-[30%] md:max-w-[330px]"
+            className="absolute bottom-[3%] right-[3%] z-[6] w-[40%] max-w-[150px] md:bottom-[7%] md:right-[5%] md:w-[30%] md:max-w-[330px]"
           >
-            <div className="relative overflow-hidden rounded-2xl border border-gold/25 bg-ground/75 p-5 shadow-[0_18px_50px_rgba(28,17,9,0.18)] backdrop-blur-md">
+            <div className="relative overflow-hidden rounded-lg border border-gold/25 bg-ground/75 p-2.5 shadow-[0_18px_50px_rgba(28,17,9,0.18)] backdrop-blur-md md:rounded-2xl md:p-5">
               {/* watermark number */}
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute -right-2 -top-5 font-display text-[4.5rem] font-extrabold leading-none text-gold/10"
+                className="pointer-events-none absolute -right-1 -top-2 font-display text-[2.2rem] font-extrabold leading-none text-gold/10 md:-right-2 md:-top-5 md:text-[4.5rem]"
               >
                 {String(shown.n).padStart(2, '0')}
               </span>
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-card text-gold">
-                  <HeadIcon name={shown.icon} className="h-4 w-4" />
+              <div className="flex items-center gap-1.5 md:gap-2.5">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-card text-gold md:h-9 md:w-9">
+                  <HeadIcon name={shown.icon} className="h-3 w-3 md:h-4 md:w-4" />
                 </div>
-                <span className="chip border-gold/40 text-gold">Head {String(shown.n).padStart(2, '0')} · {shown.short}</span>
+                <span className="chip border-gold/40 !text-[0.5rem] text-gold md:!text-[0.65rem]">Head {String(shown.n).padStart(2, '0')} · {shown.short}</span>
               </div>
-              <p className="mt-3 font-display text-[0.95rem] font-bold leading-snug">{shown.title}</p>
-              <p className="mt-1 text-xs font-extrabold tracking-wide">
+              <p className="mt-1.5 font-display text-[0.7rem] font-bold leading-snug md:mt-3 md:text-[0.95rem]">{shown.title}</p>
+              <p className="mt-0.5 text-[0.58rem] font-extrabold tracking-wide md:mt-1 md:text-xs">
                 <span className="bg-gradient-to-r from-gold to-ember bg-clip-text text-transparent">{shown.metric}</span>
               </p>
               <p className="mt-2 hidden text-xs leading-relaxed text-muted md:block">{shown.desc}</p>
               {/* which head is on stage */}
-              <div className="mt-4 flex items-center gap-1.5">
+              <div className="mt-2 flex items-center gap-1 md:mt-4 md:gap-1.5">
                 {HEADS.map((h) => (
                   <span
                     key={h.n}
@@ -335,7 +422,7 @@ export default function Hero() {
             </div>
           </div>
 
-          <div className="relative z-10 flex h-full flex-col justify-between p-8 md:p-12">
+          <div className="relative z-10 flex h-full flex-col justify-between p-6 md:p-12">
             <div className="max-w-xl">
               <motion.p
                 initial={{ opacity: 0, y: 14 }}
@@ -349,7 +436,7 @@ export default function Hero() {
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, delay: 0.08 }}
-                className="mt-5 text-4xl font-bold leading-[1.08] md:text-6xl"
+                className="mt-4 text-[1.85rem] font-bold leading-[1.1] md:mt-5 md:text-6xl md:leading-[1.08]"
               >
                 One retainer.
                 <br />
@@ -363,7 +450,7 @@ export default function Hero() {
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, delay: 0.16 }}
-                className="mt-5 max-w-md text-[0.95rem] leading-relaxed text-muted"
+                className="mt-4 max-w-md text-[0.82rem] leading-relaxed text-muted md:mt-5 md:text-[0.95rem]"
               >
                 Marketing Ravan fuses agentic AI, smart ERP and next-gen digital
                 marketing into one team. Every head is a weapon — deployed on
@@ -373,7 +460,7 @@ export default function Hero() {
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, delay: 0.24 }}
-                className="mt-8 flex flex-wrap gap-3"
+                className="mt-6 flex flex-wrap gap-3 md:mt-8"
               >
                 <a href="/contact" className="btn-primary">
                   Summon the Ravan <Arrow className="h-4 w-4" />
@@ -383,7 +470,7 @@ export default function Hero() {
             </div>
 
             {/* deploys-across strip */}
-            <p className="mt-10 max-w-lg text-[0.62rem] font-bold uppercase tracking-[0.2em] text-muted">
+            <p className="mt-10 hidden max-w-lg text-[0.62rem] font-bold uppercase tracking-[0.2em] text-muted md:block">
               Deploys across
               <span className="ml-3 font-semibold normal-case tracking-normal text-cream/55">
                 WhatsApp · LinkedIn · Meta Ads · Google · Shopify · SAP · Tally · HubSpot
