@@ -20,7 +20,7 @@ function loadCached(loader, src) {
   return gltfCache.get(src)
 }
 
-export default function RavanHead({ src = FALLBACK_SRC, className = '' }) {
+export default function RavanHead({ src = FALLBACK_SRC, poseRef = null, className = '' }) {
   const hostRef = useRef(null)
   const apiRef = useRef(null)
   const [booted, setBooted] = useState(false)
@@ -118,10 +118,13 @@ export default function RavanHead({ src = FALLBACK_SRC, className = '' }) {
         const tick = (now) => {
           const t = now / 1000
           const idle = now - lastMove > 2800 || reduced
-          const gx = idle ? Math.sin(t * 0.5) * 0.4 : tx
-          const gy = idle ? Math.sin(t * 0.3) * 0.12 : ty
-          pivot.rotation.y += (gx * 0.7 - pivot.rotation.y) * 0.07
-          pivot.rotation.x += (gy * 0.3 - pivot.rotation.x) * 0.07
+          // stage pose (set by the parent: facing right on stage, toward the
+          // stage while waiting) + cursor/touch follow + idle sway on top
+          const pose = poseRef?.current ?? { baseYaw: 0, basePitch: 0 }
+          const gx = pose.baseYaw + (idle ? Math.sin(t * 0.5) * 0.12 : tx * 0.22)
+          const gy = (pose.basePitch ?? 0) + (idle ? Math.sin(t * 0.3) * 0.05 : ty * 0.12)
+          pivot.rotation.y += (gx - pivot.rotation.y) * 0.07
+          pivot.rotation.x += (gy - pivot.rotation.x) * 0.07
           pivot.position.y = Math.sin(t * 0.8) * sizeY * 0.012
           renderer.render(scene, camera)
           raf = requestAnimationFrame(tick)

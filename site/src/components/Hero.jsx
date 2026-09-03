@@ -7,11 +7,12 @@ import RavanHead from './RavanHead.jsx'
 
 /*
  * The signature animation: a slim arc sweeping the right side of the panel.
- * 3D Ravan heads ride it on a fixed timeline — each head glides in from the
- * top-right, holds at the top of the arc while its capability card shows on
- * the inner side of the curve, then accelerates away down the arc WHILE the
- * next head is already entering. Two alternating hosts render the overlap.
- * Hovering the panel freezes the clock so the current head stays on stage.
+ * One 3D head PRESENTS at the center of the visible arc, full size, facing
+ * right, while the NEXT head waits small at the arc's corner looking toward
+ * the stage. On cue the presenter exits down the arc, the waiter grows as it
+ * glides to center, and a fresh head slides in to wait. The capability card
+ * springs up from beneath the presenting head. Three rotating hosts cover
+ * waiter + presenter + exiter being on stage at once.
  */
 
 /* which personality model presents each capability (by heads.js icon key) */
@@ -29,47 +30,46 @@ const MODEL_FOR_ICON = {
 }
 const modelFor = (head) => `/models/${MODEL_FOR_ICON[head.icon] ?? 'ravan-head2'}-web.glb`
 
-const START = -18    // entry angle (off the right edge)
-const HOLD = -100    // where a head pauses, top of the arc
-const EXIT = -232    // fully gone past the bottom-left
-const T_IN = 2.2     // seconds: glide in
-const T_HOLD = 4.2   // seconds: presenting
-const T_OUT = 2.6    // seconds: glide out (overlaps the next head's glide in)
-const PERIOD = T_IN + T_HOLD // a new head starts every PERIOD seconds
+const START = -18      // off the right edge, where a waiter slides in from
+const EXIT = -228      // fully gone past the bottom-left
+const T_SLIDE = 0.9    // seconds: slide in to the waiting corner
+const T_MOVE = 1.4     // seconds: corner -> center, growing
+const T_HOLD = 4.6     // seconds: presenting at center
+const T_EXIT = 2.0     // seconds: center -> gone
+const PERIOD = T_MOVE + T_HOLD // a new head takes the stage every PERIOD
+const WAIT_SCALE = 0.55
 
 const easeOutCubic = (p) => 1 - (1 - p) ** 3
 const easeInQuad = (p) => p * p
+const easeInOutCubic = (p) => (p < 0.5 ? 4 * p ** 3 : 1 - (-2 * p + 2) ** 3 / 2)
 
-function angleAt(u) {
-  // u: seconds since this head's slot began; null when off stage
-  if (u < 0) return null
-  if (u < T_IN) return START + (HOLD - START) * easeOutCubic(u / T_IN)
-  if (u < T_IN + T_HOLD) return HOLD
-  if (u < T_IN + T_HOLD + T_OUT) return HOLD + (EXIT - HOLD) * easeInQuad((u - T_IN - T_HOLD) / T_OUT)
-  return null
-}
+/* pose the parent feeds each head: facing right on stage, toward it waiting */
+const YAW = { wait: -0.35, move: 0.1, present: 0.55, exit: 0.3 }
 
 export default function Hero() {
   const panelRef = useRef(null)
   const layerRef = useRef(null)
-  const hostARef = useRef(null)
-  const hostBRef = useRef(null)
+  const hostRefs = [useRef(null), useRef(null), useRef(null)]
+  const poseRefs = useRef([{ baseYaw: 0 }, { baseYaw: 0 }, { baseYaw: 0 }])
+  const cardRef = useRef(null)
   const pausedRef = useRef(false)
   const [shown, setShown] = useState(HEADS[0]) // head being presented
-  const [cardVisible, setCardVisible] = useState(false)
   const [hostSrcs, setHostSrcs] = useState([
     modelFor(HEADS[0]),
     modelFor(HEADS[1]),
+    modelFor(HEADS[2]),
   ])
 
   useEffect(() => {
     const panel = panelRef.current
     const layer = layerRef.current
-    const hosts = [hostARef.current, hostBRef.current]
-    if (!panel || !layer || hosts.some((h) => !h)) return
+    const hosts = hostRefs.map((r) => r.current)
+    const card = cardRef.current
+    if (!panel || !layer || !card || hosts.some((h) => !h)) return
 
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
     let W = 0, H = 0, cx = 0, cy = 0, r = 0, bandIn = 0, bandOut = 0, bs = 0
+    let CORNER = -103, CENTER = -140
     let bandEl = null, shadeEl = null
     let raf = 0
 
@@ -107,6 +107,8 @@ export default function Hero() {
         bandIn = r - 0.075 * W
         bandOut = r + 0.075 * W
         bs = Math.max(80, 0.24 * W)
+        CORNER = -112
+        CENTER = -150
       } else {
         // slim ring pushed to the right edge, clear of the copy
         cx = 1.04 * W
@@ -115,19 +117,73 @@ export default function Hero() {
         bandIn = r - 0.055 * W
         bandOut = r + 0.055 * W
         bs = Math.min(Math.max(90, 0.15 * W), 170)
+        CORNER = -103
+        CENTER = -140
       }
       for (const h of hosts) h.style.width = h.style.height = bs + 'px'
       buildBand()
     }
 
-    function place(host, angle) {
+    function place(host, angle, scale) {
       if (angle === null) {
         host.style.transform = 'translate(-9999px, -9999px)'
         return
       }
       const rad = (angle * Math.PI) / 180
       host.style.transform =
-        `translate(${cx + r * Math.cos(rad) - bs / 2}px, ${cy + r * Math.sin(rad) - bs / 2}px)`
+        `translate(${cx + r * Math.cos(rad) - bs / 2}px, ${cy + r * Math.sin(rad) - bs / 2}px)` +
+        ` scale(${scale})`
+    }
+
+    /* one head's journey; u = seconds since its stage slot began */
+    function stateAt(u) {
+      const waitStart = -T_HOLD // slides in as the previous head starts talking
+      if (u < waitStart) return null
+      if (u < waitStart + T_SLIDE) {
+        const p = easeOutCubic((u - waitStart) / T_SLIDE)
+        return { angle: START + (CORNER - START) * p, scale: WAIT_SCALE, phase: 'wait' }
+      }
+      if (u < 0) return { angle: CORNER, scale: WAIT_SCALE, phase: 'wait' }
+      if (u < T_MOVE) {
+        const p = easeInOutCubic(u / T_MOVE)
+        return {
+          angle: CORNER + (CENTER - CORNER) * p,
+          scale: WAIT_SCALE + (1 - WAIT_SCALE) * p,
+          phase: 'move',
+        }
+      }
+      if (u < T_MOVE + T_HOLD) return { angle: CENTER, scale: 1, phase: 'present' }
+      if (u < T_MOVE + T_HOLD + T_EXIT) {
+        const p = easeInQuad((u - T_MOVE - T_HOLD) / T_EXIT)
+        return { angle: CENTER + (EXIT - CENTER) * p, scale: 1 - 0.15 * p, phase: 'exit' }
+      }
+      return null
+    }
+
+    function flyCardIn() {
+      // the card springs up from just below the presenting head
+      const rad = (CENTER * Math.PI) / 180
+      const headX = cx + r * Math.cos(rad)
+      const headY = cy + r * Math.sin(rad)
+      const pr = panel.getBoundingClientRect()
+      const cr = card.getBoundingClientRect()
+      const dx = headX - (cr.left - pr.left + cr.width / 2)
+      const dy = headY + bs * 0.55 - (cr.top - pr.top + cr.height / 2)
+      card.style.transition = 'none'
+      card.style.transform = `translate(${dx}px, ${dy}px) scale(0.5)`
+      card.style.opacity = '0'
+      requestAnimationFrame(() => {
+        card.style.transition =
+          'transform 0.7s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.45s ease-out'
+        card.style.transform = 'translate(0px, 0px) scale(1)'
+        card.style.opacity = '1'
+      })
+    }
+
+    function fadeCardOut() {
+      card.style.transition = 'transform 0.4s ease-in, opacity 0.35s ease-in'
+      card.style.transform = 'translate(0px, 14px) scale(0.96)'
+      card.style.opacity = '0'
     }
 
     measure()
@@ -135,9 +191,13 @@ export default function Hero() {
     window.addEventListener('resize', onResize)
 
     if (reduced) {
-      place(hosts[0], HOLD)
-      place(hosts[1], null)
-      setCardVisible(true)
+      place(hosts[0], CENTER, 1)
+      poseRefs.current[0].baseYaw = YAW.present
+      place(hosts[1], CORNER, WAIT_SCALE)
+      poseRefs.current[1].baseYaw = YAW.wait
+      place(hosts[2], null, 1)
+      card.style.opacity = '1'
+      card.style.transform = 'none'
       return () => window.removeEventListener('resize', onResize)
     }
 
@@ -147,7 +207,7 @@ export default function Hero() {
     let last = performance.now()
     let lastTickAt = last
     let presentedSlot = -1
-    const hostSlot = [0, 1] // which timeline slot each host currently serves
+    const hostSlot = [0, 1, 2]
 
     function tick(now) {
       const dt = Math.min(0.05, (now - last) / 1000)
@@ -155,15 +215,16 @@ export default function Hero() {
       lastTickAt = now
       if (!pausedRef.current) clock += dt
 
-      // slots k start at k*PERIOD; only k-1 and k can be on stage at once.
-      // Every frame both hosts get an explicit position — an unassigned host
-      // is parked off-screen, never left at its default top-left spot.
+      // heads k-1 (exiting), k (presenting), k+1 (waiting) can share the stage
       const kNow = Math.floor(clock / PERIOD)
-      const assigned = [null, null]
-      for (const k of [kNow - 1, kNow]) {
+      const assigned = [null, null, null]
+      for (const k of [kNow - 1, kNow, kNow + 1]) {
         if (k < 0) continue
-        const h = k % 2
-        assigned[h] = angleAt(clock - k * PERIOD)
+        const st = stateAt(clock - k * PERIOD)
+        if (!st) continue
+        const h = k % 3
+        assigned[h] = st
+        poseRefs.current[h].baseYaw = YAW[st.phase]
         if (hostSlot[h] !== k) {
           // this host just took over slot k — give it that head's model
           hostSlot[h] = k
@@ -174,19 +235,22 @@ export default function Hero() {
           })
         }
       }
-      place(hosts[0], assigned[0])
-      place(hosts[1], assigned[1])
+      for (let h = 0; h < 3; h++) {
+        place(hosts[h], assigned[h]?.angle ?? null, assigned[h]?.scale ?? 1)
+      }
 
-      // which slot is presenting (in its hold phase)?
+      // presenting slot drives the card
       const u = clock - kNow * PERIOD
-      const presenting = u >= T_IN && u < T_IN + T_HOLD ? kNow : -1
+      let presenting = -1
+      if (u >= T_MOVE && u < T_MOVE + T_HOLD) presenting = kNow
       if (presenting !== presentedSlot) {
+        const wasPresenting = presentedSlot >= 0
         presentedSlot = presenting
         if (presenting >= 0) {
           setShown(HEADS[presenting % HEADS.length])
-          setCardVisible(true)
-        } else {
-          setCardVisible(false)
+          flyCardIn()
+        } else if (wasPresenting) {
+          fadeCardOut()
         }
       }
       raf = requestAnimationFrame(tick)
@@ -209,6 +273,7 @@ export default function Hero() {
       layer.innerHTML = ''
       bandEl = null
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
@@ -223,20 +288,19 @@ export default function Hero() {
           <ShaderGrain className="absolute inset-0 z-0 h-full w-full" />
           <div ref={layerRef} className="absolute inset-0 z-0" aria-hidden="true" />
 
-          {/* two alternating 3D heads riding the arc */}
-          <div ref={hostARef} className="absolute left-0 top-0 z-[5] will-change-transform">
-            <RavanHead src={hostSrcs[0]} className="h-full w-full" />
-          </div>
-          <div ref={hostBRef} className="absolute left-0 top-0 z-[5] will-change-transform">
-            <RavanHead src={hostSrcs[1]} className="h-full w-full" />
-          </div>
+          {/* three rotating 3D heads: waiter, presenter, exiter */}
+          {hostRefs.map((ref, i) => (
+            <div key={i} ref={ref} className="absolute left-0 top-0 z-[5] will-change-transform">
+              <RavanHead src={hostSrcs[i]} poseRef={{ current: poseRefs.current[i] }} className="h-full w-full" />
+            </div>
+          ))}
 
-          {/* capability card on the inner side of the arc */}
+          {/* capability card — springs up from beneath the presenting head */}
           <div
+            ref={cardRef}
             aria-live="polite"
-            className={`absolute bottom-[5%] right-[4%] z-[6] w-[62%] max-w-[300px] transition-all duration-500 md:bottom-[7%] md:right-[5%] md:w-[30%] md:max-w-[330px] ${
-              cardVisible ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'
-            }`}
+            style={{ opacity: 0 }}
+            className="absolute bottom-[5%] right-[4%] z-[6] w-[62%] max-w-[300px] md:bottom-[7%] md:right-[5%] md:w-[30%] md:max-w-[330px]"
           >
             <div className="relative overflow-hidden rounded-2xl border border-gold/25 bg-ground/75 p-5 shadow-[0_18px_50px_rgba(28,17,9,0.18)] backdrop-blur-md">
               {/* watermark number */}
