@@ -1,5 +1,4 @@
 import Hero from '../components/Hero.jsx'
-import HeroCards from '../components/HeroCards.jsx'
 import ImageMarquee from '../components/ImageMarquee.jsx'
 import Statement from '../components/Statement.jsx'
 import Heads from '../components/Heads.jsx'
@@ -16,7 +15,6 @@ export default function Home() {
   return (
     <>
       <Hero />
-      <HeroCards />
       <ImageMarquee />
       <Statement />
       <Heads />
