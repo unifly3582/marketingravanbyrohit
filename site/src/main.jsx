@@ -4,6 +4,10 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 
+// build stamp: also rotates the bundle hash so a CDN can never pin a stale
+// error response to an old asset URL
+window.__MR_BUILD = '2026-09-04.1'
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
