@@ -12,6 +12,9 @@ cd "$APP_DIR/site"
 npm ci --legacy-peer-deps
 npm run build
 
+cd "$APP_DIR/server"
+npm ci --no-audit --no-fund
+
 systemctl restart marketingravan-api
 nginx -t && systemctl reload nginx
 
