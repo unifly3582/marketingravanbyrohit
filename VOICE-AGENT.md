@@ -95,7 +95,8 @@ indicator off.
 ## Architecture
 
 ```
-browser mic ──16 kHz PCM16──▶ our server ──▶ Gemini Live API
+browser mic ──16 kHz µ-law───▶ our server ──▶ Gemini Live API
+              (128 kbps up)         (expands to PCM16)
                                   │              (audio in/out, tools, VAD)
 browser speaker ◀─24 kHz PCM16────┤
                                   ├──▶ playbook (pgvector over policies)
@@ -157,6 +158,7 @@ code were responsible:
 
 | Cause | Cost | Fix |
 |---|---|---|
+| Microphone uplink larger than the connection | grows without bound | 8-bit µ-law, halving 256 kbps to 128 |
 | Default end-of-speech detection, tuned for dictation | ~1130 ms every turn | `realtimeInputConfig` with high sensitivity and 300 ms silence → 736 ms |
 | `search_playbook` on a 12-rule, 2.2 kB playbook | ~1300 ms per lookup | Inline the whole playbook in the prompt; drop the tool |
 | Trace writes blocking each tool call | ~400 ms per tool | `defer: true` — same writes, off the critical path |
@@ -168,6 +170,27 @@ first audio, including a tool call and a playbook-grounded answer:
 before   ~3000 ms
 after     658-1267 ms   (typically under a second)
 ```
+
+A fourth cause lived in the browser, not the server. Raw 16 kHz PCM16 is
+**32 kB/s of sustained upload**, and a typical Indian uplink measured here
+carries 23 kB/s — the microphone stream physically could not keep up, so audio
+arrived later than it was spoken and every reply inherited the backlog. The
+worklet now compands to 8-bit G.711 µ-law before sending (128 kbps, 37.3 dB SNR
+round trip, expanded back to PCM16 server-side), which is the same trade the
+phone network has made for fifty years.
+
+Where the time actually goes, same session measured from three places:
+
+| Measured from | Wait after the visitor stops talking |
+|---|---|
+| VPS → localhost (no network) | ~600 ms |
+| VPS → Cloudflare → VPS | ~780 ms |
+| Laptop on a 23 kB/s uplink, PCM16 | ~2700 ms |
+| Laptop on the same uplink, µ-law | ~1680 ms |
+
+So what a visitor experiences depends heavily on their own connection, and
+µ-law is worth about 40% of it. On a decent connection the agent answers in
+well under a second.
 
 The playbook is inlined only while it fits `INLINE_PLAYBOOK_CHAR_BUDGET`
 (12 000 chars, ~40x the current playbook). Past that, `playbookFitsInline`
