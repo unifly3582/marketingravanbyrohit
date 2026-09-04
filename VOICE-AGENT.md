@@ -282,6 +282,17 @@ Two things beyond a normal deploy:
 
 `vite.config.js` also needed `ws: true` on the dev proxy for the same reason.
 
+**TLS is terminated by Cloudflare**, not nginx — the origin only ever speaks
+plain HTTP. Cloudflare proxies WebSockets on all plans, and
+`wss://marketingravan.com/api/voice/web` was verified working through it on
+2026-09-05. If the agent ever stops connecting in production while working
+locally, check Cloudflare's WebSocket setting before touching nginx.
+
+`deploy/nginx-marketingravan.conf` mirrors the installed file but is **not**
+copied by `deploy.sh` — diff and patch by hand. It had drifted badly (it said
+`listen 80 default_server; server_name _;`), so copying it wholesale would have
+hijacked the default vhost for every other site on the box.
+
 ---
 
 ## Known gaps
