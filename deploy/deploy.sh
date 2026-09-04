@@ -47,6 +47,24 @@ fi
 
 echo "preflight ok — $ENV_FILE has all required keys"
 
+# Vite inlines VITE_* at build time, so a missing site/.env does not fail the
+# build — it silently ships a bundle whose Supabase client throws on load, and
+# only /live is broken. Catch it here instead of in front of a client.
+SITE_ENV="$APP_DIR/site/.env"
+if ! grep -qE "^[[:space:]]*VITE_SUPABASE_URL=.+" "$SITE_ENV" 2>/dev/null ||
+   ! grep -qE "^[[:space:]]*VITE_SUPABASE_PUBLISHABLE_KEY=.+" "$SITE_ENV" 2>/dev/null; then
+  echo "ABORT: $SITE_ENV needs VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY."
+  echo "       These are the publishable (browser-safe) values — RLS is what protects the data."
+  echo "       Create it with:"
+  echo
+  echo "         printf 'VITE_SUPABASE_URL=%s\\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\\n' \\"
+  echo "           'https://<project>.supabase.co' '<publishable key>' > $SITE_ENV"
+  echo
+  exit 1
+fi
+
+echo "preflight ok — $SITE_ENV has the browser keys"
+
 # Warn (do not block) if an un-migrated SQLite store is still sitting there.
 if [[ -f "$APP_DIR/server/data.sqlite" ]]; then
   echo
