@@ -1,12 +1,14 @@
 [Unit]
-Description=Marketing Ravan call-request API (Sarvam instant outbound)
+Description=Marketing Ravan API (Sarvam voice, WhatsApp, Gemini agent)
 After=network.target
 
 [Service]
 Type=simple
 WorkingDirectory=/var/www/marketingravan/server
 EnvironmentFile=/etc/marketingravan.env
-ExecStart=/usr/bin/node /var/www/marketingravan/server/index.mjs
+# Node 22 explicitly, not /usr/bin/node: @mastra/core needs >=22.13, while the
+# PM2 apps on this box run on the system node 20. Side-by-side keeps both happy.
+ExecStart=/opt/node22/bin/node /var/www/marketingravan/server/index.mjs
 Restart=always
 RestartSec=3
 User=www-data
