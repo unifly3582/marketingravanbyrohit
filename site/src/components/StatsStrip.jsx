@@ -36,12 +36,16 @@ function Counter({ to, prefix, suffix, decimals = 0, started }) {
   )
 }
 
-export default function StatsStrip() {
+/* `note` labels the numbers honestly (they are per-head targets). */
+export default function StatsStrip({ note }) {
   const ref = useRef(null)
   const inView = useInView(ref, { once: true, margin: '-80px' })
 
   return (
     <section className="border-y border-line bg-surface/60">
+      {note && (
+        <p className="container-x pt-10 text-xs font-bold uppercase tracking-[0.2em] text-muted">{note}</p>
+      )}
       <div ref={ref} className="container-x grid grid-cols-2 gap-8 py-16 md:grid-cols-4">
         {STATS.map((s) => (
           <div key={s.label}>

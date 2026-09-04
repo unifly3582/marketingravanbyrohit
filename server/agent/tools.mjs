@@ -108,12 +108,15 @@ async function searchPlaybook(query, limit = 5) {
  * @param {string} ctx.phone10  the customer
  * @param {boolean} ctx.demo    simulate side effects
  * @param {object} [ctx.outcome] mutated with what the agent actually did —
- *   the reply text as sent, and whether it escalated. Read this rather than the
- *   model's trailing prose: engines return whatever text the model happened to
- *   emit last, which is empty when the turn ends on a tool call.
+ *   the reply text as sent, whether it escalated, and (voice only) whether it
+ *   asked to end the call. Read this rather than the model's trailing prose:
+ *   engines return whatever text the model happened to emit last, which is
+ *   empty when the turn ends on a tool call.
+ * @param {"whatsapp"|"voice"} [ctx.channel] which reply tool to expose —
+ *   send_whatsapp_reply for WhatsApp, speak_reply + end_call for voice.
  * @returns {Array<{name: string, description: string, schema: import('zod').ZodTypeAny, node: string, label: string, run: (input: object) => Promise<object>}>}
  */
-export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {} }) {
+export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, channel = "whatsapp" }) {
   // One reply per turn, enforced here rather than in the prompt.
   //
   // The prompt asks for exactly one send_whatsapp_reply, and models do not
@@ -193,53 +196,101 @@ export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {} }) 
       }),
     },
 
-    {
-      name: "send_whatsapp_reply",
-      node: "reply",
-      label: "Send reply",
-      description:
-        "Send a WhatsApp message to the customer. Write in the same language and script the " +
-        "customer used (Hindi in Devanagari, Hinglish in Latin script, English in English). " +
-        "Keep it under 400 characters and never invent facts that are not in the playbook. " +
-        "Call this exactly once per turn, as your final action.",
-      schema: z.object({
-        text: z.string().max(1000).describe("The message body"),
-      }),
-      run: traced("reply", "Send reply", async ({ text }) => {
-        if (replySent) {
-          return {
-            sent: false,
-            already_replied: true,
-            error:
-              "You have already sent your one reply for this turn. Do not send another. " +
-              "Stop calling tools and end your turn now.",
-          };
-        }
-        if (demo) {
-          replySent = true;
-          outcome.reply = text;
-          return { sent: false, simulated: true, text };
-        }
-        const open = await windowOpen(phone10);
-        if (!open) {
-          // Outside the 24h service window only approved templates are allowed.
-          const r = await sendTemplate(
-            phone10,
-            process.env.WA_DEFAULT_TEMPLATE ?? "hi_intro",
-            "en",
-            [],
-            "agent"
-          );
-          replySent = true;
-          outcome.reply = text;
-          return { sent: true, mode: "template", reason: "24h window closed", messageId: r.messageId };
-        }
-        const r = await sendText(phone10, text, "agent");
-        replySent = true;
-        outcome.reply = text;
-        return { sent: true, mode: "text", messageId: r.messageId, text };
-      }),
-    },
+    ...(channel === "voice"
+      ? [
+          {
+            name: "speak_reply",
+            node: "speak",
+            label: "Speak reply",
+            description:
+              "Say something to the caller — this text is spoken aloud by text-to-speech, not read. " +
+              "Use short, plain spoken sentences: no lists, no markdown, no headings. Say numbers and " +
+              "prices the way a person would say them. Mirror the caller's language. Never invent facts " +
+              "that are not in the playbook. Call this exactly once per turn, as your final action.",
+            schema: z.object({
+              text: z.string().max(600).describe("What to say, as plain spoken words"),
+            }),
+            run: traced("speak", "Speak reply", async ({ text }) => {
+              if (replySent) {
+                return {
+                  spoken: false,
+                  already_replied: true,
+                  error:
+                    "You have already sent your one reply for this turn. Do not send another. " +
+                    "Stop calling tools and end your turn now.",
+                };
+              }
+              replySent = true;
+              outcome.reply = text;
+              return { spoken: !demo, simulated: demo, text };
+            }),
+          },
+          {
+            name: "end_call",
+            node: "speak",
+            label: "End call",
+            description:
+              "Close out the call after you've said your goodbye with speak_reply. Use this once the " +
+              "conversation has reached a natural end — the caller says bye, confirms nothing else is " +
+              "needed, or you've escalated and told them a human will follow up.",
+            schema: z.object({
+              reason: z.string().describe("Why the call is ending, one short phrase"),
+            }),
+            run: traced("speak", "End call", async ({ reason }) => {
+              outcome.endCall = true;
+              return { ending: true, reason };
+            }),
+          },
+        ]
+      : [
+          {
+            name: "send_whatsapp_reply",
+            node: "reply",
+            label: "Send reply",
+            description:
+              "Send a WhatsApp message to the customer. Write in the same language and script the " +
+              "customer used (Hindi in Devanagari, Hinglish in Latin script, English in English). " +
+              "Keep it under 400 characters and never invent facts that are not in the playbook. " +
+              "Call this exactly once per turn, as your final action.",
+            schema: z.object({
+              text: z.string().max(1000).describe("The message body"),
+            }),
+            run: traced("reply", "Send reply", async ({ text }) => {
+              if (replySent) {
+                return {
+                  sent: false,
+                  already_replied: true,
+                  error:
+                    "You have already sent your one reply for this turn. Do not send another. " +
+                    "Stop calling tools and end your turn now.",
+                };
+              }
+              if (demo) {
+                replySent = true;
+                outcome.reply = text;
+                return { sent: false, simulated: true, text };
+              }
+              const open = await windowOpen(phone10);
+              if (!open) {
+                // Outside the 24h service window only approved templates are allowed.
+                const r = await sendTemplate(
+                  phone10,
+                  process.env.WA_DEFAULT_TEMPLATE ?? "hi_intro",
+                  "en",
+                  [],
+                  "agent"
+                );
+                replySent = true;
+                outcome.reply = text;
+                return { sent: true, mode: "template", reason: "24h window closed", messageId: r.messageId };
+              }
+              const r = await sendText(phone10, text, "agent");
+              replySent = true;
+              outcome.reply = text;
+              return { sent: true, mode: "text", messageId: r.messageId, text };
+            }),
+          },
+        ]),
 
     {
       name: "escalate_to_human",

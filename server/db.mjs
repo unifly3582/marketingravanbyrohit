@@ -44,17 +44,20 @@ export async function upsertLead(phone10, fields = {}) {
 // ---------------- conversations ----------------
 
 export async function touchConversation(phone10, opts = {}) {
-  return unwrap(
-    await sb.rpc("touch_conversation", {
-      p_phone10: phone10,
-      p_text: opts.text ?? "",
-      p_direction: opts.direction ?? null,
-      p_contact_name: opts.contactName ?? null,
-      p_open_window: !!opts.openWindow,
-      p_bump_unread: !!opts.bumpUnread,
-    }),
-    "touchConversation"
-  );
+  const call = () => sb.rpc("touch_conversation", {
+    p_phone10: phone10,
+    p_text: opts.text ?? "",
+    p_direction: opts.direction ?? null,
+    p_contact_name: opts.contactName ?? null,
+    p_open_window: !!opts.openWindow,
+    p_bump_unread: !!opts.bumpUnread,
+  });
+  let r = await call();
+  // Two webhook deliveries for a brand-new number can race to create the row:
+  // the RPC upserts on phone10, but the loser trips the separate wa_id unique
+  // key first. On the retry the row exists and the upsert path applies.
+  if (r.error?.code === "23505") r = await call();
+  return unwrap(r, "touchConversation");
 }
 
 /** Conversation id for a phone number, creating a bare thread if needed. */

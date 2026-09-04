@@ -1,29 +1,18 @@
-import { motion } from 'motion/react'
 import { Arrow } from './icons.jsx'
 import CallRequest from './CallRequest.jsx'
+import LeadForm from './LeadForm.jsx'
 
-const OPTIONS = [
-  {
-    title: 'Book an intro call',
-    desc: '45 minutes on where automation pays back first in your business. No deck, no fluff.',
-    cta: 'Book a Call',
-    href: 'mailto:hello@marketingravan.com?subject=Intro%20call',
-  },
-  {
-    title: 'WhatsApp us',
-    desc: 'Talk to us where our agents live. A human answers — usually within the hour.',
-    cta: 'Open WhatsApp',
-    href: '#', // TODO: set wa.me link
-  },
-  {
-    title: 'Scope a project',
-    desc: 'Have a defined build in mind — an SDR flow, an ERP pipeline, a site? Send the brief.',
-    cta: 'Email the Brief',
-    href: 'mailto:hello@marketingravan.com?subject=Project%20brief',
-  },
+/*
+ * One form, plus the two other ways to reach us on a single line. The AI
+ * call-back demo is included by default (head pages, pricing, about); Home
+ * passes call={false} because it already shows the demo as its own section.
+ */
+const ALT = [
+  { label: 'Book a call', href: 'mailto:hello@marketingravan.com?subject=Intro%20call' },
+  { label: 'WhatsApp us', href: '#' }, // TODO: set wa.me link
 ]
 
-export default function Contact() {
+export default function Contact({ call = true }) {
   return (
     <section id="contact" className="border-t border-line bg-surface/60 py-28">
       <div className="container-x">
@@ -33,33 +22,21 @@ export default function Contact() {
             Your funnel isn't going to automate itself.
           </h2>
           <p className="mx-auto mt-5 max-w-lg text-muted">
-            Tell us what you're building. The first strategy session is on us.
+            Tell us what you're building. The first strategy call is on us.
           </p>
-        </div>
-
-        <div className="mt-14 grid gap-5 md:grid-cols-3">
-          {OPTIONS.map((o, i) => (
-            <motion.div
-              key={o.title}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-60px' }}
-              transition={{ duration: 0.6, delay: i * 0.08 }}
-              className="flex flex-col rounded-3xl border border-line bg-card p-8"
-            >
-              <h3 className="text-xl font-bold">{o.title}</h3>
-              <p className="mt-3 flex-1 text-sm leading-relaxed text-muted">{o.desc}</p>
-              <a
-                href={o.href}
-                className={`${i === 0 ? 'btn-primary' : 'btn-ghost'} mt-6 w-full justify-center`}
-              >
-                {o.cta} <Arrow className="h-4 w-4" />
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            {ALT.map((a) => (
+              <a key={a.label} href={a.href} className="btn-ghost">
+                {a.label} <Arrow className="h-4 w-4" />
               </a>
-            </motion.div>
-          ))}
+            ))}
+          </div>
         </div>
 
-        <CallRequest />
+        <div className="mt-10">
+          <LeadForm />
+          {call && <CallRequest />}
+        </div>
       </div>
     </section>
   )

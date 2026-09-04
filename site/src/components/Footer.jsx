@@ -52,7 +52,7 @@ export default function Footer() {
             <ul className="mt-4 grid gap-2">
               {HEADS.slice(0, 5).map((h) => (
                 <li key={h.n}>
-                  <a href="/#heads" className="text-sm text-cream/75 transition-colors hover:text-gold">
+                  <a href={h.href ?? '/#heads'} className="text-sm text-cream/75 transition-colors hover:text-gold">
                     {String(h.n).padStart(2, '0')} — {h.title}
                   </a>
                 </li>
@@ -65,7 +65,7 @@ export default function Footer() {
             <ul className="mt-4 grid gap-2">
               {HEADS.slice(5).map((h) => (
                 <li key={h.n}>
-                  <a href="/#heads" className="text-sm text-cream/75 transition-colors hover:text-gold">
+                  <a href={h.href ?? '/#heads'} className="text-sm text-cream/75 transition-colors hover:text-gold">
                     {String(h.n).padStart(2, '0')} — {h.title}
                   </a>
                 </li>

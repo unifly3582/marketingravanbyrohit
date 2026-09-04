@@ -3,6 +3,7 @@ import { motion, useInView } from 'motion/react'
 import { Link } from 'react-router-dom'
 import Contact from '../components/Contact.jsx'
 import { HeadIcon, Arrow, Check } from '../components/icons.jsx'
+import { HeadNext } from './heads/HeadLayout.jsx'
 
 /*
  * Head 01 — Agentic AI & Workflow Automation.
@@ -472,6 +473,10 @@ export default function HeadAgents() {
           </div>
         </div>
       </section>
+
+      <div className="pt-16">
+        <HeadNext n={1} />
+      </div>
 
       <Contact />
     </>

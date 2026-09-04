@@ -1,20 +1,25 @@
 import { motion } from 'motion/react'
 
+/* Plain title first so a visitor knows what the step is; the Ravan
+ * codename rides along as a sub-label. */
 const STEPS = [
   {
     n: '01',
-    title: 'Summon',
-    desc: 'One strategy call. We audit your funnel, your stack and your ops, then pick which heads to wake first.',
+    title: 'Strategy call',
+    code: 'Summon',
+    desc: 'One 45-minute call. We audit your funnel, your stack and your ops, then pick which heads to wake first.',
   },
   {
     n: '02',
-    title: 'Strike',
+    title: 'Weekly builds',
+    code: 'Strike',
     desc: 'Agents deploy in weekly sprints — SDR flows, voice lines, GEO pages, ERP pipelines — shipped and wired into your tools.',
   },
   {
     n: '03',
-    title: 'Scale',
-    desc: 'Live dashboards report every head’s numbers. We double down on what converts and retire what doesn’t.',
+    title: 'Live dashboards',
+    code: 'Scale',
+    desc: 'Every head reports its numbers on a dashboard you can open any time. We double down on what converts and retire what doesn’t.',
   },
 ]
 
@@ -51,7 +56,9 @@ export default function Process() {
               transition={{ duration: 0.6, delay: i * 0.1 }}
               className="rounded-3xl border border-line bg-card p-8"
             >
-              <span className="font-display text-sm font-extrabold tracking-widest text-gold">{s.n}</span>
+              <span className="font-display text-sm font-extrabold tracking-widest text-gold">
+                {s.n} <span className="ml-2 text-muted">{s.code}</span>
+              </span>
               <h3 className="mt-3 text-2xl font-bold">{s.title}</h3>
               <p className="mt-3 text-sm leading-relaxed text-muted">{s.desc}</p>
 
@@ -68,7 +75,7 @@ export default function Process() {
               )}
               {i === 2 && (
                 <div className="mt-6 grid grid-cols-3 gap-2">
-                  {[['ROAS', '+250%'], ['Leads', '3x'], ['Ops', '10x']].map(([k, v]) => (
+                  {[['Ad ROAS', '+250%'], ['Conversion', '3x'], ['Execution', '10x']].map(([k, v]) => (
                     <div key={k} className="rounded-xl border border-line bg-ground/60 px-3 py-3 text-center">
                       <p className="font-display text-lg font-extrabold text-gold">{v}</p>
                       <p className="text-[0.6rem] uppercase tracking-widest text-muted">{k}</p>

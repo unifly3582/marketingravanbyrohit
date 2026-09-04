@@ -38,6 +38,37 @@ export const WORKFLOWS = {
       ["escalate", "done"],
     ],
   },
+
+  "voice-responder": {
+    id: "voice-responder",
+    title: "Voice call responder",
+    blurb:
+      "Each caller utterance is transcribed, checked against the same client playbook the " +
+      "WhatsApp agent uses, answered aloud in the caller's language, and either progressed or " +
+      "handed to a human — sharing one lead record and one conversation thread with WhatsApp.",
+    nodes: [
+      { id: "inbound-audio", kind: "trigger", label: "Caller utterance", hint: "Sarvam STT transcript", x: 0, y: 200 },
+      { id: "context", kind: "tool", label: "Load thread history", hint: "Last 20 messages, any channel", x: 260, y: 200 },
+      { id: "reason", kind: "llm", label: "Model reasons", hint: "LLM reasoning turn", x: 500, y: 200 },
+      { id: "playbook", kind: "tool", label: "Search playbook", hint: "pgvector over policies", x: 760, y: 20 },
+      { id: "lead", kind: "tool", label: "Update lead", hint: "Qualify + tag", x: 760, y: 140 },
+      { id: "speak", kind: "tool", label: "Speak reply", hint: "Sarvam TTS to the caller", x: 760, y: 260 },
+      { id: "escalate", kind: "tool", label: "Escalate to human", hint: "Flags the thread", x: 760, y: 380 },
+      { id: "done", kind: "output", label: "Turn complete", hint: "Traced + costed", x: 1020, y: 200 },
+    ],
+    edges: [
+      ["inbound-audio", "context"],
+      ["context", "reason"],
+      ["reason", "playbook"],
+      ["reason", "lead"],
+      ["reason", "speak"],
+      ["reason", "escalate"],
+      ["playbook", "reason"],
+      ["lead", "reason"],
+      ["speak", "done"],
+      ["escalate", "done"],
+    ],
+  },
 };
 
 export const workflow = (id) => WORKFLOWS[id] ?? null;

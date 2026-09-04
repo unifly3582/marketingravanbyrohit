@@ -25,7 +25,10 @@ const QA = [
   },
 ]
 
-export default function FAQ() {
+/* `limit` shows only the first N questions (Home uses 4); `more` adds a
+ * link to the full list on the pricing page. */
+export default function FAQ({ limit, more = false }) {
+  const items = limit ? QA.slice(0, limit) : QA
   return (
     <section id="faq" className="container-x py-28">
       <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr]">
@@ -38,10 +41,15 @@ export default function FAQ() {
             Everything about how the ten heads plug into your business — from
             data access to pause rules.
           </p>
+          {more && (
+            <a href="/pricing#faq" className="mt-6 inline-block text-xs font-bold uppercase tracking-[0.2em] text-muted hover:text-gold">
+              All questions
+            </a>
+          )}
         </div>
 
         <div className="flex flex-col gap-3">
-          {QA.map((item) => (
+          {items.map((item) => (
             <details key={item.q} className="faq-item group rounded-2xl border border-line bg-card">
               <summary className="flex items-center justify-between gap-4 p-5 text-[0.95rem] font-semibold">
                 {item.q}

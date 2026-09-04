@@ -13,6 +13,18 @@ import ContactPage from './pages/ContactPage.jsx'
 import HeadAgents from './pages/HeadAgents.jsx'
 // Code-split: React Flow is ~150kB and only this route needs it.
 const AgentWorkflows = lazy(() => import('./pages/AgentWorkflows.jsx'))
+// The other nine head pages each carry their own demo; split per route.
+const HEAD_PAGES = {
+  sdr: lazy(() => import('./pages/heads/HeadSdr.jsx')),
+  voice: lazy(() => import('./pages/heads/HeadVoice.jsx')),
+  geo: lazy(() => import('./pages/heads/HeadGeo.jsx')),
+  erp: lazy(() => import('./pages/heads/HeadErp.jsx')),
+  ads: lazy(() => import('./pages/heads/HeadAds.jsx')),
+  bi: lazy(() => import('./pages/heads/HeadBi.jsx')),
+  uiux: lazy(() => import('./pages/heads/HeadUiux.jsx')),
+  api: lazy(() => import('./pages/heads/HeadApi.jsx')),
+  shield: lazy(() => import('./pages/heads/HeadShield.jsx')),
+}
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
@@ -56,6 +68,17 @@ export default function App() {
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/heads/agents" element={<HeadAgents />} />
+          {Object.entries(HEAD_PAGES).map(([slug, Page]) => (
+            <Route
+              key={slug}
+              path={`/heads/${slug}`}
+              element={
+                <Suspense fallback={<div className="min-h-[60vh]" />}>
+                  <Page />
+                </Suspense>
+              }
+            />
+          ))}
           <Route
             path="/live"
             element={

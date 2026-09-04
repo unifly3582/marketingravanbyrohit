@@ -2,6 +2,7 @@
 // the Gemini agent layer, and the admin dashboard API.
 import "./env.mjs"; // must precede db.mjs — ESM evaluates imports before top-level code
 import express from "express";
+import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { sb, upsertLead, recordCall, completeCall, windowOpen, clearUnread, unwrap } from "./db.mjs";
@@ -11,6 +12,7 @@ import { runWhatsAppAgent } from "./agent/whatsapp-agent.mjs";
 import { engineCatalog, defaultEngineId, engineFor, ENGINE_IDS } from "./agent/engines/index.mjs";
 import { modelCatalog, modelInfo, demoModel, productionModel, MODELS } from "./agent/models.mjs";
 import { embed, EMBED_DIMS, searchPlaybook } from "./agent/tools.mjs";
+import * as voice from "./voice/index.mjs";
 
 const dir = dirname(fileURLToPath(import.meta.url));
 
@@ -24,13 +26,22 @@ const AGENT_TOOL_TOKEN = env("AGENT_TOOL_TOKEN");
 const AGENT_AUTOREPLY = env("AGENT_AUTOREPLY", "false") === "true";
 const DEMO_ENABLED = env("AGENT_DEMO_ENABLED", "true") === "true";
 
+// SARVAM_ORG_ID/SARVAM_WORKSPACE_ID/SARVAM_SAMVAAD_API_KEY are for the old
+// Conversatio dial path (dispatchCall/webhooks/sarvam below) — kept dormant
+// as a fallback, not deleted, while the Vobiz+Gemini pipeline is unproven.
 for (const k of ["SARVAM_SAMVAAD_API_KEY", "SARVAM_ORG_ID", "SARVAM_WORKSPACE_ID", "AGENT_PHONE_NUMBER"]) {
   if (!env(k)) { console.error(`Missing env ${k}`); process.exit(1); }
 }
+// VOBIZ_AUTH_ID/VOBIZ_AUTH_TOKEN are NOT required at boot: the user doesn't
+// have them yet, and WhatsApp/admin/playbook must keep working regardless of
+// whether outbound dialing is configured. voice/vobiz.mjs's dialOut() throws
+// a clear error at call time instead — /api/request-call and /api/admin/call
+// already turn that into a normal 502, not a crashed server.
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 app.set("trust proxy", true);
+const httpServer = createServer(app);
 
 /** Wrap an async handler so a rejected promise becomes a 500, not a hang. */
 const wrap = (fn) => (req, res) => fn(req, res).catch((e) => {
@@ -111,7 +122,7 @@ app.post("/api/request-call", wrap(async (req, res) => {
   const msg = limitCall(req.ip);
   if (msg) return res.status(429).json({ error: msg });
   try {
-    const attempt_id = await dispatchCall(p10, { name: req.body?.name, source: req.body?.source ?? "website" });
+    const attempt_id = await voice.dialOut(p10, { name: req.body?.name, source: req.body?.source ?? "website" });
     res.json({ ok: true, attempt_id });
   } catch (e) {
     console.error("request-call", e.message);
@@ -132,14 +143,71 @@ app.post("/api/webhooks/sarvam", wrap(async (req, res) => {
 }));
 
 // ---------------- WhatsApp webhook (BSP panel) ----------------
+//
+// Same handshake the Buggly Farms OMS uses with this BSP (crm.marketingravan.com):
+//
+//   1. In the BSP panel you paste the webhook URL. The panel immediately sends
+//      GET <url>?challange=<random>  (their spelling) and expects the bare value
+//      echoed back with HTTP 200 as text — anything else and it refuses to save.
+//   2. From then on it POSTs Meta's native envelope for every inbound message,
+//      button tap, delivery status, and (Coexistence) echoes of messages sent
+//      from the WhatsApp Business app on the same number.
+//
+// Meta's own `hub.challenge` handshake is accepted too, so the same URL works
+// if the number is ever pointed straight at the Cloud API.
+//
+// Optional shared secret: set WA_WEBHOOK_TOKEN and put ?token=<value> on the URL
+// you register. Without it the endpoint stays open, like the OMS.
 
-// Verification handshake: echo the `challange` query param (BSP's spelling).
-app.get("/api/webhooks/whatsapp", (req, res) => {
-  const c = req.query.challange ?? req.query.challenge ?? "no challange";
-  res.status(200).type("text/html").send(String(c));
+const WA_WEBHOOK_TOKEN = env("WA_WEBHOOK_TOKEN");
+const WA_WEBHOOK_PATH = "/api/webhooks/whatsapp";
+
+/** The exact URL to paste into the BSP panel. */
+function whatsappWebhookUrl() {
+  const base = env("WA_WEBHOOK_PUBLIC_URL", PUBLIC_BASE_URL).replace(/\/+$/, "");
+  return `${base}${WA_WEBHOOK_PATH}${WA_WEBHOOK_TOKEN ? `?token=${encodeURIComponent(WA_WEBHOOK_TOKEN)}` : ""}`;
+}
+
+function webhookTokenOk(req) {
+  if (!WA_WEBHOOK_TOKEN) return true;
+  const provided = req.query.token ?? req.query["hub.verify_token"] ?? req.headers["x-webhook-token"];
+  return provided === WA_WEBHOOK_TOKEN;
+}
+
+// Verification handshake.
+app.get(WA_WEBHOOK_PATH, (req, res) => {
+  const challenge = req.query.challange ?? req.query.challenge ?? req.query["hub.challenge"];
+  if (!webhookTokenOk(req)) {
+    console.warn("wa webhook verify rejected: bad token from", req.ip);
+    return res.status(403).type("text/plain").send("forbidden");
+  }
+  console.log("wa webhook verify", challenge != null ? "ok" : "(no challenge param)", "from", req.ip);
+  res.status(200).type("text/html").send(String(challenge ?? "no challange"));
 });
 
-app.post("/api/webhooks/whatsapp", (req, res) => {
+// The BSP does not promise JSON: accept form-encoded and raw text bodies too,
+// and turn a JSON string hidden in a form field back into an object.
+const webhookBody = [
+  express.urlencoded({ extended: true, limit: "2mb" }),
+  express.text({ type: () => true, limit: "2mb" }),
+  (req, res, next) => {
+    let b = req.body;
+    if (typeof b === "string") { try { b = JSON.parse(b); } catch { b = { raw: b }; } }
+    else if (b && typeof b === "object") {
+      for (const [k, v] of Object.entries(b)) {
+        if (typeof v === "string" && /^[\[{]/.test(v)) { try { b[k] = JSON.parse(v); } catch { /* keep */ } }
+      }
+    }
+    req.body = b ?? {};
+    next();
+  },
+];
+
+app.post(WA_WEBHOOK_PATH, ...webhookBody, (req, res) => {
+  if (!webhookTokenOk(req)) {
+    console.warn("wa webhook event rejected: bad token from", req.ip);
+    return res.status(401).json({ error: "unauthorized" });
+  }
   // Always 200 immediately so the BSP does not retry-storm; process after.
   res.json({ ok: true });
   (async () => {
@@ -312,20 +380,59 @@ app.get("/api/admin/conversations", admin, wrap(async (req, res) => {
   ));
 }));
 
+/** Shape a messages row the way the dashboard renders it. */
+const messageView = (m) => ({
+  id: m.id,
+  direction: m.direction,
+  type: m.type ?? "text",
+  text: m.body ?? null,
+  caption: m.caption ?? null,
+  media_id: m.media_id ?? null,
+  mime_type: m.mime_type ?? null,
+  filename: m.filename ?? null,
+  button_payload: m.button_payload ?? null,
+  status: m.status ?? null,
+  source: m.source ?? null,
+  wa_message_id: m.wa_message_id ?? null,
+  timestamp: m.wa_timestamp ?? m.created_at,
+});
+
 app.get("/api/admin/messages", admin, wrap(async (req, res) => {
   const p10 = phone10(req.query.phone);
   if (!p10) return res.status(400).json({ error: "invalid phone" });
   await clearUnread(p10);
   const conv = unwrap(
-    await sb.from("conversations").select("id").eq("phone10", p10).maybeSingle(),
+    await sb.from("conversations").select("*").eq("phone10", p10).maybeSingle(),
     "conversation"
   );
-  if (!conv) return res.json([]);
-  res.json(unwrap(
+  if (!conv) return res.json({ conversation: null, messages: [] });
+  const rows = unwrap(
     await sb.from("messages").select("*").eq("conversation_id", conv.id)
-      .order("created_at", { ascending: true }).limit(500),
+      .order("wa_timestamp", { ascending: true }).order("created_at", { ascending: true }).limit(500),
     "messages"
-  ));
+  );
+  res.json({
+    conversation: {
+      ...conv,
+      window_open: !!(conv.window_open_until && new Date(conv.window_open_until).getTime() > Date.now()),
+    },
+    messages: rows.map(messageView),
+  });
+}));
+
+/** Raw webhook deliveries, newest first — the fastest way to see whether the BSP is reaching us. */
+app.get("/api/admin/webhook", admin, wrap(async (req, res) => {
+  const events = unwrap(
+    await sb.from("wa_events_raw").select("id, kind, created_at, payload")
+      .order("id", { ascending: false }).limit(Number(req.query.limit ?? 50)),
+    "wa_events_raw"
+  );
+  res.json({
+    url: whatsappWebhookUrl(),
+    token_required: !!WA_WEBHOOK_TOKEN,
+    autoreply: AGENT_AUTOREPLY,
+    events,
+  });
 }));
 
 app.post("/api/admin/send", admin, wrap(async (req, res) => {
@@ -349,7 +456,7 @@ app.post("/api/admin/call", admin, wrap(async (req, res) => {
   const p10 = phone10(req.body?.phone);
   if (!p10) return res.status(400).json({ error: "invalid phone" });
   try {
-    const attempt_id = await dispatchCall(p10, { source: "dashboard" });
+    const attempt_id = await voice.dialOut(p10, { source: "dashboard" });
     res.json({ ok: true, attempt_id });
   } catch (e) {
     res.status(502).json({ error: e.message });
@@ -464,7 +571,11 @@ app.post("/api/admin/offers", admin, wrap(async (req, res) => {
 
 app.get(["/admin", "/admin/"], (req, res) => res.sendFile(join(dir, "public", "admin.html")));
 
-app.listen(PORT, () => {
+// ---------------- voice pipeline (Vobiz call audio <-> Sarvam STT/TTS <-> Gemini brain) ----------------
+
+voice.attach(httpServer, app);
+
+httpServer.listen(PORT, () => {
   console.log(`marketingravan server listening on :${PORT}`);
   console.log(`  agent auto-reply: ${AGENT_AUTOREPLY ? "ON" : "off"}   public demo: ${DEMO_ENABLED ? "on" : "off"}`);
   console.log(`  production: ${productionModel()} via ${defaultEngineId()}`);

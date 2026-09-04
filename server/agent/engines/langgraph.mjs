@@ -36,7 +36,7 @@ async function chatModel(model, info) {
 /** Guard against a pathological tool loop burning the budget. */
 const RECURSION_LIMIT = 12;
 
-export async function run({ tracer, specs, offer, userMessage, model }) {
+export async function run({ tracer, specs, offer, userMessage, model, channel = "whatsapp" }) {
   const tools = specs.map((spec) =>
     tool(async (input) => JSON.stringify(await spec.run(input)), {
       name: spec.name,
@@ -86,7 +86,7 @@ export async function run({ tracer, specs, offer, userMessage, model }) {
   // --- run ---------------------------------------------------------------
 
   const result = await graph.invoke(
-    { messages: [new SystemMessage(systemString(offer)), new HumanMessage(userMessage)] },
+    { messages: [new SystemMessage(systemString(offer, channel)), new HumanMessage(userMessage)] },
     { recursionLimit: RECURSION_LIMIT }
   );
 

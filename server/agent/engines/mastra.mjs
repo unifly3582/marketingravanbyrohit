@@ -32,7 +32,7 @@ async function languageModel(model, info) {
 /** Ceiling on tool-call rounds, mirroring the other engines' loop guards. */
 const MAX_STEPS = 8;
 
-export async function run({ tracer, specs, offer, userMessage, model }) {
+export async function run({ tracer, specs, offer, userMessage, model, channel = "whatsapp" }) {
   const tools = Object.fromEntries(
     specs.map((spec) => [
       spec.name,
@@ -48,7 +48,7 @@ export async function run({ tracer, specs, offer, userMessage, model }) {
   const agent = new Agent({
     id: "whatsapp-responder",
     name: "WhatsApp responder",
-    instructions: systemString(offer),
+    instructions: systemString(offer, channel),
     model: await languageModel(model, requireModel(model)),
     tools,
   });

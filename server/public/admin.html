@@ -41,8 +41,29 @@
   dialog::backdrop { background:rgba(0,0,0,.7); }
   .turn { margin-bottom:8px; } .turn b { color:var(--ember); }
   #login { max-width:340px; margin:16vh auto; display:flex; flex-direction:column; gap:10px; }
+  #login[hidden] { display:none; } /* author display:flex would otherwise beat the hidden attribute */
   .row { display:flex; gap:8px; margin:10px 0; } .muted { color:var(--muted); }
   label { font-size:12px; color:var(--muted); display:block; margin:10px 0 4px; }
+  /* chats */
+  .conv { display:grid; grid-template-columns:1fr auto; gap:2px 8px; }
+  .conv b { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .conv small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .conv .when { color:var(--muted); font-size:11px; text-align:right; }
+  .conv .badge { float:none; justify-self:end; }
+  .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green); margin-right:6px; vertical-align:middle; }
+  .dot.off { background:var(--line); }
+  .thead { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line); }
+  .thead b { font-size:15px; } .thead .muted { font-size:12px; }
+  .thead .sp { flex:1; }
+  .day { align-self:center; color:var(--muted); font-size:11px; background:#0f0c0a; border:1px solid var(--line); border-radius:999px; padding:2px 10px; margin:6px 0; }
+  .m .tag { display:inline-block; font-size:10px; color:var(--muted); border:1px solid var(--line); border-radius:6px; padding:0 6px; margin-bottom:4px; }
+  .m .btn { display:inline-block; border:1px solid var(--ember); color:var(--ember); border-radius:8px; padding:2px 10px; font-size:12px; }
+  .m.voice { border-left:3px solid var(--ember); }
+  .tick { color:var(--muted); } .tick.read { color:#60a5fa; } .tick.failed { color:var(--red); }
+  .urlbox { display:flex; gap:8px; align-items:center; }
+  .urlbox code { flex:1; background:#0f0c0a; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13px; word-break:break-all; }
+  pre.json { background:#0f0c0a; border:1px solid var(--line); border-radius:10px; padding:10px; font-size:11px; overflow:auto; max-height:320px; white-space:pre-wrap; word-break:break-all; }
+  ol.steps { padding-left:20px; } ol.steps li { margin:4px 0; }
 </style>
 </head>
 <body>
@@ -58,7 +79,8 @@
   <div class="tabs">
     <button data-t="overview" class="on">Overview</button>
     <button data-t="calls">Calls</button>
-    <button data-t="inbox">WhatsApp Inbox</button>
+    <button data-t="inbox">Chats</button>
+    <button data-t="webhook">Webhook</button>
     <button data-t="offers">Offers</button>
     <button data-t="playbook">Playbook</button>
   </div>
@@ -80,6 +102,7 @@
     <div class="split">
       <div class="list" id="convs"></div>
       <div class="thread">
+        <div class="thead" id="thead" hidden></div>
         <div class="msgs" id="msgs"><p class="muted" style="margin:auto">Select a conversation</p></div>
         <div class="send">
           <input id="reply" placeholder="Reply (needs open 24h window)…" onkeydown="if(event.key==='Enter')sendReply()">
@@ -88,6 +111,21 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div id="t-webhook" hidden>
+    <div class="card" style="max-width:860px">
+      <label>Webhook URL — paste this in the BSP panel (crm.marketingravan.com → WhatsApp → Webhook)</label>
+      <div class="urlbox"><code id="whurl">…</code><button class="go" onclick="copyUrl()">Copy</button></div>
+      <p class="muted" id="whmeta" style="margin-top:8px"></p>
+      <ol class="steps muted" style="margin-top:10px">
+        <li>The panel sends <code>GET …?challange=&lt;random&gt;</code>; this server echoes the value back with 200, which is what makes the panel accept the URL.</li>
+        <li>After that every message, button tap, delivery status and phone-app echo is POSTed here, stored raw in <code>wa_events_raw</code>, then parsed into <code>conversations</code> / <code>messages</code>.</li>
+        <li>Send a WhatsApp message to the business number and watch it appear below within a few seconds, then under Chats.</li>
+      </ol>
+    </div>
+    <table><thead><tr><th>#</th><th>Received</th><th>Kind</th><th>Summary</th></tr></thead><tbody id="whrows"></tbody></table>
+    <p class="muted" id="whempty" hidden style="padding:14px">No webhook deliveries yet — the BSP has not called this URL.</p>
   </div>
 
   <div id="t-playbook" hidden>
@@ -149,7 +187,7 @@ async function login() {
 
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("on")); b.classList.add("on");
-  ["overview","calls","inbox","offers","playbook"].forEach(t => $("t-"+t).hidden = t !== b.dataset.t);
+  ["overview","calls","inbox","webhook","offers","playbook"].forEach(t => $("t-"+t).hidden = t !== b.dataset.t);
   refresh();
 });
 const activeTab = () => document.querySelector(".tabs button.on").dataset.t;
@@ -180,10 +218,18 @@ async function refresh() {
   }
   if (t === "inbox") {
     const convs = await api("/api/admin/conversations");
-    $("convs").innerHTML = convs.map(c => `<div class="conv ${c.phone10===currentPhone?'on':''}" onclick="openConv('${c.phone10}')">
-      ${c.unread ? `<span class="badge">${c.unread}</span>` : ""}
-      <b>${esc(c.contact_name || c.phone10)}</b><small>${esc((c.last_message_text||"").slice(0,42))}</small></div>`).join("") || `<p class="muted" style="padding:14px">No conversations yet</p>`;
+    $("convs").innerHTML = renderConvs(convs, currentPhone);
     if (currentPhone) loadThread();
+  }
+  if (t === "webhook") {
+    const w = await api("/api/admin/webhook");
+    $("whurl").textContent = w.url;
+    $("whmeta").textContent = (w.token_required ? "Shared secret required (WA_WEBHOOK_TOKEN is set). " : "No shared secret (WA_WEBHOOK_TOKEN unset) — the endpoint is open, like the OMS. ")
+      + "Agent auto-reply is " + (w.autoreply ? "ON" : "off") + ".";
+    $("whempty").hidden = w.events.length > 0;
+    $("whrows").innerHTML = w.events.map(e => `<tr class="click" onclick='showEvent(${JSON.stringify(e).replace(/'/g,"&#39;")})'>
+      <td>${e.id}</td><td>${esc(fmtTime(e.created_at))}</td><td><span class="pill ${e.kind==='incoming'?'ok':e.kind==='status'?'mid':''}">${esc(e.kind)}</span></td>
+      <td class="muted">${esc(eventSummary(e.payload))}</td></tr>`).join("");
   }
   if (t === "offers") {
     const offers = await api("/api/admin/offers");
@@ -202,12 +248,100 @@ async function openCall(id) {
 }
 
 async function openConv(p) { currentPhone = p; refresh(); }
-async function loadThread() {
-  const msgs = await api("/api/admin/messages?phone=" + currentPhone);
-  $("msgs").innerHTML = msgs.map(m => `<div class="m ${m.direction==='in'?'in':'out'}">${esc(m.text || m.caption || "["+m.type+"]")}
-    <small>${esc((m.timestamp||"").slice(0,16).replace("T"," "))}${m.direction==='out' ? " · " + esc(m.status||"") + (m.source ? " · "+esc(m.source) : "") : ""}</small></div>`).join("");
-  $("msgs").scrollTop = $("msgs").scrollHeight;
+
+// ---- chat rendering (pure: data in, HTML out) ----
+const pad = (n) => String(n).padStart(2, "0");
+function fmtTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso); if (isNaN(d)) return String(iso).slice(0, 16);
+  const now = new Date(), sameDay = d.toDateString() === now.toDateString();
+  const hm = pad(d.getHours()) + ":" + pad(d.getMinutes());
+  if (sameDay) return hm;
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + hm;
 }
+function dayLabel(iso) {
+  const d = new Date(iso); if (isNaN(d)) return "";
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = Math.round((today - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+  if (diff === 0) return "Today"; if (diff === 1) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+}
+const TYPE_ICON = { image:"📷 Photo", video:"🎬 Video", audio:"🎤 Voice message", document:"📄 Document", sticker:"🌟 Sticker", location:"📍 Location", contacts:"👤 Contact", template:"📋 Template", voice:"📞 Call" };
+function renderConvs(convs, selected) {
+  if (!convs.length) return `<p class="muted" style="padding:14px">No conversations yet — see the Webhook tab to check deliveries.</p>`;
+  return convs.map(c => {
+    const open = c.window_open_until && new Date(c.window_open_until) > new Date();
+    return `<div class="conv ${c.phone10===selected?'on':''}" onclick="openConv('${esc(c.phone10)}')">
+      <b><span class="dot ${open?'':'off'}" title="${open?'24h reply window open':'window closed — template only'}"></span>${esc(c.contact_name || c.phone10)}</b>
+      <span class="when">${esc(fmtTime(c.last_message_at))}</span>
+      <small>${c.last_direction==='out' ? '↩ ' : ''}${esc((c.last_message_text||"").slice(0,48))}</small>
+      ${c.unread ? `<span class="badge">${c.unread}</span>` : "<span></span>"}
+    </div>`; }).join("");
+}
+function bubble(m) {
+  const out = m.direction === "out";
+  let body = "";
+  if (m.type === "text" || m.type === "voice") body = esc(m.text || "");
+  else if (m.type === "button" || m.type === "interactive") body = `<span class="btn">${esc(m.text || m.button_payload || "")}</span>`;
+  else if (m.type === "template") body = `<span class="tag">template</span><br>${esc(m.text || "")}`;
+  else {
+    body = `<span class="tag">${esc(TYPE_ICON[m.type] || m.type)}</span>` + (m.filename ? `<br>${esc(m.filename)}` : "") + (m.caption || m.text ? `<br>${esc(m.caption || m.text)}` : "");
+  }
+  let ticks = "";
+  if (out) {
+    const s = (m.status || "").toLowerCase();
+    ticks = s === "read" ? '<span class="tick read">✓✓</span>' : s === "delivered" ? '<span class="tick">✓✓</span>' : s === "failed" ? '<span class="tick failed">✗ failed</span>' : '<span class="tick">✓</span>';
+  }
+  const src = out && m.source ? " · " + esc(m.source) : "";
+  return `<div class="m ${out?'out':'in'} ${m.type==='voice'?'voice':''}">${body}<small>${esc(fmtTime(m.timestamp))}${src} ${ticks}</small></div>`;
+}
+function renderThread(msgs) {
+  if (!msgs.length) return `<p class="muted" style="margin:auto">No messages in this conversation yet.</p>`;
+  let html = "", lastDay = null;
+  for (const m of msgs) {
+    const day = dayLabel(m.timestamp);
+    if (day !== lastDay) { html += `<div class="day">${esc(day)}</div>`; lastDay = day; }
+    html += bubble(m);
+  }
+  return html;
+}
+function renderHead(c) {
+  if (!c) return "";
+  const until = c.window_open_until ? new Date(c.window_open_until) : null;
+  const open = until && until > new Date();
+  return `<div><b>${esc(c.contact_name || c.phone10)}</b><div class="muted">+91 ${esc(c.phone10)}</div></div><span class="sp"></span>
+    <span class="pill ${open?'ok':'bad'}">${open ? "reply window open until " + esc(fmtTime(until.toISOString())) : "window closed — template only"}</span>
+    <button class="go" style="padding:6px 12px" onclick="dialPhone('${esc(c.phone10)}')">Call via AI</button>`;
+}
+
+async function loadThread() {
+  const r = await api("/api/admin/messages?phone=" + currentPhone);
+  const conv = r.conversation, msgs = r.messages || [];
+  $("thead").hidden = !conv; $("thead").innerHTML = renderHead(conv);
+  const el = $("msgs"), atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  el.innerHTML = renderThread(msgs);
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+async function dialPhone(p) {
+  try { const r = await api("/api/admin/call", { method:"POST", body: JSON.stringify({ phone: p }) }); alert("Dispatched " + r.attempt_id); }
+  catch (e) { alert(e.message); }
+}
+function eventSummary(p) {
+  try {
+    const v = p?.entry?.[0]?.changes?.[0]?.value;
+    const m = v?.messages?.[0] || v?.message_echoes?.[0] || v?.smb_message_echoes?.[0];
+    if (m) return `${m.type || "message"} ${m.from ? "from " + m.from : ""}${m.to ? " to " + m.to : ""}: ${m.text?.body || m.button?.text || m.interactive?.button_reply?.title || m.image?.caption || ""}`.trim();
+    const st = v?.statuses?.[0];
+    if (st) return `${st.status} → ${st.recipient_id || ""} (${st.id || ""})`;
+    if (p?.message_status || p?.queue_id) return `send ack ${p.message_status || ""} ${p.queue_id || ""}`;
+    return JSON.stringify(p).slice(0, 140);
+  } catch { return ""; }
+}
+function showEvent(e) {
+  $("dlgbody").innerHTML = `<h3>Event #${e.id} · ${esc(e.kind)} · ${esc(fmtTime(e.created_at))}</h3><pre class="json">${esc(JSON.stringify(e.payload, null, 2))}</pre>`;
+  dlg.showModal();
+}
+function copyUrl() { navigator.clipboard?.writeText($("whurl").textContent).then(() => { $("whmeta").textContent = "Copied. " + $("whmeta").textContent; }); }
 async function sendReply() {
   const text = $("reply").value.trim();
   if (!text || !currentPhone) return;
@@ -273,8 +407,14 @@ async function testPolicy() {
   } catch (e) { $("pbresults").textContent = e.message; }
 }
 
+// /admin#chats or #webhook opens that tab directly (after login if needed).
+const want = { chats:"inbox", inbox:"inbox", webhook:"webhook", calls:"calls", offers:"offers", playbook:"playbook" }[location.hash.slice(1)];
+if (want) {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x.dataset.t === want));
+  ["overview","calls","inbox","webhook","offers","playbook"].forEach(t => $("t-"+t).hidden = t !== want);
+}
 if (TOKEN) { $("app").hidden = false; refresh().catch(showLogin); } else showLogin();
-setInterval(() => { if (!$("app").hidden && (activeTab() === "inbox" || activeTab() === "overview")) refresh(); }, 10000);
+setInterval(() => { if (!$("app").hidden && ["inbox","overview","webhook"].includes(activeTab())) refresh(); }, 10000);
 </script>
 </body>
 </html>

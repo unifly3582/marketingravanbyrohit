@@ -4,8 +4,22 @@
     {
       "name": "marketing-ravan",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "site"],
-      "port": 5173
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "site"
+      ],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "marketing-ravan-api",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "server/index.mjs"
+      ],
+      "port": 8787
     }
   ]
 }

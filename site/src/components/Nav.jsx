@@ -4,7 +4,7 @@ import { Arrow } from './icons.jsx'
 import logo from '../assets/logo-mark.png'
 
 const LINKS = [
-  { label: 'Heads', href: '/#heads', anchor: true },
+  { label: 'Services', href: '/#heads', anchor: true },
   { label: 'Work', href: '/works' },
   { label: 'About', href: '/about' },
   { label: 'Pricing', href: '/pricing' },

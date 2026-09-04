@@ -12,9 +12,9 @@ const BILLING = [
   { key: 'y', label: 'Yearly', mult: 10 / 12, note: '2 months free' },
 ]
 
-const fmt = (n) => '$' + Math.round(n).toLocaleString('en-US')
+export const fmt = (n) => '$' + Math.round(n).toLocaleString('en-US')
 
-const TIERS = [
+export const TIERS = [
   {
     name: 'Single Head',
     base: 1900,

@@ -129,7 +129,18 @@ function readMessage(m) {
     case "audio": case "voice": Object.assign(r, { msgType: "audio", mediaId: m.audio?.id || m.voice?.id || null, mimeType: m.audio?.mime_type || m.voice?.mime_type || "audio/ogg" }); break;
     case "document": Object.assign(r, { text: m.document?.filename || "", caption: m.document?.caption || null, filename: m.document?.filename || null, mediaId: m.document?.id || null, mimeType: m.document?.mime_type || null }); break;
     case "sticker": Object.assign(r, { mediaId: m.sticker?.id || null, mimeType: m.sticker?.mime_type || "image/webp" }); break;
-    case "location": r.text = m.location?.name || m.location?.address || "[location]"; break;
+    case "location": {
+      const l = m.location || {};
+      const where = [l.name, l.address].filter(Boolean).join(", ");
+      const coords = l.latitude != null && l.longitude != null ? `${l.latitude},${l.longitude}` : "";
+      r.text = where || coords || "[location]";
+      break;
+    }
+    case "contacts": {
+      const c = Array.isArray(m.contacts) ? m.contacts[0] : null;
+      r.text = c?.name?.formatted_name || "[contact card]";
+      break;
+    }
     case "button": Object.assign(r, { text: m.button?.text || "", buttonPayload: m.button?.payload || m.button?.text || null }); break;
     case "interactive": {
       const i = m.interactive || {};
@@ -137,6 +148,10 @@ function readMessage(m) {
       Object.assign(r, { text: reply.title || "", buttonPayload: reply.id || reply.title || null });
       break;
     }
+    case "reaction": r.text = m.reaction?.emoji || "[reaction]"; break;
+    case "order": r.text = `[order] ${(m.order?.product_items || []).length} item(s)`; break;
+    case "template": r.text = `[template] ${m.template?.name || ""}`.trim(); break;
+    case "system": r.text = m.system?.body || "[system]"; break;
     default: r.text = `[${type}]`;
   }
   return r;
@@ -145,6 +160,11 @@ function readMessage(m) {
 /**
  * Ingest one webhook POST body: store raw, then messages/statuses into the DB.
  * Returns the inbound messages so the caller can hand them to the agent.
+ *
+ * The BSP forwards Meta's native envelope:
+ *   entry[0].changes[0].value.{messages|message_echoes|statuses|contacts|metadata}
+ * but the exact shape is not fully documented, so every lookup is a deep search
+ * and the raw payload is always kept in wa_events_raw before any parsing.
  */
 export async function ingest(payload) {
   const kind = classify(payload);
@@ -159,19 +179,27 @@ export async function ingest(payload) {
     return { kind, inbound: [] };
   }
 
+  // Our own number, so an echo that arrives under `messages` (some BSPs do
+  // that) is not mistaken for a customer writing to us.
+  const metadata = deepFindObj(payload, ["metadata"]);
+  const business = onlyDigits(metadata?.display_phone_number ?? env("WA_BUSINESS_PHONE")).slice(-10);
+
   const messages = deepFindObj(payload, ["messages", "message_echoes", "smb_message_echoes"]);
   const contacts = deepFindObj(payload, ["contacts"]);
   const contactName = Array.isArray(contacts) ? contacts[0]?.profile?.name ?? null : null;
   const inbound = [];
   let count = 0;
   for (const m of Array.isArray(messages) ? messages : []) {
-    const from = phone10(onlyDigits(m.from ?? deepFind(payload, ["from", "wa_id"])));
-    if (!from) continue;
+    const fromDigits = onlyDigits(m.from ?? deepFind(payload, ["from", "wa_id"]));
+    const isEcho = kind === "outgoing" || (business && fromDigits.endsWith(business));
+    // For an echo the conversation partner is the recipient, not the sender.
+    const party = phone10(isEcho ? onlyDigits(m.to) : fromDigits);
+    if (!party) continue;
     const r = readMessage(m);
     const hasContent = (r.text && r.text.trim()) || r.mediaId || r.buttonPayload || r.msgType !== "text";
-    if (kind === "incoming" && !hasContent) continue;
-    const direction = kind === "outgoing" ? "out" : "in";
-    await insertMessage(from, {
+    if (!hasContent) continue; // a receipt/ack leaking through, not a message
+    const direction = isEcho ? "out" : "in";
+    await insertMessage(party, {
       direction,
       type: r.msgType,
       text: r.text || null,
@@ -181,18 +209,19 @@ export async function ingest(payload) {
       filename: r.filename,
       buttonPayload: r.buttonPayload,
       messageId: m.id ?? null,
+      status: direction === "out" ? "sent" : null,
       source: direction === "out" ? "phone-echo" : null,
-      contactName,
+      contactName: direction === "in" ? contactName : null,
       timestamp: m.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : new Date().toISOString(),
     });
-    await touchConversation(from, {
+    await touchConversation(party, {
       text: r.text || r.caption || `[${r.msgType}]`,
       direction,
-      contactName,
+      contactName: direction === "in" ? contactName : null,
       openWindow: direction === "in",   // an inbound message opens the 24h window
       bumpUnread: direction === "in",
     });
-    if (direction === "in") inbound.push({ phone10: from, text: r.text, type: r.msgType, contactName });
+    if (direction === "in") inbound.push({ phone10: party, text: r.text, type: r.msgType, contactName });
     count++;
   }
   return { kind, count, inbound };

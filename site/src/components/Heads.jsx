@@ -142,14 +142,14 @@ export default function Heads() {
                 </motion.div>
 
                 <motion.a
-                  href="/contact"
+                  href={h.href ?? '/contact'}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: '-100px' }}
                   transition={{ duration: 0.6, delay: 0.24 }}
                   className="mt-9 inline-flex items-center gap-2 text-sm font-bold text-cream transition-colors hover:text-gold"
                 >
-                  Deploy this head <Arrow className="h-4 w-4" />
+                  {h.href ? 'Explore this head' : 'Deploy this head'} <Arrow className="h-4 w-4" />
                 </motion.a>
               </div>
 
