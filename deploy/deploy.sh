@@ -65,12 +65,29 @@ fi
 
 echo "preflight ok — $SITE_ENV has the browser keys"
 
+# @mastra/core needs >=22.13, @supabase/supabase-js and @ai-sdk/google need >=22.
+# npm only warns about engine mismatches, so without this check the install
+# "succeeds" and the service misbehaves at runtime instead.
+NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+if (( NODE_MAJOR < 22 )); then
+  echo "ABORT: node $(node --version 2>/dev/null || echo 'not found') — this app needs >= 22."
+  echo "       Other services on this box may pin the system node, so install 22"
+  echo "       side-by-side and point only this unit at it:"
+  echo "         ExecStart=/opt/node22/bin/node /var/www/marketingravan/server/index.mjs"
+  exit 1
+fi
+echo "preflight ok — node $(node --version)"
+
 # Warn (do not block) if an un-migrated SQLite store is still sitting there.
-if [[ -f "$APP_DIR/server/data.sqlite" ]]; then
+# The old store honoured DB_PATH, so it is usually NOT under server/.
+LEGACY_DB=$(grep -oE '^[[:space:]]*DB_PATH=.+' "$ENV_FILE" | head -1 | cut -d= -f2- | tr -d '"'"'"' ')
+LEGACY_DB=${LEGACY_DB:-$APP_DIR/server/data.sqlite}
+if [[ -f "$LEGACY_DB" ]]; then
   echo
-  echo "NOTE: $APP_DIR/server/data.sqlite still exists."
-  echo "      The new code does not read it. If it holds live leads/calls/messages, run:"
-  echo "        node $APP_DIR/server/migrate-sqlite.mjs --apply"
+  echo "NOTE: $LEGACY_DB still exists (plus any -wal holding uncheckpointed rows)."
+  echo "      The new code does not read it. If it holds live leads/calls/messages:"
+  echo "        node $APP_DIR/server/migrate-sqlite.mjs '$LEGACY_DB'          # dry run"
+  echo "        node $APP_DIR/server/migrate-sqlite.mjs '$LEGACY_DB' --apply"
   echo "      Keep the file as a cold backup either way."
   echo
 fi
