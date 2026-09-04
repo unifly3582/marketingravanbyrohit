@@ -69,6 +69,45 @@ export const WORKFLOWS = {
       ["escalate", "done"],
     ],
   },
+
+  "web-voice": {
+    id: "web-voice",
+    title: "Website voice agent",
+    blurb:
+      "A visitor presses the microphone and talks to the site. Gemini's realtime voice model " +
+      "hears them, answers aloud in about a second, drives the page to whatever it is " +
+      "describing, and reaches for the same playbook, lead record and escalation path the " +
+      "WhatsApp and phone agents use. One run per conversation, not per turn.",
+    nodes: [
+      { id: "session", kind: "trigger", label: "Session opened", hint: "Mic granted, socket up", x: 0, y: 220 },
+      { id: "context", kind: "tool", label: "Load thread history", hint: "If they're a known number", x: 250, y: 220 },
+      { id: "reason", kind: "llm", label: "Live model", hint: "Gemini Live, audio in/out", x: 500, y: 220 },
+      { id: "playbook", kind: "tool", label: "Search playbook", hint: "pgvector over policies", x: 780, y: 0 },
+      { id: "navigate", kind: "tool", label: "Navigate the site", hint: "Moves the visitor's page", x: 780, y: 110 },
+      { id: "lead", kind: "tool", label: "Capture contact", hint: "Anonymous → lead", x: 780, y: 220 },
+      { id: "callback", kind: "tool", label: "Request a callback", hint: "Hands off to the phone agent", x: 780, y: 330 },
+      { id: "whatsapp", kind: "tool", label: "WhatsApp follow-up", hint: "Approved template", x: 780, y: 440 },
+      { id: "escalate", kind: "tool", label: "Escalate to human", hint: "Flags the thread", x: 780, y: 550 },
+      { id: "done", kind: "output", label: "Session complete", hint: "Transcript + cost", x: 1060, y: 220 },
+    ],
+    edges: [
+      ["session", "context"],
+      ["context", "reason"],
+      ["reason", "playbook"],
+      ["reason", "navigate"],
+      ["reason", "lead"],
+      ["reason", "callback"],
+      ["reason", "whatsapp"],
+      ["reason", "escalate"],
+      ["playbook", "reason"],
+      ["navigate", "reason"],
+      ["lead", "reason"],
+      ["callback", "reason"],
+      ["whatsapp", "reason"],
+      ["escalate", "reason"],
+      ["reason", "done"],
+    ],
+  },
 };
 
 export const workflow = (id) => WORKFLOWS[id] ?? null;

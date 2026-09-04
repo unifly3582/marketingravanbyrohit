@@ -49,7 +49,28 @@ export const MODELS = {
     input: 0.3, output: 2.5, cacheRead: 0.03,
     thinking: null, effort: false, promptCaching: false, refusalFallbacks: false,
   },
+
+  // --- Live: realtime audio in and out, for the website voice agent ---------
+  // bidiGenerateContent only — this one cannot be used by mastra or langgraph,
+  // and voice/web-session.mjs talks to it over its own WebSocket.
+  //
+  // Google prices this by modality: text is $0.75/$4.50, audio is $3.00/$12.00
+  // (checked 2026-09-05). A voice session is overwhelmingly audio, and the
+  // tracer's cost model is a single flat rate per model, so the audio rate is
+  // what is recorded here. That over-states spend on the text tokens, which is
+  // the safe direction to be wrong in for a daily cost cap.
+  "gemini-3.1-flash-live-preview": {
+    provider: "google",
+    label: "Gemini 3.1 Flash Live",
+    input: 3.0, output: 12.0, cacheRead: 0.3,
+    thinking: null, effort: false, promptCaching: false, refusalFallbacks: false,
+    realtime: true,
+  },
 };
+
+/** Realtime audio conversations — the only model here that speaks. */
+export const DEFAULT_LIVE_MODEL = "gemini-3.1-flash-live-preview";
+export const liveModel = () => process.env.AGENT_LIVE_MODEL ?? DEFAULT_LIVE_MODEL;
 
 /** Real customers: Flash rather than Flash-Lite — it has to judge escalation. */
 export const DEFAULT_MODEL = "gemini-3.8-flash";
@@ -80,12 +101,20 @@ export function requireModel(id) {
   return info;
 }
 
-/** Human-readable list for the API/UI. */
+/**
+ * Human-readable list for the API/UI.
+ *
+ * Realtime models are excluded: the public demo lets a visitor pick a model for
+ * a Mastra/LangGraph run, and those engines call generateContent, which a
+ * bidi-only model does not serve. Offering it would only hand someone a 404.
+ */
 export const modelCatalog = () =>
-  Object.entries(MODELS).map(([id, m]) => ({
-    id,
-    label: m.label,
-    provider: m.provider,
-    input: m.input,
-    output: m.output,
-  }));
+  Object.entries(MODELS)
+    .filter(([, m]) => !m.realtime)
+    .map(([id, m]) => ({
+      id,
+      label: m.label,
+      provider: m.provider,
+      input: m.input,
+      output: m.output,
+    }));

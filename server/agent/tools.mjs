@@ -105,18 +105,26 @@ async function searchPlaybook(query, limit = 5) {
 /**
  * @param {object} ctx
  * @param {object} ctx.tracer   run tracer
- * @param {string} ctx.phone10  the customer
+ * @param {string|(() => string|null)} ctx.phone10
+ *   The customer. WhatsApp and voice know who they are talking to before the
+ *   run opens, so they pass a string. A website visitor is anonymous until
+ *   they hand over a number mid-conversation, so the web channel passes a
+ *   getter and every tool resolves it at call time instead of at build time.
  * @param {boolean} ctx.demo    simulate side effects
  * @param {object} [ctx.outcome] mutated with what the agent actually did —
  *   the reply text as sent, whether it escalated, and (voice only) whether it
  *   asked to end the call. Read this rather than the model's trailing prose:
  *   engines return whatever text the model happened to emit last, which is
  *   empty when the turn ends on a tool call.
- * @param {"whatsapp"|"voice"} [ctx.channel] which reply tool to expose —
- *   send_whatsapp_reply for WhatsApp, speak_reply + end_call for voice.
+ * @param {"whatsapp"|"voice"|"web"} [ctx.channel] which reply tool to expose —
+ *   send_whatsapp_reply for WhatsApp, speak_reply + end_call for voice, and
+ *   none for web (the Live API speaks natively, so a reply tool would only
+ *   duplicate what the model is already saying aloud).
  * @returns {Array<{name: string, description: string, schema: import('zod').ZodTypeAny, node: string, label: string, run: (input: object) => Promise<object>}>}
  */
 export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, channel = "whatsapp" }) {
+  /** The customer's number right now — see the ctx.phone10 note above. */
+  const who = () => (typeof phone10 === "function" ? phone10() : phone10);
   // One reply per turn, enforced here rather than in the prompt.
   //
   // The prompt asks for exactly one send_whatsapp_reply, and models do not
@@ -158,7 +166,7 @@ export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, ch
       }),
       run: traced("context", "Load thread history", async ({ limit }) =>
         // A demo run has no thread, and must not create one just by looking.
-        demo ? { messages: [] } : { messages: await recentMessages(phone10, limit ?? 20) }
+        demo || !who() ? { messages: [] } : { messages: await recentMessages(who(), limit ?? 20) }
       ),
     },
 
@@ -191,7 +199,7 @@ export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, ch
       }),
       run: traced("lead", "Update lead", async ({ name, status, note }) => {
         if (demo) return { updated: false, simulated: true, name, status, note };
-        const lead = await upsertLead(phone10, { name, status });
+        const lead = await upsertLead(who(), { name, status });
         return { updated: true, lead_id: lead?.id ?? null, name, status, note };
       }),
     },
@@ -242,7 +250,12 @@ export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, ch
             }),
           },
         ]
-      : [
+      : []),
+
+    // The web channel has no reply tool at all: the Live API speaks the answer
+    // itself, so exposing one would only let the model say everything twice.
+    ...(channel === "whatsapp"
+      ? [
           {
             name: "send_whatsapp_reply",
             node: "reply",
@@ -270,11 +283,11 @@ export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, ch
                 outcome.reply = text;
                 return { sent: false, simulated: true, text };
               }
-              const open = await windowOpen(phone10);
+              const open = await windowOpen(who());
               if (!open) {
                 // Outside the 24h service window only approved templates are allowed.
                 const r = await sendTemplate(
-                  phone10,
+                  who(),
                   process.env.WA_DEFAULT_TEMPLATE ?? "hi_intro",
                   "en",
                   [],
@@ -284,13 +297,14 @@ export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, ch
                 outcome.reply = text;
                 return { sent: true, mode: "template", reason: "24h window closed", messageId: r.messageId };
               }
-              const r = await sendText(phone10, text, "agent");
+              const r = await sendText(who(), text, "agent");
               replySent = true;
               outcome.reply = text;
               return { sent: true, mode: "text", messageId: r.messageId, text };
             }),
           },
-        ]),
+        ]
+      : []),
 
     {
       name: "escalate_to_human",
@@ -307,10 +321,15 @@ export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, ch
       run: traced("escalate", "Escalate to human", async ({ reason, urgency }) => {
         outcome.escalated = true;
         if (demo) return { escalated: false, simulated: true, reason, urgency: urgency ?? "normal" };
+        // A website visitor may still be anonymous. The escalation is real —
+        // it is on the run, which the dashboard lists — but there is no thread
+        // to flag yet, and `.eq("phone10", null)` would silently match nothing.
+        if (!who())
+          return { escalated: true, thread_flagged: false, reason, urgency: urgency ?? "normal" };
         const { error } = await sb
           .from("conversations")
           .update({ human_handoff: true, status: "needs_human" })
-          .eq("phone10", phone10);
+          .eq("phone10", who());
         if (error) throw new Error(error.message);
         return { escalated: true, reason, urgency: urgency ?? "normal" };
       }),

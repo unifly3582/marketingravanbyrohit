@@ -16,6 +16,7 @@ import { WebSocketServer } from "ws";
 import { sb, recordCall, upsertLead, completeCall } from "../db.mjs";
 import * as vobiz from "./vobiz.mjs";
 import { CallSession } from "./session.mjs";
+import { WebVoiceSession, WEB_STREAM_PATH, INPUT_SAMPLE_RATE, OUTPUT_SAMPLE_RATE } from "./web-session.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 
@@ -50,7 +51,53 @@ async function callInfo(attemptId) {
 
 const STREAM_PATH_RE = /^\/api\/voice\/stream\/([^/]+)$/;
 
+// ---------------- website voice agent ----------------
+//
+// The browser agent is metered separately from the phone agent: it is offered
+// to anonymous visitors, it bills by the second of audio, and a single tab left
+// open would otherwise run the daily budget down on its own. Two independent
+// limits, because they fail differently — a crowd hitting the site at once is
+// a concurrency problem, one enthusiast reloading is a per-IP problem.
+
+const WEB_ENABLED = () => (process.env.WEB_VOICE_ENABLED ?? "true") === "true";
+const MAX_CONCURRENT = Number(process.env.WEB_VOICE_MAX_CONCURRENT ?? 4);
+const PER_IP_PER_HOUR = Number(process.env.WEB_VOICE_PER_IP_PER_HOUR ?? 4);
+const PER_DAY = Number(process.env.WEB_VOICE_PER_DAY ?? 150);
+
+let liveSessions = 0;
+const ipHits = new Map();
+let dayCount = { day: new Date().toDateString(), n: 0 };
+
+/** null when the visitor may start a session, otherwise why not. */
+function webVoiceGate(ip) {
+  if (!WEB_ENABLED()) return "The voice agent is switched off right now.";
+  if (liveSessions >= MAX_CONCURRENT) return "All our agents are busy. Try again in a minute.";
+  const now = Date.now();
+  const hits = (ipHits.get(ip) ?? []).filter((t) => now - t < 3600_000);
+  if (hits.length >= PER_IP_PER_HOUR) return "You have used your demo sessions for this hour.";
+  const today = new Date().toDateString();
+  if (dayCount.day !== today) dayCount = { day: today, n: 0 };
+  if (dayCount.n >= PER_DAY) return "The voice demo has hit today's limit. Book a call instead.";
+  hits.push(now);
+  ipHits.set(ip, hits);
+  dayCount.n++;
+  return null;
+}
+
 export function attach(httpServer, app) {
+  // What the browser needs before it asks for the microphone: whether the
+  // agent is even available, and the exact audio format to capture in.
+  app.get("/api/voice/web/config", (req, res) => {
+    res.json({
+      enabled: WEB_ENABLED(),
+      path: WEB_STREAM_PATH,
+      inputSampleRate: INPUT_SAMPLE_RATE,
+      outputSampleRate: OUTPUT_SAMPLE_RATE,
+      maxSessionSeconds: Math.round(Number(process.env.WEB_VOICE_MAX_SESSION_MS ?? 300_000) / 1000),
+      busy: liveSessions >= MAX_CONCURRENT,
+    });
+  });
+
   app.post("/api/voice/answer/:callId", async (req, res) => {
     const attemptId = req.params.callId;
     const info = await callInfo(attemptId).catch((err) => {
@@ -69,12 +116,43 @@ export function attach(httpServer, app) {
   // part of the path (see the comment up top on why it's not a query param),
   // so the upgrade is handled manually and routed by regex instead.
   const wss = new WebSocketServer({ noServer: true });
+  const webWss = new WebSocketServer({ noServer: true });
+
+  // One upgrade handler for the whole server: Node fires every registered
+  // listener for the same socket, so two handlers that each destroy what they
+  // don't recognise would race to kill each other's connections.
   httpServer.on("upgrade", (req, socket, head) => {
-    const { pathname } = new URL(req.url, "http://internal");
+    const { pathname, searchParams } = new URL(req.url, "http://internal");
+
     const match = pathname.match(STREAM_PATH_RE);
-    if (!match) return socket.destroy();
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req, match[1]));
+    if (match) {
+      return wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req, match[1]));
+    }
+
+    if (pathname === WEB_STREAM_PATH) {
+      const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() ?? req.socket.remoteAddress;
+      const denied = webVoiceGate(ip);
+      if (denied) {
+        // The visitor is about to see a spinner, so say why in the close frame
+        // rather than dropping the socket with no explanation.
+        return webWss.handleUpgrade(req, socket, head, (ws) => {
+          ws.send(JSON.stringify({ type: "error", message: denied }));
+          ws.close(1013, "unavailable");
+        });
+      }
+      return webWss.handleUpgrade(req, socket, head, (ws) => {
+        liveSessions++;
+        new WebVoiceSession(ws, {
+          dialOut,
+          page: searchParams.get("page") ?? "/",
+          onClose: () => { liveSessions = Math.max(0, liveSessions - 1); },
+        });
+      });
+    }
+
+    socket.destroy();
   });
+
   wss.on("connection", async (ws, req, attemptId) => {
     const info = await callInfo(attemptId).catch(() => null);
     if (!info) {
@@ -86,4 +164,5 @@ export function attach(httpServer, app) {
   });
 
   console.log("voice pipeline attached: POST /api/voice/answer/:callId, WS /api/voice/stream/:callId");
+  console.log(`web voice agent: WS ${WEB_STREAM_PATH} (${WEB_ENABLED() ? "on" : "off"}, max ${MAX_CONCURRENT} concurrent)`);
 }

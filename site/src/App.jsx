@@ -3,6 +3,7 @@ import { Routes, Route, useLocation } from 'react-router-dom'
 import Lenis from 'lenis'
 import Nav from './components/Nav.jsx'
 import Footer from './components/Footer.jsx'
+import VoiceAgent from './components/VoiceAgent.jsx'
 import Home from './pages/Home.jsx'
 import WorksPage from './pages/WorksPage.jsx'
 import CaseNova from './pages/CaseNova.jsx'
@@ -91,6 +92,7 @@ export default function App() {
         </Routes>
       </main>
       <Footer />
+      <VoiceAgent />
     </>
   )
 }
