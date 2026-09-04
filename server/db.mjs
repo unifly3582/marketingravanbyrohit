@@ -1,119 +1,174 @@
-// SQLite storage for leads, calls, WhatsApp threads and offers.
-import Database from "better-sqlite3";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+// Supabase (Postgres) storage for leads, calls, WhatsApp threads, offers and
+// agent traces.
+//
+// This is the only data store. It replaced a local better-sqlite3 file, which
+// bought two things: the browser can subscribe to the same rows over Realtime,
+// and state survives a redeploy. An existing server still holding a data.sqlite
+// is migrated with `node migrate-sqlite.mjs --apply`.
+//
+// Uses the service-role key: this module runs server-side only and deliberately
+// bypasses RLS. Never import it from anything that ships to a browser.
+import { createClient } from "@supabase/supabase-js";
 
-const dir = dirname(fileURLToPath(import.meta.url));
-export const db = new Database(process.env.DB_PATH ?? join(dir, "data.sqlite"));
-db.pragma("journal_mode = WAL");
-
-db.exec(`
-CREATE TABLE IF NOT EXISTS leads (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  phone10 TEXT UNIQUE NOT NULL,
-  name TEXT,
-  source TEXT,
-  status TEXT DEFAULT 'new',
-  created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
-);
-CREATE TABLE IF NOT EXISTS calls (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  attempt_id TEXT UNIQUE,
-  phone10 TEXT NOT NULL,
-  status TEXT DEFAULT 'dispatched',
-  duration REAL,
-  transcript TEXT,
-  variables TEXT,
-  failure_reason TEXT,
-  interaction_id TEXT,
-  created_at TEXT DEFAULT (datetime('now')),
-  completed_at TEXT
-);
-CREATE TABLE IF NOT EXISTS wa_messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  phone10 TEXT NOT NULL,
-  direction TEXT NOT NULL,          -- 'in' | 'out'
-  type TEXT DEFAULT 'text',
-  text TEXT,
-  caption TEXT,
-  media_id TEXT,
-  mime_type TEXT,
-  filename TEXT,
-  button_payload TEXT,
-  message_id TEXT,
-  status TEXT,                      -- sent/delivered/read/failed (outbound)
-  source TEXT,                      -- reply | agent | voice-agent | automation
-  timestamp TEXT DEFAULT (datetime('now')),
-  created_at TEXT DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_wa_messages_phone ON wa_messages(phone10, id);
-CREATE TABLE IF NOT EXISTS wa_conversations (
-  phone10 TEXT PRIMARY KEY,
-  contact_name TEXT,
-  last_message_at TEXT,
-  last_message_text TEXT,
-  last_direction TEXT,
-  unread INTEGER DEFAULT 0,
-  window_open_until TEXT,
-  updated_at TEXT DEFAULT (datetime('now'))
-);
-CREATE TABLE IF NOT EXISTS wa_events_raw (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  kind TEXT,
-  payload TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
-);
-CREATE TABLE IF NOT EXISTS offers (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  pitch TEXT NOT NULL,
-  goal TEXT,
-  active INTEGER DEFAULT 0,
-  updated_at TEXT DEFAULT (datetime('now'))
-);
-`);
-
-export function upsertLead(phone10, fields = {}) {
-  db.prepare(
-    `INSERT INTO leads (phone10, name, source) VALUES (?, ?, ?)
-     ON CONFLICT(phone10) DO UPDATE SET
-       name = COALESCE(excluded.name, leads.name),
-       source = COALESCE(excluded.source, leads.source),
-       updated_at = datetime('now')`
-  ).run(phone10, fields.name ?? null, fields.source ?? null);
-  if (fields.status) {
-    db.prepare(`UPDATE leads SET status = ?, updated_at = datetime('now') WHERE phone10 = ?`).run(fields.status, phone10);
-  }
-  return db.prepare(`SELECT * FROM leads WHERE phone10 = ?`).get(phone10);
+const url = process.env.SUPABASE_URL;
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!url || !key) {
+  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+  process.exit(1);
 }
 
-export function touchConversation(phone10, { text, direction, contactName, openWindow, bumpUnread }) {
-  const now = new Date().toISOString();
-  db.prepare(
-    `INSERT INTO wa_conversations (phone10, contact_name, last_message_at, last_message_text, last_direction, unread, window_open_until, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-     ON CONFLICT(phone10) DO UPDATE SET
-       contact_name = COALESCE(excluded.contact_name, wa_conversations.contact_name),
-       last_message_at = excluded.last_message_at,
-       last_message_text = excluded.last_message_text,
-       last_direction = excluded.last_direction,
-       unread = CASE WHEN ? THEN wa_conversations.unread + 1 ELSE wa_conversations.unread END,
-       window_open_until = COALESCE(excluded.window_open_until, wa_conversations.window_open_until),
-       updated_at = datetime('now')`
-  ).run(
-    phone10,
-    contactName ?? null,
-    now,
-    text ?? "",
-    direction,
-    bumpUnread ? 1 : 0,
-    openWindow ? new Date(Date.now() + 24 * 3600 * 1000).toISOString() : null,
-    bumpUnread ? 1 : 0
+export const sb = createClient(url, key, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+
+/** Throw on error, otherwise hand back the data. Keeps call sites terse. */
+export function unwrap({ data, error }, context) {
+  if (error) throw new Error(`${context}: ${error.message}`);
+  return data;
+}
+
+// ---------------- leads ----------------
+
+export async function upsertLead(phone10, fields = {}) {
+  return unwrap(
+    await sb.rpc("upsert_lead", {
+      p_phone10: phone10,
+      p_name: fields.name ?? null,
+      p_source: fields.source ?? null,
+      p_status: fields.status ?? null,
+    }),
+    "upsertLead"
   );
 }
 
-export function windowOpen(phone10) {
-  const row = db.prepare(`SELECT window_open_until FROM wa_conversations WHERE phone10 = ?`).get(phone10);
+// ---------------- conversations ----------------
+
+export async function touchConversation(phone10, opts = {}) {
+  return unwrap(
+    await sb.rpc("touch_conversation", {
+      p_phone10: phone10,
+      p_text: opts.text ?? "",
+      p_direction: opts.direction ?? null,
+      p_contact_name: opts.contactName ?? null,
+      p_open_window: !!opts.openWindow,
+      p_bump_unread: !!opts.bumpUnread,
+    }),
+    "touchConversation"
+  );
+}
+
+/** Conversation id for a phone number, creating a bare thread if needed. */
+export async function conversationId(phone10, contactName = null) {
+  const existing = unwrap(
+    await sb.from("conversations").select("id").eq("phone10", phone10).maybeSingle(),
+    "conversationId"
+  );
+  if (existing) return existing.id;
+  const created = await touchConversation(phone10, { contactName, text: "", direction: null });
+  return created.id;
+}
+
+export async function windowOpen(phone10) {
+  const row = unwrap(
+    await sb.from("conversations").select("window_open_until").eq("phone10", phone10).maybeSingle(),
+    "windowOpen"
+  );
   return !!(row?.window_open_until && new Date(row.window_open_until).getTime() > Date.now());
+}
+
+export async function clearUnread(phone10) {
+  unwrap(await sb.from("conversations").update({ unread: 0 }).eq("phone10", phone10), "clearUnread");
+}
+
+// ---------------- messages ----------------
+
+export async function insertMessage(phone10, fields) {
+  const convId = await conversationId(phone10, fields.contactName ?? null);
+  const row = {
+    conversation_id: convId,
+    direction: fields.direction,
+    role: fields.direction === "in" ? "user" : "assistant",
+    type: fields.type ?? "text",
+    body: fields.text ?? null,
+    caption: fields.caption ?? null,
+    media_id: fields.mediaId ?? null,
+    mime_type: fields.mimeType ?? null,
+    filename: fields.filename ?? null,
+    button_payload: fields.buttonPayload ?? null,
+    wa_message_id: fields.messageId ?? null,
+    status: fields.status ?? null,
+    source: fields.source ?? null,
+    wa_timestamp: fields.timestamp ?? new Date().toISOString(),
+  };
+  // Duplicate webhook deliveries are normal; ignore the unique-violation replay.
+  const { data, error } = await sb.from("messages").insert(row).select().maybeSingle();
+  if (error && error.code !== "23505") throw new Error(`insertMessage: ${error.message}`);
+  return data ?? null;
+}
+
+export async function updateMessageStatus(waMessageId, status) {
+  unwrap(
+    await sb.from("messages").update({ status }).eq("wa_message_id", waMessageId),
+    "updateMessageStatus"
+  );
+}
+
+export async function recentMessages(phone10, limit = 20) {
+  const convId = await conversationId(phone10);
+  const rows = unwrap(
+    await sb
+      .from("messages")
+      .select("direction, role, body, type, created_at")
+      .eq("conversation_id", convId)
+      .order("created_at", { ascending: false })
+      .limit(limit),
+    "recentMessages"
+  );
+  return rows.reverse();
+}
+
+export async function logRawEvent(kind, payload) {
+  const { error } = await sb.from("wa_events_raw").insert({ kind, payload });
+  if (error) console.error("logRawEvent:", error.message); // never block ingestion
+}
+
+// ---------------- calls ----------------
+
+export async function recordCall(phone10, attemptId, source = "website") {
+  const lead = await upsertLead(phone10, { status: "called", source });
+  return unwrap(
+    await sb
+      .from("calls")
+      .insert({ attempt_id: attemptId, phone10, lead_id: lead?.id ?? null, source })
+      .select()
+      .maybeSingle(),
+    "recordCall"
+  );
+}
+
+export async function completeCall(attemptId, payload) {
+  unwrap(
+    await sb
+      .from("calls")
+      .update({
+        status: payload.status ?? "unknown",
+        duration: payload.duration ?? null,
+        transcript: payload.interaction_transcript ?? null,
+        variables: payload.final_agent_variables ?? null,
+        failure_reason: payload.failure_reason ?? null,
+        interaction_id: payload.interaction_id ?? null,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("attempt_id", attemptId),
+    "completeCall"
+  );
+}
+
+// ---------------- offers ----------------
+
+export async function activeOffer() {
+  return unwrap(
+    await sb.from("offers").select("*").eq("active", true).limit(1).maybeSingle(),
+    "activeOffer"
+  );
 }

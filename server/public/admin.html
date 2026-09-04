@@ -60,6 +60,7 @@
     <button data-t="calls">Calls</button>
     <button data-t="inbox">WhatsApp Inbox</button>
     <button data-t="offers">Offers</button>
+    <button data-t="playbook">Playbook</button>
   </div>
 
   <div id="t-overview">
@@ -87,6 +88,29 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div id="t-playbook" hidden>
+    <div class="card" style="max-width:760px">
+      <p class="muted" style="margin:0 0 10px">
+        The agent quotes these rules word for word and will not state a price or policy that is not here.
+        Saving re-embeds the rule automatically.
+      </p>
+      <label>Title</label><input id="pbtitle" placeholder="e.g. Website pricing">
+      <label>Rule — write it as you want it quoted to a customer</label><textarea id="pbrule" rows="4"></textarea>
+      <label>Category</label><input id="pbcat" placeholder="pricing / delivery / policy / general" value="general">
+      <div class="row"><label style="margin:0"><input type="checkbox" id="pbactive" style="width:auto" checked> active</label>
+      <button class="go" onclick="savePolicy()">Save rule</button>
+      <button class="go" style="background:#332211;color:var(--text)" onclick="clearPolicy()">New</button>
+      <span id="pbmsg" class="muted"></span></div>
+    </div>
+    <div class="card" style="max-width:760px">
+      <label>Test retrieval — ask the way a customer would, in any language</label>
+      <div class="row"><input id="pbq" placeholder="kitna paisa lagega website ka">
+      <button class="go" onclick="testPolicy()">Search</button></div>
+      <div id="pbresults" class="muted"></div>
+    </div>
+    <table><thead><tr><th>Title</th><th>Category</th><th>Embedded</th><th></th></tr></thead><tbody id="pbrows"></tbody></table>
   </div>
 
   <div id="t-offers" hidden>
@@ -125,13 +149,23 @@ async function login() {
 
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("on")); b.classList.add("on");
-  ["overview","calls","inbox","offers"].forEach(t => $("t-"+t).hidden = t !== b.dataset.t);
+  ["overview","calls","inbox","offers","playbook"].forEach(t => $("t-"+t).hidden = t !== b.dataset.t);
   refresh();
 });
 const activeTab = () => document.querySelector(".tabs button.on").dataset.t;
 
 async function refresh() {
   const t = activeTab();
+  if (t === "playbook") {
+    const rows = await api("/api/admin/playbook");
+    $("pbrows").innerHTML = rows.map(p =>
+      "<tr><td>" + esc(p.title) + "<br><span class=muted>" + esc(p.rule.slice(0, 90)) + (p.rule.length > 90 ? "…" : "") + "</span></td>" +
+      "<td>" + esc(p.category) + "</td>" +
+      "<td>" + (p.embedded ? "yes" : "<b>no</b>") + (p.active ? "" : " · inactive") + "</td>" +
+      "<td><button class=go onclick='editPolicy(" + esc(JSON.stringify(p)).replace(/'/g, "&#39;") + ")'>Edit</button> " +
+      "<button class=go style=\"background:#3a1f1f\" onclick=\"deletePolicy('" + p.id + "'," + JSON.stringify(p.title) + ")\">Delete</button></td></tr>").join("");
+    return;
+  }
   if (t === "overview") {
     const s = await api("/api/admin/overview");
     $("stats").innerHTML = Object.entries({Leads:s.leads, "Calls total":s.calls, Connected:s.connected, "Calls today":s.calls_today, Chats:s.conversations, Unread:s.unread})
@@ -197,6 +231,46 @@ async function saveOffer() {
     await api("/api/admin/offers", { method:"POST", body: JSON.stringify({ id: currentOfferId, name: $("oname").value, pitch: $("opitch").value, goal: $("ogoal").value, active: $("oactive").checked }) });
     $("omsg").textContent = "Saved."; currentOfferId = null; ["oname","opitch","ogoal"].forEach(i => $(i).value = ""); $("oactive").checked = false; refresh();
   } catch (e) { $("omsg").textContent = e.message; }
+}
+
+
+let currentPolicyId = null;
+function clearPolicy() {
+  currentPolicyId = null;
+  $("pbtitle").value = ""; $("pbrule").value = ""; $("pbcat").value = "general";
+  $("pbactive").checked = true; $("pbmsg").textContent = "";
+}
+function editPolicy(p) {
+  currentPolicyId = p.id;
+  $("pbtitle").value = p.title; $("pbrule").value = p.rule;
+  $("pbcat").value = p.category; $("pbactive").checked = !!p.active;
+  $("pbmsg").textContent = "Editing — Save overwrites this rule.";
+  window.scrollTo(0, 0);
+}
+async function savePolicy() {
+  $("pbmsg").textContent = "Embedding…";
+  try {
+    const r = await api("/api/admin/playbook", { method: "POST", body: JSON.stringify({
+      id: currentPolicyId, title: $("pbtitle").value, rule: $("pbrule").value,
+      category: $("pbcat").value, active: $("pbactive").checked }) });
+    $("pbmsg").textContent = r.embedded ? "Saved and embedded." : "Saved — but NOT embedded (no Google key), so it is keyword-only.";
+    currentPolicyId = null; clearPolicy(); refresh();
+  } catch (e) { $("pbmsg").textContent = e.message; }
+}
+async function deletePolicy(id, title) {
+  if (!confirm("Delete \"" + title + "\"? The agent will no longer be able to quote it.")) return;
+  try { await api("/api/admin/playbook/" + id, { method: "DELETE" }); refresh(); }
+  catch (e) { $("pbmsg").textContent = e.message; }
+}
+async function testPolicy() {
+  $("pbresults").textContent = "Searching…";
+  try {
+    const r = await api("/api/admin/playbook/search", { method: "POST", body: JSON.stringify({ query: $("pbq").value }) });
+    if (!r.results.length) { $("pbresults").innerHTML = "<p>No match — the agent would say it needs to check with the team.</p>"; return; }
+    $("pbresults").innerHTML = "<p>via " + esc(r.mode) + " search:</p>" + r.results.map(x =>
+      "<p><b>" + esc(x.title) + "</b>" + (x.similarity != null ? " <span class=muted>" + x.similarity.toFixed(3) + "</span>" : "") +
+      "<br>" + esc(x.rule) + "</p>").join("");
+  } catch (e) { $("pbresults").textContent = e.message; }
 }
 
 if (TOKEN) { $("app").hidden = false; refresh().catch(showLogin); } else showLogin();

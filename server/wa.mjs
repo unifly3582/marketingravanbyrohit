@@ -1,6 +1,6 @@
 // WhatsApp send/receive via the crm.marketingravan.com BSP panel (Meta-proxy).
 // Patterns ported from the battle-tested Buggly Farms OMS integration.
-import { db, touchConversation } from "./db.mjs";
+import { insertMessage, touchConversation, updateMessageStatus, logRawEvent } from "./db.mjs";
 
 const env = (k) => process.env[k];
 const base = () => `${env("WA_API_URL")}/${env("WA_API_VERSION")}`;
@@ -23,12 +23,18 @@ async function post(path, payload) {
   return data;
 }
 
-function logOutbound(p10, fields, preview, openWindow = false) {
-  db.prepare(
-    `INSERT INTO wa_messages (phone10, direction, type, text, caption, button_payload, message_id, status, source, timestamp)
-     VALUES (?, 'out', ?, ?, ?, NULL, ?, 'sent', ?, ?)`
-  ).run(p10, fields.type ?? "text", fields.text ?? null, fields.caption ?? null, fields.messageId ?? null, fields.source ?? "reply", new Date().toISOString());
-  touchConversation(p10, { text: preview, direction: "out", openWindow });
+async function logOutbound(p10, fields, preview, openWindow = false) {
+  await insertMessage(p10, {
+    direction: "out",
+    type: fields.type ?? "text",
+    text: fields.text ?? null,
+    caption: fields.caption ?? null,
+    messageId: fields.messageId ?? null,
+    status: "sent",
+    source: fields.source ?? "reply",
+    timestamp: new Date().toISOString(),
+  });
+  await touchConversation(p10, { text: preview, direction: "out", openWindow });
 }
 
 /** Send an approved template (allowed any time; the only way to open a closed conversation). */
@@ -44,7 +50,7 @@ export async function sendTemplate(p10, name, language = "en", bodyParams = [], 
     template: { language: { policy: "deterministic", code: language }, name, components },
   });
   const id = data.message?.queue_id || data.messages?.[0]?.id || null;
-  logOutbound(p10, { type: "template", text: `[template] ${name}`, messageId: id, source }, `[template] ${name}`);
+  await logOutbound(p10, { type: "template", text: `[template] ${name}`, messageId: id, source }, `[template] ${name}`);
   return { messageId: id };
 }
 
@@ -58,7 +64,7 @@ export async function sendText(p10, text, source = "reply") {
     text: { preview_url: false, body: text },
   });
   const id = data.message?.queue_id || data.messages?.[0]?.id || null;
-  logOutbound(p10, { type: "text", text, messageId: id, source }, text);
+  await logOutbound(p10, { type: "text", text, messageId: id, source }, text);
   return { messageId: id };
 }
 
@@ -136,25 +142,27 @@ function readMessage(m) {
   return r;
 }
 
-/** Ingest one webhook POST body: store raw, then messages/statuses into the DB. */
-export function ingest(payload) {
+/**
+ * Ingest one webhook POST body: store raw, then messages/statuses into the DB.
+ * Returns the inbound messages so the caller can hand them to the agent.
+ */
+export async function ingest(payload) {
   const kind = classify(payload);
-  db.prepare(`INSERT INTO wa_events_raw (kind, payload) VALUES (?, ?)`).run(kind, JSON.stringify(payload));
-  if (kind === "ack" || kind === "unknown") return { kind };
+  await logRawEvent(kind, payload);
+  if (kind === "ack" || kind === "unknown") return { kind, inbound: [] };
 
   if (kind === "status") {
     const statuses = deepFindObj(payload, ["statuses"]);
     for (const s of Array.isArray(statuses) ? statuses : []) {
-      if (s?.id && s?.status) {
-        db.prepare(`UPDATE wa_messages SET status = ? WHERE message_id = ?`).run(s.status, s.id);
-      }
+      if (s?.id && s?.status) await updateMessageStatus(s.id, s.status);
     }
-    return { kind };
+    return { kind, inbound: [] };
   }
 
   const messages = deepFindObj(payload, ["messages", "message_echoes", "smb_message_echoes"]);
   const contacts = deepFindObj(payload, ["contacts"]);
   const contactName = Array.isArray(contacts) ? contacts[0]?.profile?.name ?? null : null;
+  const inbound = [];
   let count = 0;
   for (const m of Array.isArray(messages) ? messages : []) {
     const from = phone10(onlyDigits(m.from ?? deepFind(payload, ["from", "wa_id"])));
@@ -163,22 +171,29 @@ export function ingest(payload) {
     const hasContent = (r.text && r.text.trim()) || r.mediaId || r.buttonPayload || r.msgType !== "text";
     if (kind === "incoming" && !hasContent) continue;
     const direction = kind === "outgoing" ? "out" : "in";
-    db.prepare(
-      `INSERT INTO wa_messages (phone10, direction, type, text, caption, media_id, mime_type, filename, button_payload, message_id, source, timestamp)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      from, direction, r.msgType, r.text || null, r.caption, r.mediaId, r.mimeType, r.filename, r.buttonPayload,
-      m.id ?? null, direction === "out" ? "phone-echo" : null,
-      m.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : new Date().toISOString()
-    );
-    touchConversation(from, {
+    await insertMessage(from, {
+      direction,
+      type: r.msgType,
+      text: r.text || null,
+      caption: r.caption,
+      mediaId: r.mediaId,
+      mimeType: r.mimeType,
+      filename: r.filename,
+      buttonPayload: r.buttonPayload,
+      messageId: m.id ?? null,
+      source: direction === "out" ? "phone-echo" : null,
+      contactName,
+      timestamp: m.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : new Date().toISOString(),
+    });
+    await touchConversation(from, {
       text: r.text || r.caption || `[${r.msgType}]`,
       direction,
       contactName,
       openWindow: direction === "in",   // an inbound message opens the 24h window
       bumpUnread: direction === "in",
     });
+    if (direction === "in") inbound.push({ phone10: from, text: r.text, type: r.msgType, contactName });
     count++;
   }
-  return { kind, count };
+  return { kind, count, inbound };
 }
