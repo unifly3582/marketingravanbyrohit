@@ -5,6 +5,14 @@ set -euo pipefail
 APP_DIR=/var/www/marketingravan
 ENV_FILE=/etc/marketingravan.env
 
+# Prefer a side-by-side Node 22 when one is installed. Other services on this
+# box (the PM2 apps) run on the system node, so it must not be upgraded in
+# place — this app gets its own runtime instead, and the systemd unit points
+# at the same binary.
+if [[ -x /opt/node22/bin/node ]]; then
+  export PATH=/opt/node22/bin:$PATH
+fi
+
 # ---------------------------------------------------------------- preflight
 #
 # The server now exits on boot without Supabase and Google credentials. Without
