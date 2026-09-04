@@ -67,7 +67,30 @@ async function utterance(text) {
   return speech;
 }
 
-const ws = new WebSocket(`${BASE}/api/voice/web?page=/`);
+/** One 16-bit sample to one G.711 mu-law byte — mirrors site/public/voice-worklet.js. */
+function toMuLaw(sample) {
+  const BIAS = 0x84;
+  const CLIP = 32635;
+  let sign = (sample >> 8) & 0x80;
+  if (sign) sample = -sample;
+  if (sample > CLIP) sample = CLIP;
+  sample += BIAS;
+  let exponent = 7;
+  for (let mask = 0x4000; (sample & mask) === 0 && exponent > 0; exponent--, mask >>= 1);
+  const mantissa = (sample >> (exponent + 3)) & 0x0f;
+  return ~(sign | (exponent << 4) | mantissa) & 0xff;
+}
+
+// Match the browser by default: it sends mu-law, which halves the upload and
+// is the difference between fitting down a modest uplink and falling behind it.
+// CODEC=pcm16 sends raw samples instead, to measure what that costs.
+const CODEC = process.env.CODEC === "pcm16" ? "pcm16" : "mulaw";
+const encode = (pcm) =>
+  CODEC === "mulaw"
+    ? Buffer.from(Uint8Array.from(pcm, toMuLaw))
+    : Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+
+const ws = new WebSocket(`${BASE}/api/voice/web?codec=${CODEC}&page=/`);
 ws.binaryType = "arraybuffer";
 
 let audioBytes = 0;
@@ -89,22 +112,23 @@ async function speak(text) {
   const pcm = await utterance(text);
   const step = 16000 * 0.04; // 40 ms
   for (let o = 0; o < pcm.length; o += step) {
-    const slice = pcm.subarray(o, o + step);
-    ws.send(Buffer.from(slice.buffer, slice.byteOffset, slice.byteLength));
+    ws.send(encode(pcm.subarray(o, o + step)));
     await new Promise((r) => setTimeout(r, 40));
   }
   // The clock starts when the visitor stops talking, not when we stop sending.
   askedAt = Date.now();
-  const silence = new Int16Array(step);
+  const silence = encode(new Int16Array(step));
   for (let sent = 0; sent < TAIL_MS; sent += 40) {
-    ws.send(Buffer.from(silence.buffer));
+    ws.send(silence);
     await new Promise((r) => setTimeout(r, 40));
   }
 }
 
 const next = () => (SPEAK ? speak(script[turn++]) : type(script[turn++]));
 
-ws.on("open", () => console.log(`connected to ${BASE} (${SPEAK ? "speaking" : "typing"})`));
+ws.on("open", () =>
+  console.log(`connected to ${BASE} (${SPEAK ? `speaking, ${CODEC}` : "typing"})`)
+);
 
 ws.on("message", (data, isBinary) => {
   if (isBinary) {

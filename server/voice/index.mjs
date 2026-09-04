@@ -93,6 +93,7 @@ export function attach(httpServer, app) {
       path: WEB_STREAM_PATH,
       inputSampleRate: INPUT_SAMPLE_RATE,
       outputSampleRate: OUTPUT_SAMPLE_RATE,
+      inputCodec: "mulaw",
       maxSessionSeconds: Math.round(Number(process.env.WEB_VOICE_MAX_SESSION_MS ?? 300_000) / 1000),
       busy: liveSessions >= MAX_CONCURRENT,
     });
@@ -145,6 +146,7 @@ export function attach(httpServer, app) {
         new WebVoiceSession(ws, {
           dialOut,
           page: searchParams.get("page") ?? "/",
+          codec: searchParams.get("codec") ?? "pcm16",
           onClose: () => { liveSessions = Math.max(0, liveSessions - 1); },
         });
       });

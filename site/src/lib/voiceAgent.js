@@ -139,7 +139,9 @@ export class VoiceAgentClient extends EventTarget {
   _openSocket() {
     return new Promise((resolve, reject) => {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const url = `${proto}//${location.host}/api/voice/web?page=${encodeURIComponent(this.page)}`
+      // The worklet emits 8-bit µ-law; say so, or the server will read it as
+      // PCM16 and hear noise.
+      const url = `${proto}//${location.host}/api/voice/web?codec=mulaw&page=${encodeURIComponent(this.page)}`
       const ws = new WebSocket(url)
       ws.binaryType = 'arraybuffer'
       this.ws = ws

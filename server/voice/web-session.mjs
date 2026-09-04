@@ -16,6 +16,7 @@
 
 import { randomUUID } from "node:crypto";
 import { GeminiLiveSession, INPUT_SAMPLE_RATE, OUTPUT_SAMPLE_RATE } from "./gemini-live.mjs";
+import { mulawToPcm16 } from "./audio.mjs";
 import { buildToolSpecs } from "../agent/tools.mjs";
 import { buildWebToolSpecs } from "../agent/web-tools.mjs";
 import { currentOffer, systemString, activePlaybook, playbookFitsInline } from "../agent/prompt.mjs";
@@ -42,11 +43,14 @@ export class WebVoiceSession {
    * @param {string} [opts.page]   the route the visitor is on
    * @param {() => void} [opts.onClose]
    */
-  constructor(ws, { dialOut, page = "/", onClose = null } = {}) {
+  constructor(ws, { dialOut, page = "/", codec = "pcm16", onClose = null } = {}) {
     this.ws = ws;
     this.id = randomUUID();
     this.dialOut = dialOut;
     this.page = page;
+    // The browser sends µ-law to halve its upload; anything speaking this
+    // socket directly (the test client, a curl session) sends plain PCM16.
+    this.codec = codec === "mulaw" ? "mulaw" : "pcm16";
     this.onCloseCb = onClose;
 
     this.identity = { phone10: null, name: null, email: null, conversationId: null };
@@ -181,7 +185,8 @@ export class WebVoiceSession {
 
     if (isBinary) {
       if (data.length > MAX_FRAME_BYTES) return;
-      this.live?.sendAudio(Buffer.isBuffer(data) ? data : Buffer.from(data));
+      const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+      this.live?.sendAudio(this.codec === "mulaw" ? mulawToPcm16(buf) : buf);
       return;
     }
 
