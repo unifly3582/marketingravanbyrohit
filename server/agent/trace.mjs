@@ -43,11 +43,38 @@ export function costOf(model, usage = {}) {
 }
 
 class Tracer {
-  constructor(run) {
+  /**
+   * @param {object|null} run
+   * @param {boolean} [defer]
+   *   Don't make callers wait for trace writes.
+   *
+   *   Supabase is ~200 ms away from the VPS, and step() writes a row before the
+   *   tool runs and updates it after — 400 ms of round trips per tool call,
+   *   sitting directly between a visitor's question and the answer. That is
+   *   affordable on WhatsApp, where nobody is listening to silence, and not on
+   *   a live voice call. With this set the writes still happen, in order, just
+   *   off the critical path.
+   */
+  constructor(run, defer = false) {
     this.run = run;
     this.seq = 0;
     this.totals = { input: 0, output: 0, cacheRead: 0, cost: 0 };
     this.startedAt = Date.now();
+    this.defer = defer;
+    // Serialises deferred writes: a step's update must not overtake its insert.
+    this.queue = Promise.resolve();
+  }
+
+  /** Run a trace write now, or queue it, depending on the mode. */
+  _write(fn) {
+    if (!this.defer) return fn();
+    this.queue = this.queue.then(fn).catch((e) => console.error("trace (deferred):", e.message));
+    return Promise.resolve();
+  }
+
+  /** Wait for queued writes — call before reading the run back. */
+  async flush() {
+    await this.queue;
   }
 
   get id() {
@@ -64,35 +91,61 @@ class Tracer {
     assertNode(this.run.workflow, node);
     const seq = ++this.seq;
     const startedAt = Date.now();
-    const { data, error } = await sb
-      .from("agent_steps")
-      .insert({
-        run_id: this.run.id,
-        seq,
-        node,
-        kind,
-        label,
-        input,
-        status: "running",
-        demo: this.run.demo,
-      })
-      .select("id")
-      .maybeSingle();
-    if (error) {
-      console.error("trace.step:", error.message);
-      return noopStep;
+
+    const insert = async () => {
+      const { data, error } = await sb
+        .from("agent_steps")
+        .insert({
+          run_id: this.run.id,
+          seq,
+          node,
+          kind,
+          label,
+          input,
+          status: "running",
+          demo: this.run.demo,
+        })
+        .select("id")
+        .maybeSingle();
+      if (error) {
+        console.error("trace.step:", error.message);
+        return null;
+      }
+      return data.id;
+    };
+
+    // Deferred: the row id becomes a promise the close path awaits, so neither
+    // write blocks the caller. Immediate: unchanged behaviour for WhatsApp and
+    // the phone agent, where a failed insert should still short-circuit.
+    let stepId;
+    if (this.defer) {
+      stepId = this.queue = this.queue.then(insert);
+    } else {
+      const id = await insert();
+      if (!id) return noopStep;
+      stepId = Promise.resolve(id);
     }
 
-    const close = async (patch) => {
-      const { error: e } = await sb
-        .from("agent_steps")
-        .update({ ...patch, ended_at: new Date().toISOString(), latency_ms: Date.now() - startedAt })
-        .eq("id", data.id);
-      if (e) console.error("trace.close:", e.message);
+    const close = (patch) => {
+      // Stamp the timings now, not when the queued write eventually runs —
+      // otherwise a deferred step records how long it waited in the queue
+      // instead of how long the tool took, and every number in the dashboard
+      // is quietly wrong.
+      const endedAt = new Date().toISOString();
+      const latencyMs = Date.now() - startedAt;
+      return this._write(async () => {
+        const id = await stepId;
+        if (!id) return;
+        const { error } = await sb
+          .from("agent_steps")
+          .update({ ...patch, ended_at: endedAt, latency_ms: latencyMs })
+          .eq("id", id);
+        if (error) console.error("trace.close:", error.message);
+      });
     };
 
     return {
-      id: data.id,
+      id: stepId,
       ok: (output = null, usage = null) => {
         const u = normalizeUsage(usage);
         if (u) this.addUsage(u);
@@ -120,6 +173,8 @@ class Tracer {
 
   async finish(status, output = null, error = null) {
     if (!this.run) return;
+    // Deferred steps may still be in flight; the run row must land last.
+    await this.flush();
     const { error: e } = await sb
       .from("agent_runs")
       .update({
@@ -157,6 +212,7 @@ export async function startRun({
   leadId = null,
   input = {},
   demo = false,
+  defer = false,
 }) {
   const { data, error } = await sb
     .from("agent_runs")
@@ -177,7 +233,7 @@ export async function startRun({
     .maybeSingle();
   if (error) {
     console.error("trace.startRun:", error.message);
-    return new Tracer(null);
+    return new Tracer(null, defer);
   }
-  return new Tracer({ ...data, workflow, model, demo });
+  return new Tracer({ ...data, workflow, model, demo }, defer);
 }

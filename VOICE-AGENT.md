@@ -144,6 +144,36 @@ Gemini function declarations. So the website agent, the WhatsApp agent and the
 phone agent call **the same tool implementations**, against the same playbook,
 writing the same trace. Swapping which loop drives them stays a one-line change.
 
+### Latency, and how it was won back
+
+The first version felt slow on the live site while every local number looked
+fine. The cause was measurement: **typed turns skip end-of-speech detection**,
+so text-mode timings are optimistic by about a second. `SPEAK=1` on the test
+script speaks a real sentence instead, and that is the number that matters.
+
+It was never the VPS. The box is in Mumbai, 85 ms from Google's endpoint, and
+timings from the VPS and from a laptop were identical. Three things in our own
+code were responsible:
+
+| Cause | Cost | Fix |
+|---|---|---|
+| Default end-of-speech detection, tuned for dictation | ~1130 ms every turn | `realtimeInputConfig` with high sensitivity and 300 ms silence → 736 ms |
+| `search_playbook` on a 12-rule, 2.2 kB playbook | ~1300 ms per lookup | Inline the whole playbook in the prompt; drop the tool |
+| Trace writes blocking each tool call | ~400 ms per tool | `defer: true` — same writes, off the critical path |
+
+Measured end to end, from the visitor finishing their sentence to hearing the
+first audio, including a tool call and a playbook-grounded answer:
+
+```
+before   ~3000 ms
+after     658-1267 ms   (typically under a second)
+```
+
+The playbook is inlined only while it fits `INLINE_PLAYBOOK_CHAR_BUDGET`
+(12 000 chars, ~40x the current playbook). Past that, `playbookFitsInline`
+returns false, `search_playbook` comes back automatically, and retrieval
+genuinely earns its round trip again. Nothing to remember, nothing to switch.
+
 ### Observability
 
 Every session is one run in `agent_runs` (`workflow: "web-voice"`) with a step
@@ -257,7 +287,23 @@ node server/test-web-voice.mjs
 ```
 
 It runs a scripted conversation and prints transcripts, tool calls, navigation
-and audio volume. Pass your own lines as arguments to try something specific.
+and per-turn latency. Pass your own lines as arguments to try something
+specific.
+
+**Use `SPEAK=1` when you care about speed.** It synthesises each line, streams
+it at real-time pace and holds the mic open on silence afterwards, so
+end-of-speech detection actually runs. Typed turns skip it and flatter the
+numbers by about a second:
+
+```bash
+SPEAK=1 node server/test-web-voice.mjs "what does a WhatsApp agent cost?"
+```
+
+Against production:
+
+```bash
+TEST_WS_BASE=wss://marketingravan.com SPEAK=1 node server/test-web-voice.mjs
+```
 
 **Note:** it captures a real lead (`9876543210`) unless you change the script.
 Delete the row afterwards, or the dashboard fills with test prospects.
@@ -301,8 +347,10 @@ hijacked the default vhost for every other site on the box.
   strictest about `AudioContext` creation outside a user gesture, and about two
   contexts at once. Both are created inside the click handler, which should be
   correct, but it needs a real device.
-- **No language pin.** The model mirrors whatever the visitor speaks, which
-  works well, but there is no way yet to force Hindi-only for a campaign.
+- **No language pin.** The agent opens in English and follows the visitor from
+  their first reply. There is no way yet to force Hindi-only for a campaign.
+  (It used to sometimes open in Hindi and then stay there even when answered in
+  English — fixed in the prompt, worth re-checking if the prompt is edited.)
 - **`update_lead` and `capture_contact` overlap.** One sets the qualification
   stage, the other identity. Distinct in their descriptions; worth watching
   whether the model ever reaches for the wrong one.

@@ -34,6 +34,28 @@ export const OUTPUT_SAMPLE_RATE = 24000;
 const apiKey = () => process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY;
 
 /**
+ * How eagerly the server decides the visitor has stopped talking.
+ *
+ * The defaults are tuned for dictation, where cutting someone off mid-thought
+ * is worse than a pause. In a sales conversation the opposite is true: measured
+ * on the live box, the stock settings leave 1130 ms of silence between a
+ * visitor finishing their sentence and hearing anything back, and these bring
+ * it to 736 ms — a third of the wait, on every single turn.
+ *
+ * 300 ms of silence is short enough to feel responsive and long enough to
+ * survive the natural gap mid-sentence; below about 200 ms the agent starts
+ * interrupting people who were only drawing breath.
+ */
+export const DEFAULT_VAD = {
+  automaticActivityDetection: {
+    startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
+    endOfSpeechSensitivity: "END_SENSITIVITY_HIGH",
+    prefixPaddingMs: Number(process.env.WEB_VOICE_PREFIX_PADDING_MS ?? 100),
+    silenceDurationMs: Number(process.env.WEB_VOICE_SILENCE_MS ?? 300),
+  },
+};
+
+/**
  * Convert one engine-agnostic tool spec (agent/tools.mjs) into a Gemini
  * functionDeclaration, so the Live API can call exactly the same tools Mastra
  * and LangGraph call.
@@ -90,7 +112,15 @@ export class GeminiLiveSession {
    * @param {string} [opts.voice]            prebuilt voice name
    * @param {string} [opts.language]         BCP-47 hint, e.g. "hi-IN"
    */
-  constructor({ model, systemInstruction, tools = [], voice = "Kore", language = null, ...handlers }) {
+  constructor({
+    model,
+    systemInstruction,
+    tools = [],
+    voice = "Kore",
+    language = null,
+    vad = DEFAULT_VAD,
+    ...handlers
+  }) {
     if (!apiKey()) throw new Error("GOOGLE_GENERATIVE_AI_API_KEY not configured");
 
     this.model = model;
@@ -99,7 +129,7 @@ export class GeminiLiveSession {
     this.closed = false;
 
     this.ws = new WebSocket(`${ENDPOINT}?key=${apiKey()}`);
-    this.ws.on("open", () => this._sendSetup({ systemInstruction, tools, voice, language }));
+    this.ws.on("open", () => this._sendSetup({ systemInstruction, tools, voice, language, vad }));
     this.ws.on("message", (raw) => this._onMessage(raw));
     this.ws.on("error", (err) => handlers.onError?.(err));
     this.ws.on("close", (code, reason) => {
@@ -108,7 +138,7 @@ export class GeminiLiveSession {
     });
   }
 
-  _sendSetup({ systemInstruction, tools, voice, language }) {
+  _sendSetup({ systemInstruction, tools, voice, language, vad }) {
     const functionDeclarations = tools.map(toFunctionDeclaration);
     this._send({
       setup: {
@@ -126,6 +156,7 @@ export class GeminiLiveSession {
         // conversation: the audio itself is never persisted.
         inputAudioTranscription: {},
         outputAudioTranscription: {},
+        ...(vad ? { realtimeInputConfig: vad } : {}),
       },
     });
   }

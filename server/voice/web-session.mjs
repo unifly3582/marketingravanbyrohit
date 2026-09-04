@@ -18,7 +18,7 @@ import { randomUUID } from "node:crypto";
 import { GeminiLiveSession, INPUT_SAMPLE_RATE, OUTPUT_SAMPLE_RATE } from "./gemini-live.mjs";
 import { buildToolSpecs } from "../agent/tools.mjs";
 import { buildWebToolSpecs } from "../agent/web-tools.mjs";
-import { currentOffer, systemString } from "../agent/prompt.mjs";
+import { currentOffer, systemString, activePlaybook, playbookFitsInline } from "../agent/prompt.mjs";
 import { startRun } from "../agent/trace.mjs";
 import { liveModel } from "../agent/models.mjs";
 import { insertMessage, touchConversation } from "../db.mjs";
@@ -81,7 +81,11 @@ export class WebVoiceSession {
 
   async _boot() {
     const model = liveModel();
-    const offer = await currentOffer();
+
+    // Both are session setup, not turn work, so they happen once here rather
+    // than on the critical path of an answer.
+    const [offer, playbook] = await Promise.all([currentOffer(), activePlaybook()]);
+    const inlinePlaybook = playbookFitsInline(playbook);
 
     this.tracer = await startRun({
       agentSlug: "web-voice",
@@ -89,7 +93,10 @@ export class WebVoiceSession {
       trigger: "web_voice_session",
       model,
       engine: "gemini-live",
-      input: { page: this.page },
+      input: { page: this.page, playbook: inlinePlaybook ? "inline" : "retrieval" },
+      // A live conversation cannot wait ~200 ms on Supabase either side of
+      // every tool call just to be observable.
+      defer: true,
     });
 
     const opened = await this.tracer.step("session", {
@@ -101,12 +108,16 @@ export class WebVoiceSession {
 
     // The shared tools, resolved against whoever this turns out to be, plus
     // the ones that only mean something in a browser.
+    //
+    // search_playbook is dropped when the playbook is inlined above: leaving it
+    // there would let the model spend 1.3 s retrieving text it is already
+    // holding, which is exactly the pause visitors noticed.
     const shared = buildToolSpecs({
       tracer: this.tracer,
       phone10: () => this.identity.phone10,
       outcome: this.outcome,
       channel: "web",
-    });
+    }).filter((s) => !(inlinePlaybook && s.name === "search_playbook"));
     const webOnly = buildWebToolSpecs({
       tracer: this.tracer,
       identity: this.identity,
@@ -118,7 +129,9 @@ export class WebVoiceSession {
 
     this.live = new GeminiLiveSession({
       model,
-      systemInstruction: `${systemString(offer, "web")}\n\nThe visitor is currently on the page ${this.page}.`,
+      systemInstruction:
+        `${systemString(offer, "web", inlinePlaybook ? playbook : null)}` +
+        `\n\nThe visitor is currently on the page ${this.page}.`,
       tools: [...this.specs.values()],
       voice: env("WEB_VOICE_VOICE", "Kore"),
 
@@ -127,8 +140,9 @@ export class WebVoiceSession {
         // Nudge rather than script: the model opens in its own words, which
         // keeps the greeting in the visitor's language once they reply.
         this.live.sendText(
-          "[The visitor just opened the microphone. Greet them, say in one sentence what you are, " +
-            "and ask what brought them to the site.]"
+          "[The visitor just opened the microphone. Greet them in English, say in one sentence " +
+            "what you are, and ask what brought them to the site. If they reply in another " +
+            "language, switch to it immediately for the rest of the conversation.]"
         );
       },
       onAudio: (pcm) => this._sendBinary(pcm),

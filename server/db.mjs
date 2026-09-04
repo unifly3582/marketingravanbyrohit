@@ -175,3 +175,15 @@ export async function activeOffer() {
     "activeOffer"
   );
 }
+
+/** Every active playbook rule, for inlining into a prompt. Vectors excluded. */
+export async function activePolicies() {
+  const { data, error } = await sb
+    .from("policies")
+    .select("title, rule, category")
+    .eq("active", true)
+    .order("category")
+    .order("title");
+  if (error) throw new Error(`activePolicies: ${error.message}`);
+  return data ?? [];
+}
