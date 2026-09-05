@@ -37,6 +37,43 @@ async function logOutbound(p10, fields, preview, openWindow = false) {
   await touchConversation(p10, { text: preview, direction: "out", openWindow });
 }
 
+// ---------- templates ----------
+
+let tplCache = { at: 0, data: [] };
+
+/** Approved templates on the WABA, with body text and parameter count. Cached 5 min. */
+export async function listTemplates() {
+  if (Date.now() - tplCache.at < 5 * 60_000 && tplCache.data.length) return tplCache.data;
+  const res = await fetch(`${base()}/${env("WA_WABA_ID")}/message_templates?limit=100`, { headers: headers() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error?.message || data?.error || `WA API ${res.status}`);
+  const list = (data.data ?? [])
+    .filter((t) => t.status === "APPROVED")
+    .map((t) => {
+      const comp = (type) => (t.components ?? []).find((c) => c.type === type);
+      const body = comp("BODY")?.text ?? "";
+      return {
+        name: t.name,
+        language: t.language,
+        category: t.category,
+        header: comp("HEADER")?.text ?? null,
+        footer: comp("FOOTER")?.text ?? null,
+        body,
+        params: new Set(body.match(/\{\{\d+\}\}/g) ?? []).size,
+      };
+    });
+  tplCache = { at: Date.now(), data: list };
+  return list;
+}
+
+/** Body text of a template with {{n}} filled in — so the chat shows what the customer saw. */
+async function renderTemplate(name, language, params) {
+  const list = await listTemplates().catch(() => []);
+  const tpl = list.find((t) => t.name === name && t.language === language) ?? list.find((t) => t.name === name);
+  if (!tpl) return `[template] ${name}`;
+  return tpl.body.replace(/\{\{(\d+)\}\}/g, (_, i) => String(params[Number(i) - 1] ?? ""));
+}
+
 /** Send an approved template (allowed any time; the only way to open a closed conversation). */
 export async function sendTemplate(p10, name, language = "en", bodyParams = [], source = "reply") {
   const components = bodyParams.length
@@ -50,7 +87,8 @@ export async function sendTemplate(p10, name, language = "en", bodyParams = [], 
     template: { language: { policy: "deterministic", code: language }, name, components },
   });
   const id = data.message?.queue_id || data.messages?.[0]?.id || null;
-  await logOutbound(p10, { type: "template", text: `[template] ${name}`, messageId: id, source }, `[template] ${name}`);
+  const text = await renderTemplate(name, language, bodyParams);
+  await logOutbound(p10, { type: "template", text, caption: name, messageId: id, source }, text);
   return { messageId: id };
 }
 

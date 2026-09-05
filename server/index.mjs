@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { sb, upsertLead, recordCall, completeCall, windowOpen, clearUnread, unwrap } from "./db.mjs";
-import { phone10, sendTemplate, sendText, ingest } from "./wa.mjs";
+import { phone10, sendTemplate, sendText, ingest, listTemplates } from "./wa.mjs";
 import { workflowList, workflow } from "./agent/graph.mjs";
 import { runWhatsAppAgent } from "./agent/whatsapp-agent.mjs";
 import { engineCatalog, defaultEngineId, engineFor, ENGINE_IDS } from "./agent/engines/index.mjs";
@@ -433,6 +433,11 @@ app.get("/api/admin/webhook", admin, wrap(async (req, res) => {
     autoreply: AGENT_AUTOREPLY,
     events,
   });
+}));
+
+app.get("/api/admin/templates", admin, wrap(async (req, res) => {
+  try { res.json(await listTemplates()); }
+  catch (e) { res.status(502).json({ error: e.message }); }
 }));
 
 app.post("/api/admin/send", admin, wrap(async (req, res) => {

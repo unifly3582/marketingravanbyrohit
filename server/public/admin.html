@@ -4,170 +4,277 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ravan Command</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#0d0a08; --card:#171210; --line:#2b221d; --text:#f3ece6; --muted:#9b8d83; --ember:#f97316; --green:#4ade80; --red:#f87171; }
+  :root {
+    --bg:#f0f2f5; --panel:#ffffff; --line:#e4e7eb; --line-2:#d5d9de;
+    --text:#111b21; --muted:#667781; --faint:#8696a0;
+    --accent:#008069; --accent-2:#00a884; --accent-soft:#e7f8f3;
+    --out:#d9fdd3; --in:#ffffff; --chat-bg:#efeae2;
+    --blue:#53bdeb; --red:#d93025; --amber:#b45309; --amber-soft:#fef3c7; --red-soft:#fde8e6;
+    --shadow:0 1px 2px rgba(11,20,26,.08), 0 1px 1px rgba(11,20,26,.04);
+    --radius:12px;
+  }
   * { box-sizing:border-box; margin:0; }
-  body { background:var(--bg); color:var(--text); font:14px/1.5 system-ui,-apple-system,sans-serif; }
-  .wrap { max-width:1200px; margin:0 auto; padding:24px 16px; }
-  h1 { font-size:20px; } h1 span { color:var(--ember); }
-  .tabs { display:flex; gap:8px; margin:18px 0; flex-wrap:wrap; }
-  .tabs button { background:var(--card); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:8px 18px; cursor:pointer; font-weight:600; }
-  .tabs button.on { color:var(--text); border-color:var(--ember); }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
-  .card b { font-size:26px; display:block; } .card span { color:var(--muted); font-size:12px; }
-  table { width:100%; border-collapse:collapse; margin-top:12px; }
-  th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); font-size:13px; }
-  th { color:var(--muted); font-weight:600; }
-  tr.click { cursor:pointer; } tr.click:hover { background:#1d1613; }
-  .pill { padding:2px 10px; border-radius:999px; font-size:11px; font-weight:700; }
-  .ok { background:#12291a; color:var(--green); } .bad { background:#2b1414; color:var(--red); } .mid { background:#241d12; color:var(--ember); }
-  .split { display:grid; grid-template-columns:320px 1fr; gap:14px; min-height:420px; }
-  .list { background:var(--card); border:1px solid var(--line); border-radius:16px; overflow:auto; max-height:70vh; }
-  .conv { padding:12px 14px; border-bottom:1px solid var(--line); cursor:pointer; }
-  .conv:hover,.conv.on { background:#1d1613; }
-  .conv b { display:block; } .conv small { color:var(--muted); }
-  .badge { float:right; background:var(--ember); color:#000; border-radius:999px; padding:0 8px; font-size:11px; font-weight:800; }
-  .thread { background:var(--card); border:1px solid var(--line); border-radius:16px; display:flex; flex-direction:column; max-height:70vh; }
-  .msgs { flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:8px; }
-  .m { max-width:70%; padding:9px 13px; border-radius:14px; white-space:pre-wrap; word-break:break-word; }
-  .in { background:#221a15; align-self:flex-start; } .out { background:#332211; align-self:flex-end; }
-  .m small { display:block; color:var(--muted); font-size:10px; margin-top:4px; }
-  .send { display:flex; gap:8px; padding:12px; border-top:1px solid var(--line); }
-  input,textarea,select { background:#0f0c0a; border:1px solid var(--line); color:var(--text); border-radius:10px; padding:10px 12px; font:inherit; width:100%; }
-  .send input { flex:1; }
-  button.go { background:var(--ember); border:0; color:#000; font-weight:800; border-radius:10px; padding:10px 18px; cursor:pointer; }
-  dialog { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:16px; max-width:720px; width:92%; padding:20px; }
-  dialog::backdrop { background:rgba(0,0,0,.7); }
-  .turn { margin-bottom:8px; } .turn b { color:var(--ember); }
-  #login { max-width:340px; margin:16vh auto; display:flex; flex-direction:column; gap:10px; }
-  #login[hidden] { display:none; } /* author display:flex would otherwise beat the hidden attribute */
-  .row { display:flex; gap:8px; margin:10px 0; } .muted { color:var(--muted); }
-  label { font-size:12px; color:var(--muted); display:block; margin:10px 0 4px; }
-  /* chats */
-  .conv { display:grid; grid-template-columns:1fr auto; gap:2px 8px; }
-  .conv b { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .conv small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .conv .when { color:var(--muted); font-size:11px; text-align:right; }
-  .conv .badge { float:none; justify-self:end; }
-  .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green); margin-right:6px; vertical-align:middle; }
-  .dot.off { background:var(--line); }
-  .thead { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line); }
-  .thead b { font-size:15px; } .thead .muted { font-size:12px; }
-  .thead .sp { flex:1; }
-  .day { align-self:center; color:var(--muted); font-size:11px; background:#0f0c0a; border:1px solid var(--line); border-radius:999px; padding:2px 10px; margin:6px 0; }
-  .m .tag { display:inline-block; font-size:10px; color:var(--muted); border:1px solid var(--line); border-radius:6px; padding:0 6px; margin-bottom:4px; }
-  .m .btn { display:inline-block; border:1px solid var(--ember); color:var(--ember); border-radius:8px; padding:2px 10px; font-size:12px; }
-  .m.voice { border-left:3px solid var(--ember); }
-  .tick { color:var(--muted); } .tick.read { color:#60a5fa; } .tick.failed { color:var(--red); }
+  [hidden] { display:none !important; } /* flex/grid display rules must not beat the hidden attribute */
+  html,body { height:100%; }
+  body { background:var(--bg); color:var(--text); font:14px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--accent); }
+  button { font:inherit; cursor:pointer; }
+  input,textarea,select { font:inherit; color:var(--text); background:#fff; border:1px solid var(--line-2); border-radius:8px; padding:9px 12px; width:100%; outline:none; }
+  input:focus,textarea:focus,select:focus { border-color:var(--accent-2); box-shadow:0 0 0 3px rgba(0,168,132,.15); }
+  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line-2); background:#fff; color:var(--text); border-radius:8px; padding:8px 14px; font-weight:500; white-space:nowrap; }
+  .btn:hover { background:#f7f8fa; }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.primary:hover { background:#006f5b; }
+  .btn.danger { color:var(--red); border-color:#f3c2be; }
+  .btn.sm { padding:5px 10px; font-size:12px; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .muted { color:var(--muted); } .faint { color:var(--faint); }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:600; background:#eef0f2; color:var(--muted); }
+  .pill.ok { background:var(--accent-soft); color:var(--accent); }
+  .pill.warn { background:var(--amber-soft); color:var(--amber); }
+  .pill.bad { background:var(--red-soft); color:var(--red); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
+  label { display:block; font-size:12px; font-weight:600; color:var(--muted); margin:12px 0 5px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
+  th,td { text-align:left; padding:11px 14px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; }
+  th { background:#fafbfc; color:var(--muted); font-weight:600; font-size:12px; }
+  tr:last-child td { border-bottom:0; }
+  tr.click { cursor:pointer; } tr.click:hover td { background:#f7f9fb; }
+
+  /* ---- app chrome ---- */
+  .top { background:var(--panel); border-bottom:1px solid var(--line); height:56px; display:flex; align-items:center; padding:0 20px; gap:24px; position:sticky; top:0; z-index:5; }
+  .brand { font-weight:700; font-size:16px; display:flex; align-items:center; gap:10px; }
+  .brand i { width:28px; height:28px; border-radius:8px; background:var(--accent); display:inline-flex; align-items:center; justify-content:center; color:#fff; font-style:normal; font-size:14px; }
+  .tabs { display:flex; gap:2px; height:100%; }
+  .tabs button { background:none; border:0; border-bottom:2px solid transparent; color:var(--muted); padding:0 12px; font-weight:500; height:100%; }
+  .tabs button.on { color:var(--accent); border-bottom-color:var(--accent); }
+  .tabs button:hover { color:var(--text); }
+  .tabs .badge { display:inline-flex; align-items:center; justify-content:center; background:var(--accent-2); color:#fff; border-radius:999px; min-width:18px; height:18px; padding:0 5px; font-size:11px; font-weight:700; margin-left:4px; vertical-align:middle; }
+  .top .sp { flex:1; }
+  .page { max-width:1180px; margin:0 auto; padding:22px 20px; }
+  .page.full { max-width:none; padding:0; height:calc(100vh - 56px); }
+
+  /* ---- login ---- */
+  #login { max-width:360px; margin:14vh auto; }
+  #login h1 { font-size:20px; margin-bottom:4px; }
+
+  /* ---- overview ---- */
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:18px; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); }
+  .stat b { font-size:26px; display:block; font-weight:700; } .stat span { color:var(--muted); font-size:12px; }
+
+  /* ---- chats ---- */
+  .chat { display:grid; grid-template-columns:360px 1fr; height:100%; background:var(--panel); }
+  .side { border-right:1px solid var(--line); display:flex; flex-direction:column; min-width:0; }
+  .side .search { padding:10px 12px; border-bottom:1px solid var(--line); display:flex; gap:8px; align-items:center; }
+  .side .search input { background:#f0f2f5; border-color:transparent; padding:8px 12px; }
+  .filters { display:flex; gap:6px; padding:8px 12px; border-bottom:1px solid var(--line); }
+  .filters button { border:1px solid var(--line-2); background:#fff; color:var(--muted); border-radius:999px; padding:3px 12px; font-size:12px; }
+  .filters button.on { background:var(--accent-soft); border-color:transparent; color:var(--accent); font-weight:600; }
+  .convs { flex:1; overflow:auto; }
+  .conv { display:grid; grid-template-columns:44px 1fr auto; gap:0 12px; padding:10px 14px; cursor:pointer; border-bottom:1px solid #f1f3f5; align-items:center; }
+  .conv:hover { background:#f5f6f6; } .conv.on { background:#f0f2f5; }
+  .av { width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600; font-size:15px; grid-row:span 2; }
+  .conv .name { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .conv .when { font-size:11px; color:var(--faint); justify-self:end; }
+  .conv .prev { color:var(--muted); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .conv .badge { justify-self:end; background:var(--accent-2); color:#fff; border-radius:999px; min-width:20px; height:20px; padding:0 6px; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .conv .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent-2); margin-left:6px; vertical-align:middle; }
+  .empty { padding:40px 20px; text-align:center; color:var(--muted); }
+
+  .thread { display:flex; flex-direction:column; min-width:0; background:var(--chat-bg); }
+  .thread .head { background:#f0f2f5; border-bottom:1px solid var(--line); padding:10px 16px; display:flex; align-items:center; gap:12px; min-height:60px; }
+  .thread .head .av { width:40px; height:40px; grid-row:auto; font-size:14px; }
+  .thread .head .who b { display:block; font-weight:600; } .thread .head .who span { font-size:12px; color:var(--muted); }
+  .thread .head .sp { flex:1; }
+  .msgs { flex:1; overflow:auto; padding:18px 8%; display:flex; flex-direction:column; gap:4px;
+          background-image:radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px); background-size:22px 22px; }
+  .day { align-self:center; background:#fff; color:var(--muted); font-size:11.5px; font-weight:500; padding:4px 12px; border-radius:8px; box-shadow:var(--shadow); margin:10px 0 6px; }
+  .m { max-width:65%; padding:7px 9px 5px 10px; border-radius:10px; box-shadow:var(--shadow); white-space:pre-wrap; word-break:break-word; font-size:14px; line-height:1.4; position:relative; }
+  .m.in { background:var(--in); align-self:flex-start; border-top-left-radius:2px; }
+  .m.out { background:var(--out); align-self:flex-end; border-top-right-radius:2px; }
+  .m + .m.in, .m + .m.out { margin-top:2px; }
+  .m.in + .m.out, .m.out + .m.in { margin-top:10px; }
+  .m .meta { display:flex; justify-content:flex-end; gap:5px; align-items:center; font-size:10.5px; color:var(--faint); margin-top:3px; }
+  .m .tick { font-size:12px; letter-spacing:-2px; } .m .tick.read { color:var(--blue); } .m .tick.failed { color:var(--red); letter-spacing:0; font-size:10.5px; }
+  .m .kind { display:inline-flex; align-items:center; gap:6px; background:rgba(0,0,0,.05); border-radius:8px; padding:6px 10px; margin-bottom:4px; font-size:13px; color:var(--muted); }
+  .m .btnreply { display:inline-block; border:1px solid var(--accent-2); color:var(--accent); border-radius:8px; padding:3px 12px; font-weight:500; }
+  .m .tpl { font-size:10.5px; color:var(--faint); text-transform:uppercase; letter-spacing:.4px; margin-bottom:3px; }
+  .m.voice { border-left:3px solid var(--accent-2); }
+  .m .src { font-size:10px; color:var(--faint); }
+  .compose { background:#f0f2f5; border-top:1px solid var(--line); padding:10px 14px; display:flex; gap:10px; align-items:flex-end; }
+  .compose textarea { resize:none; max-height:140px; min-height:42px; border-radius:10px; }
+  .compose .btn { height:42px; }
+  .closed { background:var(--amber-soft); color:var(--amber); padding:10px 16px; font-size:13px; display:flex; gap:10px; align-items:center; border-top:1px solid #fde68a; }
+  .closed .sp { flex:1; }
+  .nochat { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--muted); gap:8px; }
+  .nochat b { font-size:18px; color:var(--text); font-weight:600; }
+  .back { display:none; }
+
+  /* ---- template picker ---- */
+  dialog { margin:auto; border:0; border-radius:14px; padding:0; max-width:560px; width:94%; box-shadow:0 20px 60px rgba(0,0,0,.25); color:var(--text); }
+  dialog::backdrop { background:rgba(17,27,33,.45); }
+  .dlg-h { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; } .dlg-h b { font-size:15px; flex:1; }
+  .dlg-b { padding:16px 20px; max-height:65vh; overflow:auto; }
+  .dlg-f { padding:12px 20px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px; }
+  .tplitem { border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px; cursor:pointer; }
+  .tplitem:hover { border-color:var(--accent-2); } .tplitem.on { border-color:var(--accent); background:var(--accent-soft); }
+  .tplitem b { display:block; } .tplitem p { color:var(--muted); font-size:13px; white-space:pre-wrap; margin-top:4px; }
+  pre.json { background:#f6f8fa; border:1px solid var(--line); border-radius:10px; padding:12px; font-size:12px; overflow:auto; max-height:60vh; white-space:pre-wrap; word-break:break-all; }
+  .turn { margin-bottom:8px; } .turn b { color:var(--accent); }
   .urlbox { display:flex; gap:8px; align-items:center; }
-  .urlbox code { flex:1; background:#0f0c0a; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13px; word-break:break-all; }
-  pre.json { background:#0f0c0a; border:1px solid var(--line); border-radius:10px; padding:10px; font-size:11px; overflow:auto; max-height:320px; white-space:pre-wrap; word-break:break-all; }
-  ol.steps { padding-left:20px; } ol.steps li { margin:4px 0; }
+  .urlbox code { flex:1; background:#f6f8fa; border:1px solid var(--line); border-radius:8px; padding:10px 12px; font-size:13px; word-break:break-all; }
+  ol.steps { padding-left:20px; color:var(--muted); font-size:13px; } ol.steps li { margin:4px 0; } ol.steps code { background:#f0f2f5; padding:1px 5px; border-radius:4px; }
+
+  @media (max-width: 760px) {
+    .chat { grid-template-columns:1fr; }
+    .chat.open .side { display:none; }
+    .chat:not(.open) .thread { display:none; }
+    .back { display:inline-flex; }
+    .msgs { padding:14px 12px; } .m { max-width:85%; }
+    body { overflow-x:hidden; }
+    .top { gap:10px; padding:0 10px; }
+    .brand span { display:none; }
+    .tabs { overflow-x:auto; scrollbar-width:none; } .tabs::-webkit-scrollbar { display:none; }
+    .tabs button { padding:0 8px; font-size:13px; white-space:nowrap; }
+    .thread .head { padding:8px 10px; gap:8px; }
+    .thread .head .btn .lbl { display:none; }
+    .msgs { padding:14px 10px; }
+  }
 </style>
 </head>
 <body>
 <div id="login" hidden>
-  <h1>Ravan <span>Command</span></h1>
-  <input id="pw" type="password" placeholder="Dashboard password">
-  <button class="go" onclick="login()">Enter</button>
-  <p id="loginerr" class="muted"></p>
+  <div class="card">
+    <h1>Ravan Command</h1>
+    <p class="muted" style="margin-bottom:14px">Calls · WhatsApp · Leads</p>
+    <input id="pw" type="password" placeholder="Dashboard password" onkeydown="if(event.key==='Enter')login()">
+    <button class="btn primary" style="width:100%;justify-content:center;margin-top:10px" onclick="login()">Sign in</button>
+    <p id="loginerr" class="muted" style="margin-top:8px"></p>
+  </div>
 </div>
 
-<div class="wrap" id="app" hidden>
-  <h1>Ravan <span>Command</span> <small class="muted" style="font-weight:400;font-size:12px">— calls · WhatsApp · leads</small></h1>
-  <div class="tabs">
-    <button data-t="overview" class="on">Overview</button>
-    <button data-t="calls">Calls</button>
-    <button data-t="inbox">Chats</button>
-    <button data-t="webhook">Webhook</button>
-    <button data-t="offers">Offers</button>
-    <button data-t="playbook">Playbook</button>
-  </div>
-
-  <div id="t-overview">
-    <div class="cards" id="stats"></div>
-    <div class="row">
-      <input id="dialNum" placeholder="Dial a number now (10 digits)" style="max-width:280px">
-      <button class="go" onclick="dial()">Call via AI</button>
-      <span id="dialmsg" class="muted"></span>
+<div id="app" hidden>
+  <div class="top">
+    <div class="brand"><i>R</i><span>Ravan Command</span></div>
+    <div class="tabs">
+      <button data-t="inbox" class="on">Chats <span id="unreadTotal" class="badge" hidden></span></button>
+      <button data-t="overview">Overview</button>
+      <button data-t="calls">Calls</button>
+      <button data-t="webhook">Webhook</button>
+      <button data-t="offers">Offers</button>
+      <button data-t="playbook">Playbook</button>
     </div>
+    <span class="sp"></span>
+    <button class="btn sm" onclick="logout()">Sign out</button>
   </div>
 
-  <div id="t-calls" hidden>
-    <table><thead><tr><th>When</th><th>Number</th><th>Name</th><th>Status</th><th>Duration</th><th></th></tr></thead><tbody id="callrows"></tbody></table>
-  </div>
-
-  <div id="t-inbox" hidden>
-    <div class="split">
-      <div class="list" id="convs"></div>
+  <!-- ================= CHATS ================= -->
+  <div id="t-inbox" class="page full">
+    <div class="chat" id="chat">
+      <div class="side">
+        <div class="search"><input id="q" placeholder="Search name or number" oninput="drawConvs()"></div>
+        <div class="filters">
+          <button class="on" data-f="all" onclick="setFilter('all')">All</button>
+          <button data-f="unread" onclick="setFilter('unread')">Unread</button>
+          <button data-f="open" onclick="setFilter('open')">Window open</button>
+        </div>
+        <div class="convs" id="convs"></div>
+      </div>
       <div class="thread">
-        <div class="thead" id="thead" hidden></div>
-        <div class="msgs" id="msgs"><p class="muted" style="margin:auto">Select a conversation</p></div>
-        <div class="send">
-          <input id="reply" placeholder="Reply (needs open 24h window)…" onkeydown="if(event.key==='Enter')sendReply()">
-          <button class="go" onclick="sendReply()">Send</button>
-          <button class="go" style="background:#332211;color:var(--text)" onclick="sendTpl()" title="Send template (opens closed conversations)">Tpl</button>
+        <div class="head" id="thead" hidden></div>
+        <div class="nochat" id="nochat"><b>Pick a conversation</b><span>Incoming WhatsApp messages show up on the left.</span></div>
+        <div class="msgs" id="msgs" hidden></div>
+        <div class="closed" id="closed" hidden>
+          <span>⏳</span><span>The 24-hour reply window is closed. Free text will not deliver — send an approved template to reopen it.</span>
+          <span class="sp"></span><button class="btn sm primary" onclick="openTemplates()">Send template</button>
+        </div>
+        <div class="compose" id="compose" hidden>
+          <button class="btn" title="Send a template" onclick="openTemplates()">📋</button>
+          <textarea id="reply" rows="1" placeholder="Type a message…" title="Enter to send, Shift+Enter for a new line" oninput="growReply()" onkeydown="replyKey(event)"></textarea>
+          <button class="btn primary" id="sendBtn" onclick="sendReply()">Send</button>
         </div>
       </div>
     </div>
   </div>
 
-  <div id="t-webhook" hidden>
-    <div class="card" style="max-width:860px">
-      <label>Webhook URL — paste this in the BSP panel (crm.marketingravan.com → WhatsApp → Webhook)</label>
-      <div class="urlbox"><code id="whurl">…</code><button class="go" onclick="copyUrl()">Copy</button></div>
-      <p class="muted" id="whmeta" style="margin-top:8px"></p>
-      <ol class="steps muted" style="margin-top:10px">
+  <!-- ================= OVERVIEW ================= -->
+  <div id="t-overview" class="page" hidden>
+    <div class="cards" id="stats"></div>
+    <div class="card" style="max-width:560px">
+      <label>Dial a number with the AI voice agent</label>
+      <div class="row"><input id="dialNum" placeholder="10-digit mobile" style="max-width:240px"><button class="btn primary" onclick="dial()">Call via AI</button><span id="dialmsg" class="muted"></span></div>
+    </div>
+  </div>
+
+  <!-- ================= CALLS ================= -->
+  <div id="t-calls" class="page" hidden>
+    <table><thead><tr><th>When</th><th>Number</th><th>Name</th><th>Status</th><th>Duration</th><th></th></tr></thead><tbody id="callrows"></tbody></table>
+  </div>
+
+  <!-- ================= WEBHOOK ================= -->
+  <div id="t-webhook" class="page" hidden>
+    <div class="card" style="margin-bottom:16px">
+      <label style="margin-top:0">Webhook URL — paste into the BSP panel (crm.marketingravan.com → WhatsApp → Webhook)</label>
+      <div class="urlbox"><code id="whurl">…</code><button class="btn" onclick="copyUrl()">Copy</button></div>
+      <p class="muted" id="whmeta" style="margin-top:8px;font-size:13px"></p>
+      <ol class="steps" style="margin-top:10px">
         <li>The panel sends <code>GET …?challange=&lt;random&gt;</code>; this server echoes the value back with 200, which is what makes the panel accept the URL.</li>
-        <li>After that every message, button tap, delivery status and phone-app echo is POSTed here, stored raw in <code>wa_events_raw</code>, then parsed into <code>conversations</code> / <code>messages</code>.</li>
-        <li>Send a WhatsApp message to the business number and watch it appear below within a few seconds, then under Chats.</li>
+        <li>After that every message, button tap, delivery status and phone-app echo is POSTed here, stored raw, then parsed into conversations and messages.</li>
+        <li>Send a WhatsApp to the business number and watch it appear below within seconds, then under Chats.</li>
       </ol>
     </div>
-    <table><thead><tr><th>#</th><th>Received</th><th>Kind</th><th>Summary</th></tr></thead><tbody id="whrows"></tbody></table>
-    <p class="muted" id="whempty" hidden style="padding:14px">No webhook deliveries yet — the BSP has not called this URL.</p>
+    <table><thead><tr><th style="width:60px">#</th><th style="width:150px">Received</th><th style="width:110px">Kind</th><th>Summary</th></tr></thead><tbody id="whrows"></tbody></table>
+    <p class="empty" id="whempty" hidden>No webhook deliveries yet — the BSP has not called this URL.</p>
   </div>
 
-  <div id="t-playbook" hidden>
-    <div class="card" style="max-width:760px">
-      <p class="muted" style="margin:0 0 10px">
-        The agent quotes these rules word for word and will not state a price or policy that is not here.
-        Saving re-embeds the rule automatically.
-      </p>
-      <label>Title</label><input id="pbtitle" placeholder="e.g. Website pricing">
-      <label>Rule — write it as you want it quoted to a customer</label><textarea id="pbrule" rows="4"></textarea>
-      <label>Category</label><input id="pbcat" placeholder="pricing / delivery / policy / general" value="general">
-      <div class="row"><label style="margin:0"><input type="checkbox" id="pbactive" style="width:auto" checked> active</label>
-      <button class="go" onclick="savePolicy()">Save rule</button>
-      <button class="go" style="background:#332211;color:var(--text)" onclick="clearPolicy()">New</button>
-      <span id="pbmsg" class="muted"></span></div>
-    </div>
-    <div class="card" style="max-width:760px">
-      <label>Test retrieval — ask the way a customer would, in any language</label>
-      <div class="row"><input id="pbq" placeholder="kitna paisa lagega website ka">
-      <button class="go" onclick="testPolicy()">Search</button></div>
-      <div id="pbresults" class="muted"></div>
-    </div>
-    <table><thead><tr><th>Title</th><th>Category</th><th>Embedded</th><th></th></tr></thead><tbody id="pbrows"></tbody></table>
-  </div>
-
-  <div id="t-offers" hidden>
-    <div class="card" style="max-width:640px">
-      <label>Offer name</label><input id="oname">
+  <!-- ================= OFFERS ================= -->
+  <div id="t-offers" class="page" hidden>
+    <div class="card" style="max-width:640px;margin-bottom:16px">
+      <label style="margin-top:0">Offer name</label><input id="oname">
       <label>Pitch — what the agent should discuss/offer</label><textarea id="opitch" rows="5"></textarea>
       <label>Goal of the call</label><input id="ogoal" placeholder="e.g. book a strategy meeting">
-      <div class="row"><label style="margin:0"><input type="checkbox" id="oactive" style="width:auto"> active</label>
-      <button class="go" onclick="saveOffer()">Save offer</button><span id="omsg" class="muted"></span></div>
+      <div class="row" style="margin-top:12px"><label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="oactive" style="width:auto"> active</label>
+      <button class="btn primary" onclick="saveOffer()">Save offer</button><span id="omsg" class="muted"></span></div>
     </div>
     <table><thead><tr><th>Name</th><th>Goal</th><th>Active</th></tr></thead><tbody id="offerrows"></tbody></table>
   </div>
+
+  <!-- ================= PLAYBOOK ================= -->
+  <div id="t-playbook" class="page" hidden>
+    <div class="card" style="max-width:760px;margin-bottom:16px">
+      <p class="muted" style="font-size:13px">The agent quotes these rules word for word and will not state a price or policy that is not here. Saving re-embeds the rule automatically.</p>
+      <label>Title</label><input id="pbtitle" placeholder="e.g. Website pricing">
+      <label>Rule — write it as you want it quoted to a customer</label><textarea id="pbrule" rows="4"></textarea>
+      <label>Category</label><input id="pbcat" placeholder="pricing / delivery / policy / general" value="general">
+      <div class="row" style="margin-top:12px"><label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="pbactive" style="width:auto" checked> active</label>
+      <button class="btn primary" onclick="savePolicy()">Save rule</button>
+      <button class="btn" onclick="clearPolicy()">New</button>
+      <span id="pbmsg" class="muted"></span></div>
+    </div>
+    <div class="card" style="max-width:760px;margin-bottom:16px">
+      <label style="margin-top:0">Test retrieval — ask the way a customer would, in any language</label>
+      <div class="row"><input id="pbq" placeholder="kitna paisa lagega website ka" style="flex:1"><button class="btn" onclick="testPolicy()">Search</button></div>
+      <div id="pbresults" class="muted" style="margin-top:10px;font-size:13px"></div>
+    </div>
+    <table><thead><tr><th>Title</th><th>Category</th><th>Embedded</th><th></th></tr></thead><tbody id="pbrows"></tbody></table>
+  </div>
 </div>
 
-<dialog id="dlg"><div id="dlgbody"></div><div class="row" style="justify-content:flex-end"><button class="go" onclick="dlg.close()">Close</button></div></dialog>
+<dialog id="dlg">
+  <div class="dlg-h"><b id="dlgtitle"></b><button class="btn sm" onclick="dlg.close()">✕</button></div>
+  <div class="dlg-b" id="dlgbody"></div>
+  <div class="dlg-f" id="dlgfoot"></div>
+</dialog>
 
 <script>
 let TOKEN = localStorage.getItem("mr_token") || "";
-let currentPhone = null, currentOfferId = null;
+let currentPhone = null, currentOfferId = null, currentPolicyId = null;
+let convCache = [], filter = "all", threadTimer = null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -184,119 +291,104 @@ async function login() {
   try { await api("/api/admin/overview"); localStorage.setItem("mr_token", TOKEN); $("login").hidden = true; $("app").hidden = false; refresh(); }
   catch { $("loginerr").textContent = "Wrong password."; }
 }
+function logout() { localStorage.removeItem("mr_token"); TOKEN = ""; showLogin(); }
 
-document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
-  document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("on")); b.classList.add("on");
-  ["overview","calls","inbox","webhook","offers","playbook"].forEach(t => $("t-"+t).hidden = t !== b.dataset.t);
-  refresh();
-});
+// ---------------- tabs ----------------
+const TABS = ["inbox","overview","calls","webhook","offers","playbook"];
+function showTab(t) {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x.dataset.t === t));
+  TABS.forEach(x => $("t-"+x).hidden = x !== t);
+  location.hash = t === "inbox" ? "chats" : t;
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { showTab(b.dataset.t); refresh(); });
 const activeTab = () => document.querySelector(".tabs button.on").dataset.t;
 
-async function refresh() {
-  const t = activeTab();
-  if (t === "playbook") {
-    const rows = await api("/api/admin/playbook");
-    $("pbrows").innerHTML = rows.map(p =>
-      "<tr><td>" + esc(p.title) + "<br><span class=muted>" + esc(p.rule.slice(0, 90)) + (p.rule.length > 90 ? "…" : "") + "</span></td>" +
-      "<td>" + esc(p.category) + "</td>" +
-      "<td>" + (p.embedded ? "yes" : "<b>no</b>") + (p.active ? "" : " · inactive") + "</td>" +
-      "<td><button class=go onclick='editPolicy(" + esc(JSON.stringify(p)).replace(/'/g, "&#39;") + ")'>Edit</button> " +
-      "<button class=go style=\"background:#3a1f1f\" onclick=\"deletePolicy('" + p.id + "'," + JSON.stringify(p.title) + ")\">Delete</button></td></tr>").join("");
-    return;
-  }
-  if (t === "overview") {
-    const s = await api("/api/admin/overview");
-    $("stats").innerHTML = Object.entries({Leads:s.leads, "Calls total":s.calls, Connected:s.connected, "Calls today":s.calls_today, Chats:s.conversations, Unread:s.unread})
-      .map(([k,v]) => `<div class="card"><b>${v}</b><span>${k}</span></div>`).join("");
-  }
-  if (t === "calls") {
-    const rows = await api("/api/admin/calls");
-    $("callrows").innerHTML = rows.map(c => `<tr class="click" onclick="openCall(${c.id})">
-      <td>${esc((c.created_at||"").slice(0,16))}</td><td>${esc(c.phone10)}</td><td>${esc(c.name||"—")}</td>
-      <td><span class="pill ${c.status==='connected'?'ok':c.status==='dispatched'?'mid':'bad'}">${esc(c.status)}</span></td>
-      <td>${c.duration ? Math.round(c.duration)+"s" : "—"}</td><td>${c.has_transcript ? "📄" : ""}</td></tr>`).join("");
-  }
-  if (t === "inbox") {
-    const convs = await api("/api/admin/conversations");
-    $("convs").innerHTML = renderConvs(convs, currentPhone);
-    if (currentPhone) loadThread();
-  }
-  if (t === "webhook") {
-    const w = await api("/api/admin/webhook");
-    $("whurl").textContent = w.url;
-    $("whmeta").textContent = (w.token_required ? "Shared secret required (WA_WEBHOOK_TOKEN is set). " : "No shared secret (WA_WEBHOOK_TOKEN unset) — the endpoint is open, like the OMS. ")
-      + "Agent auto-reply is " + (w.autoreply ? "ON" : "off") + ".";
-    $("whempty").hidden = w.events.length > 0;
-    $("whrows").innerHTML = w.events.map(e => `<tr class="click" onclick='showEvent(${JSON.stringify(e).replace(/'/g,"&#39;")})'>
-      <td>${e.id}</td><td>${esc(fmtTime(e.created_at))}</td><td><span class="pill ${e.kind==='incoming'?'ok':e.kind==='status'?'mid':''}">${esc(e.kind)}</span></td>
-      <td class="muted">${esc(eventSummary(e.payload))}</td></tr>`).join("");
-  }
-  if (t === "offers") {
-    const offers = await api("/api/admin/offers");
-    $("offerrows").innerHTML = offers.map(o => `<tr class="click" onclick='editOffer(${JSON.stringify(o).replace(/'/g,"&#39;")})'>
-      <td>${esc(o.name)}</td><td>${esc(o.goal||"—")}</td><td>${o.active ? "🔥" : ""}</td></tr>`).join("");
-  }
-}
-
-async function openCall(id) {
-  const c = await api("/api/admin/calls/" + id);
-  const t = (c.transcript||[]).map(x => `<p class="turn"><b>${esc((x.role||x.speaker||"?").toUpperCase())}:</b> ${esc(x.text||x.content||JSON.stringify(x))}</p>`).join("") || "<p class='muted'>No transcript.</p>";
-  $("dlgbody").innerHTML = `<h3>${esc(c.phone10)} — ${esc(c.status)} ${c.duration?("· "+Math.round(c.duration)+"s"):""}</h3>
-    ${c.variables ? `<p class="muted">Extracted: ${esc(JSON.stringify(c.variables))}</p>` : ""}
-    ${c.failure_reason ? `<p class="muted">Failure: ${esc(c.failure_reason)}</p>` : ""}<hr style="border-color:var(--line);margin:10px 0">${t}`;
-  dlg.showModal();
-}
-
-async function openConv(p) { currentPhone = p; refresh(); }
-
-// ---- chat rendering (pure: data in, HTML out) ----
+// ---------------- formatting ----------------
 const pad = (n) => String(n).padStart(2, "0");
 function fmtTime(iso) {
   if (!iso) return "";
   const d = new Date(iso); if (isNaN(d)) return String(iso).slice(0, 16);
-  const now = new Date(), sameDay = d.toDateString() === now.toDateString();
   const hm = pad(d.getHours()) + ":" + pad(d.getMinutes());
-  if (sameDay) return hm;
+  if (d.toDateString() === new Date().toDateString()) return hm;
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + hm;
+}
+function fmtListTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso); if (isNaN(d)) return "";
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return pad(d.getHours()) + ":" + pad(d.getMinutes());
+  const y = new Date(now); y.setDate(y.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return "Yesterday";
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 function dayLabel(iso) {
   const d = new Date(iso); if (isNaN(d)) return "";
   const today = new Date(); today.setHours(0,0,0,0);
   const diff = Math.round((today - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
   if (diff === 0) return "Today"; if (diff === 1) return "Yesterday";
-  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  return d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
 }
-const TYPE_ICON = { image:"📷 Photo", video:"🎬 Video", audio:"🎤 Voice message", document:"📄 Document", sticker:"🌟 Sticker", location:"📍 Location", contacts:"👤 Contact", template:"📋 Template", voice:"📞 Call" };
+const AV_COLORS = ["#00a884","#3b82f6","#8b5cf6","#ec4899","#f59e0b","#14b8a6","#ef4444","#6366f1"];
+function avatar(c, cls = "av") {
+  const name = c.contact_name || "";
+  const initials = name ? name.trim().split(/\s+/).slice(0,2).map(w => w[0]).join("").toUpperCase() : (c.phone10 || "?").slice(-2);
+  const color = AV_COLORS[[...(c.phone10 || "")].reduce((n, ch) => n + ch.charCodeAt(0), 0) % AV_COLORS.length];
+  return `<div class="${cls}" style="background:${color}">${esc(initials)}</div>`;
+}
+const isOpen = (c) => !!(c.window_open_until && new Date(c.window_open_until) > new Date());
+const TYPE_ICON = { image:"📷 Photo", video:"🎬 Video", audio:"🎤 Voice message", document:"📄 Document", sticker:"🌟 Sticker", location:"📍 Location", contacts:"👤 Contact", reaction:"💬 Reaction", order:"🛒 Order" };
+
+// ---------------- chats: list ----------------
+function setFilter(f) { filter = f; document.querySelectorAll(".filters button").forEach(b => b.classList.toggle("on", b.dataset.f === f)); drawConvs(); }
+function drawConvs() {
+  const q = $("q").value.trim().toLowerCase();
+  let list = convCache.filter(c => c.last_message_at); // hide bare/demo threads with no traffic
+  if (q) list = list.filter(c => (c.contact_name || "").toLowerCase().includes(q) || (c.phone10 || "").includes(q));
+  if (filter === "unread") list = list.filter(c => c.unread > 0);
+  if (filter === "open") list = list.filter(isOpen);
+  $("convs").innerHTML = renderConvs(list, currentPhone);
+  const total = convCache.reduce((n, c) => n + (c.unread || 0), 0);
+  $("unreadTotal").hidden = !total; $("unreadTotal").textContent = total;
+}
 function renderConvs(convs, selected) {
-  if (!convs.length) return `<p class="muted" style="padding:14px">No conversations yet — see the Webhook tab to check deliveries.</p>`;
-  return convs.map(c => {
-    const open = c.window_open_until && new Date(c.window_open_until) > new Date();
-    return `<div class="conv ${c.phone10===selected?'on':''}" onclick="openConv('${esc(c.phone10)}')">
-      <b><span class="dot ${open?'':'off'}" title="${open?'24h reply window open':'window closed — template only'}"></span>${esc(c.contact_name || c.phone10)}</b>
-      <span class="when">${esc(fmtTime(c.last_message_at))}</span>
-      <small>${c.last_direction==='out' ? '↩ ' : ''}${esc((c.last_message_text||"").slice(0,48))}</small>
-      ${c.unread ? `<span class="badge">${c.unread}</span>` : "<span></span>"}
-    </div>`; }).join("");
+  if (!convs.length) return `<div class="empty">No conversations here yet.</div>`;
+  return convs.map(c => `<div class="conv ${c.phone10===selected?'on':''}" onclick="openConv('${esc(c.phone10)}')">
+      ${avatar(c)}
+      <div class="name">${esc(c.contact_name || "+91 " + c.phone10)}${isOpen(c) ? '<span class="dot" title="24h reply window open"></span>' : ""}</div>
+      <div class="when">${esc(fmtListTime(c.last_message_at))}</div>
+      <div class="prev">${c.last_direction==='out' ? '<span class="faint">You: </span>' : ''}${esc((c.last_message_text||"").replace(/\s+/g," ").slice(0,60))}</div>
+      ${c.unread ? `<div class="badge">${c.unread}</div>` : "<div></div>"}
+    </div>`).join("");
 }
+async function loadConvs() { convCache = await api("/api/admin/conversations"); drawConvs(); }
+
+// ---------------- chats: thread ----------------
+async function openConv(p) {
+  currentPhone = p;
+  $("chat").classList.add("open");
+  drawConvs();
+  await loadThread(true);
+}
+function closeConv() { currentPhone = null; $("chat").classList.remove("open"); drawConvs(); }
+
 function bubble(m) {
   const out = m.direction === "out";
   let body = "";
   if (m.type === "text" || m.type === "voice") body = esc(m.text || "");
-  else if (m.type === "button" || m.type === "interactive") body = `<span class="btn">${esc(m.text || m.button_payload || "")}</span>`;
-  else if (m.type === "template") body = `<span class="tag">template</span><br>${esc(m.text || "")}`;
-  else {
-    body = `<span class="tag">${esc(TYPE_ICON[m.type] || m.type)}</span>` + (m.filename ? `<br>${esc(m.filename)}` : "") + (m.caption || m.text ? `<br>${esc(m.caption || m.text)}` : "");
-  }
+  else if (m.type === "button" || m.type === "interactive") body = `<span class="btnreply">${esc(m.text || m.button_payload || "")}</span>`;
+  else if (m.type === "template") body = `<div class="tpl">Template${m.caption ? " · " + esc(m.caption) : ""}</div>${esc(m.text || "")}`;
+  else body = `<div class="kind">${esc(TYPE_ICON[m.type] || m.type)}${m.filename ? " · " + esc(m.filename) : ""}</div>` + (m.caption || m.text ? esc(m.caption || m.text) : "");
   let ticks = "";
   if (out) {
     const s = (m.status || "").toLowerCase();
-    ticks = s === "read" ? '<span class="tick read">✓✓</span>' : s === "delivered" ? '<span class="tick">✓✓</span>' : s === "failed" ? '<span class="tick failed">✗ failed</span>' : '<span class="tick">✓</span>';
+    ticks = s === "read" ? '<span class="tick read">✓✓</span>' : s === "delivered" ? '<span class="tick">✓✓</span>'
+          : s === "failed" ? '<span class="tick failed">failed</span>' : '<span class="tick">✓</span>';
   }
-  const src = out && m.source ? " · " + esc(m.source) : "";
-  return `<div class="m ${out?'out':'in'} ${m.type==='voice'?'voice':''}">${body}<small>${esc(fmtTime(m.timestamp))}${src} ${ticks}</small></div>`;
+  const src = out && m.source && m.source !== "reply" ? `<span class="src">${esc(m.source)}</span>` : (m.type === "voice" ? '<span class="src">call</span>' : "");
+  return `<div class="m ${out?'out':'in'} ${m.type==='voice'?'voice':''}">${body}<div class="meta">${src}<span>${esc(fmtTime(m.timestamp))}</span>${ticks}</div></div>`;
 }
 function renderThread(msgs) {
-  if (!msgs.length) return `<p class="muted" style="margin:auto">No messages in this conversation yet.</p>`;
+  if (!msgs.length) return `<div class="day">No messages yet</div>`;
   let html = "", lastDay = null;
   for (const m of msgs) {
     const day = dayLabel(m.timestamp);
@@ -306,25 +398,132 @@ function renderThread(msgs) {
   return html;
 }
 function renderHead(c) {
-  if (!c) return "";
-  const until = c.window_open_until ? new Date(c.window_open_until) : null;
-  const open = until && until > new Date();
-  return `<div><b>${esc(c.contact_name || c.phone10)}</b><div class="muted">+91 ${esc(c.phone10)}</div></div><span class="sp"></span>
-    <span class="pill ${open?'ok':'bad'}">${open ? "reply window open until " + esc(fmtTime(until.toISOString())) : "window closed — template only"}</span>
-    <button class="go" style="padding:6px 12px" onclick="dialPhone('${esc(c.phone10)}')">Call via AI</button>`;
+  const open = isOpen(c);
+  return `<button class="btn sm back" onclick="closeConv()">←</button>${avatar(c)}
+    <div class="who"><b>${esc(c.contact_name || "+91 " + c.phone10)}</b><span>+91 ${esc(c.phone10)}${open ? " · window open until " + esc(fmtTime(c.window_open_until)) : " · window closed"}</span></div>
+    <span class="sp"></span>
+    <button class="btn sm" onclick="runAgent()" title="Let the AI agent answer the latest message (it sends the reply)">🤖<span class="lbl"> Agent reply</span></button>
+    <button class="btn sm" onclick="dialPhone('${esc(c.phone10)}')" title="Call via AI">📞<span class="lbl"> Call via AI</span></button>`;
 }
-
-async function loadThread() {
+async function loadThread(jump = false) {
+  if (!currentPhone) return;
+  const phone = currentPhone;
+  const r = await api("/api/admin/messages?phone=" + phone);
+  if (phone !== currentPhone) return; // user switched while loading
+  const conv = r.conversation || { phone10: phone }, msgs = r.messages || [];
+  $("nochat").hidden = true; $("thead").hidden = false; $("msgs").hidden = false;
+  $("thead").innerHTML = renderHead(conv);
+  const open = isOpen(conv);
+  $("compose").hidden = !open; $("closed").hidden = open;
+  const el = $("msgs"), atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  const html = renderThread(msgs);
+  if (el.innerHTML !== html) el.innerHTML = html;
+  if (jump || atBottom) el.scrollTop = el.scrollHeight;
+  if (jump && open) $("reply").focus();
+  // The list's unread count for this thread is now stale — refresh it quietly.
+  const c = convCache.find(x => x.phone10 === phone); if (c && c.unread) { c.unread = 0; drawConvs(); }
+}
+function growReply() { const t = $("reply"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 140) + "px"; }
+function replyKey(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }
+async function sendReply() {
+  const text = $("reply").value.trim();
+  if (!text || !currentPhone) return;
+  $("sendBtn").disabled = true;
+  try { await api("/api/admin/send", { method:"POST", body: JSON.stringify({ phone: currentPhone, text }) }); $("reply").value = ""; growReply(); await loadThread(true); }
+  catch (e) { alert(e.message); }
+  finally { $("sendBtn").disabled = false; }
+}
+async function runAgent() {
+  if (!currentPhone) return;
   const r = await api("/api/admin/messages?phone=" + currentPhone);
-  const conv = r.conversation, msgs = r.messages || [];
-  $("thead").hidden = !conv; $("thead").innerHTML = renderHead(conv);
-  const el = $("msgs"), atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-  el.innerHTML = renderThread(msgs);
-  if (atBottom) el.scrollTop = el.scrollHeight;
+  const last = [...(r.messages || [])].reverse().find(m => m.direction === "in");
+  if (!last) return alert("No customer message to answer yet.");
+  if (!confirm("Let the AI agent answer this conversation now? It will send its reply to the customer.")) return;
+  try { const run = await api("/api/admin/agent/run", { method:"POST", body: JSON.stringify({ phone: currentPhone, text: last.text || `[${last.type}]` }) }); await loadThread(true); if (run.status && run.status !== "ok" && run.status !== "completed") alert("Agent run: " + run.status); }
+  catch (e) { alert(e.message); }
 }
 async function dialPhone(p) {
-  try { const r = await api("/api/admin/call", { method:"POST", body: JSON.stringify({ phone: p }) }); alert("Dispatched " + r.attempt_id); }
+  try { const r = await api("/api/admin/call", { method:"POST", body: JSON.stringify({ phone: p }) }); alert("Dispatched call " + String(r.attempt_id).slice(0,8)); }
   catch (e) { alert(e.message); }
+}
+
+// ---------------- templates ----------------
+let templates = null, pickedTpl = null;
+async function openTemplates() {
+  if (!currentPhone) return;
+  $("dlgtitle").textContent = "Send a template to +91 " + currentPhone;
+  $("dlgbody").innerHTML = '<p class="muted">Loading approved templates…</p>'; $("dlgfoot").innerHTML = "";
+  dlg.showModal();
+  try { templates = templates || await api("/api/admin/templates"); }
+  catch (e) { $("dlgbody").innerHTML = `<p class="muted">Could not load templates: ${esc(e.message)}</p>`; return; }
+  pickedTpl = null; drawTemplates();
+}
+function drawTemplates() {
+  if (!templates.length) { $("dlgbody").innerHTML = '<p class="muted">No approved templates on this WhatsApp account.</p>'; return; }
+  $("dlgbody").innerHTML = templates.map((t, i) => `<div class="tplitem ${pickedTpl===i?'on':''}" onclick="pickTemplate(${i})">
+      <b>${esc(t.name)} <span class="pill">${esc(t.language)}</span> <span class="pill">${esc(t.category || "")}</span></b>
+      ${t.header ? `<p><b>${esc(t.header)}</b></p>` : ""}<p>${esc(t.body)}</p>
+      ${pickedTpl===i && t.params ? Array.from({length:t.params}, (_, k) => `<label>Parameter {{${k+1}}}</label><input id="tp${k}" onclick="event.stopPropagation()">`).join("") : ""}
+    </div>`).join("");
+  $("dlgfoot").innerHTML = `<button class="btn" onclick="dlg.close()">Cancel</button><button class="btn primary" ${pickedTpl==null?"disabled":""} onclick="sendTemplate()">Send template</button>`;
+}
+function pickTemplate(i) { pickedTpl = i; drawTemplates(); }
+async function sendTemplate() {
+  const t = templates[pickedTpl]; if (!t) return;
+  const params = Array.from({length:t.params}, (_, k) => $("tp"+k).value);
+  if (params.some(p => !p.trim())) return alert("Fill in every parameter.");
+  try { await api("/api/admin/send", { method:"POST", body: JSON.stringify({ phone: currentPhone, template: t.name, language: t.language, params }) }); dlg.close(); await loadThread(true); }
+  catch (e) { alert(e.message); }
+}
+
+// ---------------- other tabs ----------------
+async function refresh() {
+  const t = activeTab();
+  if (t === "inbox") { await loadConvs(); if (currentPhone) await loadThread(); return; }
+  if (t === "overview") {
+    const s = await api("/api/admin/overview");
+    $("stats").innerHTML = Object.entries({ Chats:s.conversations, Unread:s.unread, Leads:s.leads, "Calls total":s.calls, Connected:s.connected, "Calls today":s.calls_today, "Agent runs":s.agent_runs, "Agent spend today":"$"+s.agent_spend_today })
+      .map(([k,v]) => `<div class="stat"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join("");
+  }
+  if (t === "calls") {
+    const rows = await api("/api/admin/calls");
+    $("callrows").innerHTML = rows.map(c => `<tr class="click" onclick="openCall(${c.id})">
+      <td>${esc(fmtTime(c.created_at))}</td><td>${esc(c.phone10)}</td><td>${esc(c.name||"—")}</td>
+      <td><span class="pill ${c.status==='connected'?'ok':c.status==='dispatched'?'warn':'bad'}">${esc(c.status)}</span></td>
+      <td>${c.duration ? Math.round(c.duration)+"s" : "—"}</td><td>${c.has_transcript ? "📄" : ""}</td></tr>`).join("") || '<tr><td colspan="6" class="muted">No calls yet.</td></tr>';
+  }
+  if (t === "webhook") {
+    const w = await api("/api/admin/webhook");
+    $("whurl").textContent = w.url;
+    $("whmeta").textContent = (w.token_required ? "Shared secret required (WA_WEBHOOK_TOKEN is set). " : "No shared secret (WA_WEBHOOK_TOKEN unset) — the endpoint is open, like the OMS. ") + "Agent auto-reply is " + (w.autoreply ? "ON" : "off") + ".";
+    $("whempty").hidden = w.events.length > 0;
+    $("whrows").innerHTML = w.events.map(e => `<tr class="click" onclick='showEvent(${JSON.stringify(e).replace(/'/g,"&#39;")})'>
+      <td>${e.id}</td><td>${esc(fmtTime(e.created_at))}</td><td><span class="pill ${e.kind==='incoming'?'ok':e.kind==='status'?'warn':''}">${esc(e.kind)}</span></td>
+      <td class="muted">${esc(eventSummary(e.payload))}</td></tr>`).join("");
+  }
+  if (t === "offers") {
+    const offers = await api("/api/admin/offers");
+    $("offerrows").innerHTML = offers.map(o => `<tr class="click" onclick='editOffer(${JSON.stringify(o).replace(/'/g,"&#39;")})'>
+      <td>${esc(o.name)}</td><td>${esc(o.goal||"—")}</td><td>${o.active ? '<span class="pill ok">active</span>' : ""}</td></tr>`).join("") || '<tr><td colspan="3" class="muted">No offers yet.</td></tr>';
+  }
+  if (t === "playbook") {
+    const rows = await api("/api/admin/playbook");
+    $("pbrows").innerHTML = rows.map(p =>
+      "<tr><td>" + esc(p.title) + "<br><span class=muted>" + esc(p.rule.slice(0, 90)) + (p.rule.length > 90 ? "…" : "") + "</span></td>" +
+      "<td>" + esc(p.category) + "</td>" +
+      "<td>" + (p.embedded ? '<span class="pill ok">yes</span>' : '<span class="pill bad">no</span>') + (p.active ? "" : ' <span class="pill">inactive</span>') + "</td>" +
+      "<td><button class='btn sm' onclick='editPolicy(" + esc(JSON.stringify(p)).replace(/'/g, "&#39;") + ")'>Edit</button> " +
+      "<button class='btn sm danger' onclick=\"deletePolicy('" + p.id + "'," + JSON.stringify(p.title) + ")\">Delete</button></td></tr>").join("") || '<tr><td colspan="4" class="muted">No rules yet.</td></tr>';
+  }
+}
+
+async function openCall(id) {
+  const c = await api("/api/admin/calls/" + id);
+  const t = (c.transcript||[]).map(x => `<p class="turn"><b>${esc((x.role||x.speaker||"?").toUpperCase())}:</b> ${esc(x.text||x.content||JSON.stringify(x))}</p>`).join("") || "<p class='muted'>No transcript.</p>";
+  $("dlgtitle").textContent = `${c.phone10} — ${c.status}${c.duration ? " · " + Math.round(c.duration) + "s" : ""}`;
+  $("dlgbody").innerHTML = `${c.variables ? `<p class="muted">Extracted: ${esc(JSON.stringify(c.variables))}</p>` : ""}${c.failure_reason ? `<p class="muted">Failure: ${esc(c.failure_reason)}</p>` : ""}${t}`;
+  $("dlgfoot").innerHTML = '<button class="btn" onclick="dlg.close()">Close</button>';
+  dlg.showModal();
 }
 function eventSummary(p) {
   try {
@@ -332,89 +531,59 @@ function eventSummary(p) {
     const m = v?.messages?.[0] || v?.message_echoes?.[0] || v?.smb_message_echoes?.[0];
     if (m) return `${m.type || "message"} ${m.from ? "from " + m.from : ""}${m.to ? " to " + m.to : ""}: ${m.text?.body || m.button?.text || m.interactive?.button_reply?.title || m.image?.caption || ""}`.trim();
     const st = v?.statuses?.[0];
-    if (st) return `${st.status} → ${st.recipient_id || ""} (${st.id || ""})`;
-    if (p?.message_status || p?.queue_id) return `send ack ${p.message_status || ""} ${p.queue_id || ""}`;
+    if (st) return `${st.status} → ${st.recipient_id || ""}${st.errors?.[0] ? " · " + (st.errors[0].title || st.errors[0].message || "error " + st.errors[0].code) : ""}`;
+    if (p?.message_status || p?.queue_id || p?.message?.queue_id) return `send ack ${p.message_status || p.message?.message_status || ""}`;
     return JSON.stringify(p).slice(0, 140);
   } catch { return ""; }
 }
 function showEvent(e) {
-  $("dlgbody").innerHTML = `<h3>Event #${e.id} · ${esc(e.kind)} · ${esc(fmtTime(e.created_at))}</h3><pre class="json">${esc(JSON.stringify(e.payload, null, 2))}</pre>`;
+  $("dlgtitle").textContent = `Event #${e.id} · ${e.kind} · ${fmtTime(e.created_at)}`;
+  $("dlgbody").innerHTML = `<pre class="json">${esc(JSON.stringify(e.payload, null, 2))}</pre>`;
+  $("dlgfoot").innerHTML = '<button class="btn" onclick="dlg.close()">Close</button>';
   dlg.showModal();
 }
 function copyUrl() { navigator.clipboard?.writeText($("whurl").textContent).then(() => { $("whmeta").textContent = "Copied. " + $("whmeta").textContent; }); }
-async function sendReply() {
-  const text = $("reply").value.trim();
-  if (!text || !currentPhone) return;
-  try { await api("/api/admin/send", { method:"POST", body: JSON.stringify({ phone: currentPhone, text }) }); $("reply").value = ""; loadThread(); }
-  catch (e) { alert(e.message); }
-}
-async function sendTpl() {
-  if (!currentPhone) return;
-  const name = prompt("Template name to send:", "hi_intro");
-  if (!name) return;
-  try { await api("/api/admin/send", { method:"POST", body: JSON.stringify({ phone: currentPhone, template: name }) }); loadThread(); }
-  catch (e) { alert(e.message); }
-}
 async function dial() {
-  try { const r = await api("/api/admin/call", { method:"POST", body: JSON.stringify({ phone: $("dialNum").value }) }); $("dialmsg").textContent = "Dispatched " + r.attempt_id.slice(0,8); }
+  try { const r = await api("/api/admin/call", { method:"POST", body: JSON.stringify({ phone: $("dialNum").value }) }); $("dialmsg").textContent = "Dispatched " + String(r.attempt_id).slice(0,8); }
   catch (e) { $("dialmsg").textContent = e.message; }
 }
-function editOffer(o) { currentOfferId = o.id; $("oname").value = o.name; $("opitch").value = o.pitch; $("ogoal").value = o.goal||""; $("oactive").checked = !!o.active; }
+function editOffer(o) { currentOfferId = o.id; $("oname").value = o.name; $("opitch").value = o.pitch; $("ogoal").value = o.goal||""; $("oactive").checked = !!o.active; window.scrollTo(0,0); }
 async function saveOffer() {
   try {
     await api("/api/admin/offers", { method:"POST", body: JSON.stringify({ id: currentOfferId, name: $("oname").value, pitch: $("opitch").value, goal: $("ogoal").value, active: $("oactive").checked }) });
     $("omsg").textContent = "Saved."; currentOfferId = null; ["oname","opitch","ogoal"].forEach(i => $(i).value = ""); $("oactive").checked = false; refresh();
   } catch (e) { $("omsg").textContent = e.message; }
 }
-
-
-let currentPolicyId = null;
-function clearPolicy() {
-  currentPolicyId = null;
-  $("pbtitle").value = ""; $("pbrule").value = ""; $("pbcat").value = "general";
-  $("pbactive").checked = true; $("pbmsg").textContent = "";
-}
-function editPolicy(p) {
-  currentPolicyId = p.id;
-  $("pbtitle").value = p.title; $("pbrule").value = p.rule;
-  $("pbcat").value = p.category; $("pbactive").checked = !!p.active;
-  $("pbmsg").textContent = "Editing — Save overwrites this rule.";
-  window.scrollTo(0, 0);
-}
+function clearPolicy() { currentPolicyId = null; $("pbtitle").value = ""; $("pbrule").value = ""; $("pbcat").value = "general"; $("pbactive").checked = true; $("pbmsg").textContent = ""; }
+function editPolicy(p) { currentPolicyId = p.id; $("pbtitle").value = p.title; $("pbrule").value = p.rule; $("pbcat").value = p.category; $("pbactive").checked = !!p.active; $("pbmsg").textContent = "Editing — Save overwrites this rule."; window.scrollTo(0, 0); }
 async function savePolicy() {
   $("pbmsg").textContent = "Embedding…";
   try {
-    const r = await api("/api/admin/playbook", { method: "POST", body: JSON.stringify({
-      id: currentPolicyId, title: $("pbtitle").value, rule: $("pbrule").value,
-      category: $("pbcat").value, active: $("pbactive").checked }) });
+    const r = await api("/api/admin/playbook", { method: "POST", body: JSON.stringify({ id: currentPolicyId, title: $("pbtitle").value, rule: $("pbrule").value, category: $("pbcat").value, active: $("pbactive").checked }) });
     $("pbmsg").textContent = r.embedded ? "Saved and embedded." : "Saved — but NOT embedded (no Google key), so it is keyword-only.";
-    currentPolicyId = null; clearPolicy(); refresh();
+    clearPolicy(); refresh();
   } catch (e) { $("pbmsg").textContent = e.message; }
 }
 async function deletePolicy(id, title) {
   if (!confirm("Delete \"" + title + "\"? The agent will no longer be able to quote it.")) return;
-  try { await api("/api/admin/playbook/" + id, { method: "DELETE" }); refresh(); }
-  catch (e) { $("pbmsg").textContent = e.message; }
+  try { await api("/api/admin/playbook/" + id, { method: "DELETE" }); refresh(); } catch (e) { $("pbmsg").textContent = e.message; }
 }
 async function testPolicy() {
   $("pbresults").textContent = "Searching…";
   try {
     const r = await api("/api/admin/playbook/search", { method: "POST", body: JSON.stringify({ query: $("pbq").value }) });
     if (!r.results.length) { $("pbresults").innerHTML = "<p>No match — the agent would say it needs to check with the team.</p>"; return; }
-    $("pbresults").innerHTML = "<p>via " + esc(r.mode) + " search:</p>" + r.results.map(x =>
-      "<p><b>" + esc(x.title) + "</b>" + (x.similarity != null ? " <span class=muted>" + x.similarity.toFixed(3) + "</span>" : "") +
-      "<br>" + esc(x.rule) + "</p>").join("");
+    $("pbresults").innerHTML = "<p>via " + esc(r.mode) + " search:</p>" + r.results.map(x => "<p><b>" + esc(x.title) + "</b>" + (x.similarity != null ? " <span class=muted>" + x.similarity.toFixed(3) + "</span>" : "") + "<br>" + esc(x.rule) + "</p>").join("");
   } catch (e) { $("pbresults").textContent = e.message; }
 }
 
-// /admin#chats or #webhook opens that tab directly (after login if needed).
-const want = { chats:"inbox", inbox:"inbox", webhook:"webhook", calls:"calls", offers:"offers", playbook:"playbook" }[location.hash.slice(1)];
-if (want) {
-  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x.dataset.t === want));
-  ["overview","calls","inbox","webhook","offers","playbook"].forEach(t => $("t-"+t).hidden = t !== want);
-}
+// ---------------- boot ----------------
+const want = { chats:"inbox", inbox:"inbox", overview:"overview", webhook:"webhook", calls:"calls", offers:"offers", playbook:"playbook" }[location.hash.slice(1)];
+showTab(want || "inbox");
 if (TOKEN) { $("app").hidden = false; refresh().catch(showLogin); } else showLogin();
-setInterval(() => { if (!$("app").hidden && ["inbox","overview","webhook"].includes(activeTab())) refresh(); }, 10000);
+// Live-ish: the open thread polls quickly, the list and other live tabs more slowly.
+setInterval(() => { if (!$("app").hidden && activeTab() === "inbox" && currentPhone) loadThread().catch(() => {}); }, 4000);
+setInterval(() => { if (!$("app").hidden && ["inbox","overview","webhook"].includes(activeTab())) refresh().catch(() => {}); }, 12000);
 </script>
 </body>
 </html>
