@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
-import { VoiceAgentClient, STATES, fetchVoiceConfig } from '../lib/voiceAgent.js'
+import { VoiceAgentClient, STATES, fetchVoiceConfig, originReachable } from '../lib/voiceAgent.js'
 import { Cross } from './icons.jsx'
 
 /*
@@ -51,10 +51,17 @@ export default function VoiceAgent() {
   useEffect(() => {
     let cancelled = false
     fetchVoiceConfig()
-      .then((cfg) => {
+      .then(async (cfg) => {
         if (cancelled) return
         setAvailable(!!cfg.enabled)
-        setWsOrigin(cfg.wsOrigin ?? null)
+        if (!cfg.wsOrigin) return
+        // Check the fast route now, while the visitor is still reading. If it
+        // is unreachable from this network we simply never offer it, and the
+        // session starts on the page's own origin with no delay at all.
+        const ok = await originReachable(cfg.wsOrigin)
+        if (cancelled) return
+        if (ok) setWsOrigin(cfg.wsOrigin)
+        else console.warn(`voice: ${cfg.wsOrigin} is not reachable from here; using this origin`)
       })
       .catch(() => !cancelled && setAvailable(false))
     return () => { cancelled = true }

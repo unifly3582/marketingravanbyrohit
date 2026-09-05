@@ -145,14 +145,43 @@ export class VoiceAgentClient extends EventTarget {
     this.levelRaf = requestAnimationFrame(tick)
   }
 
+  /**
+   * Open the session, fastest route first.
+   *
+   * The direct host skips the CDN and is worth ~120 ms per round trip, so it is
+   * always tried first. It is also a separate hostname, which is one more thing
+   * that can fail independently of the site — a resolver that has the name
+   * negatively cached will simply not find it, and that must not take the agent
+   * down when the page's own origin would have worked.
+   *
+   * The fallback costs a working visitor nothing: it only runs if the first
+   * route never opened, and VoiceAgent.jsx has usually already checked the
+   * direct host in the background before anyone clicks.
+   */
   _openSocket() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const sameOrigin = `${proto}//${location.host}`
+    // A configured origin already carries its own scheme; otherwise follow the
+    // page's, so an https page never opens an insecure socket.
+    const direct = this.wsOrigin ? this.wsOrigin.replace(/^http/, 'ws').replace(/\/+$/, '') : null
+    const routes = direct && direct !== sameOrigin ? [direct, sameOrigin] : [sameOrigin]
+    return this._connectVia(routes)
+  }
+
+  async _connectVia([base, ...rest]) {
+    try {
+      return await this._connect(base, rest.length > 0)
+    } catch (err) {
+      // A refusal is the server answering — rate limit, agent switched off.
+      // Trying the same server by another name would only burn another slot.
+      if (!rest.length || err.refused) throw err
+      console.warn(`voice: could not reach ${base}, falling back to ${rest[0]}`)
+      return this._connectVia(rest)
+    }
+  }
+
+  _connect(base, hasFallback) {
     return new Promise((resolve, reject) => {
-      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-      // A configured origin already carries its own scheme; otherwise follow
-      // the page's, so an https page never opens an insecure socket.
-      const base = this.wsOrigin
-        ? this.wsOrigin.replace(/^http/, 'ws').replace(/\/+$/, '')
-        : `${proto}//${location.host}`
       // The worklet emits 8-bit µ-law; say so, or the server will read it as
       // PCM16 and hear noise.
       const url = `${base}/api/voice/web?codec=mulaw&page=${encodeURIComponent(this.page)}`
@@ -160,19 +189,44 @@ export class VoiceAgentClient extends EventTarget {
       ws.binaryType = 'arraybuffer'
       this.ws = ws
 
-      const failFast = setTimeout(() => reject(new Error('The agent did not answer. Try again.')), 15000)
+      // Give up on an unreachable route quickly when there is somewhere else to
+      // go; wait properly when this is the last chance.
+      const deadline = hasFallback ? 4000 : 15000
+      const failFast = setTimeout(
+        () => reject(new Error('The agent did not answer. Try again.')),
+        deadline,
+      )
+
+      // Until the server says "ready" this attempt is still a candidate, and a
+      // failure has to leave the microphone and both audio contexts alone —
+      // the next route is about to use them.
+      let live = false
+      const settle = (fn, arg) => {
+        clearTimeout(failFast)
+        fn(arg)
+      }
 
       ws.onopen = () => clearTimeout(failFast)
       ws.onmessage = (e) => {
         if (e.data instanceof ArrayBuffer) return this._play(e.data)
-        this._onControl(JSON.parse(e.data), resolve)
+        const msg = JSON.parse(e.data)
+        // A refusal before the session starts is the server answering — a rate
+        // limit, or the agent switched off. Reaching it by another name would
+        // get the same answer and spend another slot doing it.
+        if (msg.type === 'error' && !live) {
+          const err = new Error(msg.message)
+          err.refused = true
+          return settle(reject, err)
+        }
+        if (msg.type === 'ready') live = true
+        this._onControl(msg, resolve)
       }
       ws.onerror = () => {
-        clearTimeout(failFast)
-        reject(new Error('Could not reach the agent.'))
+        if (!live) return settle(reject, new Error('Could not reach the agent.'))
       }
       ws.onclose = () => {
         clearTimeout(failFast)
+        if (!live) return reject(new Error('Could not reach the agent.'))
         if (this.state !== STATES.error) this._teardown(STATES.ended)
       }
     })
@@ -319,6 +373,37 @@ export class VoiceAgentClient extends EventTarget {
       this.ws = null
     }
     this._setState(state)
+  }
+}
+
+/**
+ * Is this origin actually reachable from here, right now?
+ *
+ * The direct voice host is a separate hostname, so it can fail on its own — a
+ * resolver holding a negative cache entry for it will not find it even while
+ * the site loads perfectly. Checking in the background, before the visitor
+ * clicks anything, means a bad route costs zero seconds instead of a timeout.
+ *
+ * `no-cors` because the voice host serves no CORS headers and does not need to:
+ * an opaque response still proves the name resolved and the server answered,
+ * which is the entire question. DNS and connection failures reject.
+ */
+export async function originReachable(origin, timeoutMs = 2500) {
+  if (!origin) return false
+  const http = origin.replace(/^ws/, 'http').replace(/\/+$/, '')
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    await fetch(`${http}/api/voice/web/config`, {
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: ctrl.signal,
+    })
+    return true
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
   }
 }
 
