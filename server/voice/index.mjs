@@ -60,6 +60,25 @@ const STREAM_PATH_RE = /^\/api\/voice\/stream\/([^/]+)$/;
 // a concurrency problem, one enthusiast reloading is a per-IP problem.
 
 const WEB_ENABLED = () => (process.env.WEB_VOICE_ENABLED ?? "true") === "true";
+
+/**
+ * Where the browser should open the voice socket, when that is not the origin
+ * serving the page.
+ *
+ * marketingravan.com is behind Cloudflare, which terminates TLS and proxies the
+ * WebSocket. For a page that is fine; for realtime audio it is not. Measured
+ * from an Indian connection on 2026-09-05: 52 ms round trip straight to the
+ * Mumbai box, 167 ms through Cloudflare — which was serving that visitor from
+ * Singapore — with spikes to 630 ms right after a burst of audio. A voice turn
+ * pays that several times over, which is the whole gap between "fast on the dev
+ * server" and "sluggish on the live site".
+ *
+ * Set this to an origin whose DNS record bypasses the proxy (grey cloud) and
+ * has its own certificate, e.g. wss://voice.marketingravan.com. Unset, the
+ * browser falls back to the page's own origin and nothing changes — so this is
+ * safe to deploy before the DNS record exists.
+ */
+const WEB_WS_ORIGIN = () => process.env.WEB_VOICE_WS_ORIGIN ?? null;
 const MAX_CONCURRENT = Number(process.env.WEB_VOICE_MAX_CONCURRENT ?? 4);
 const PER_IP_PER_HOUR = Number(process.env.WEB_VOICE_PER_IP_PER_HOUR ?? 4);
 const PER_DAY = Number(process.env.WEB_VOICE_PER_DAY ?? 150);
@@ -94,6 +113,7 @@ export function attach(httpServer, app) {
       inputSampleRate: INPUT_SAMPLE_RATE,
       outputSampleRate: OUTPUT_SAMPLE_RATE,
       inputCodec: "mulaw",
+      wsOrigin: WEB_WS_ORIGIN(),
       maxSessionSeconds: Math.round(Number(process.env.WEB_VOICE_MAX_SESSION_MS ?? 300_000) / 1000),
       busy: liveSessions >= MAX_CONCURRENT,
     });
@@ -166,5 +186,8 @@ export function attach(httpServer, app) {
   });
 
   console.log("voice pipeline attached: POST /api/voice/answer/:callId, WS /api/voice/stream/:callId");
-  console.log(`web voice agent: WS ${WEB_STREAM_PATH} (${WEB_ENABLED() ? "on" : "off"}, max ${MAX_CONCURRENT} concurrent)`);
+  console.log(
+    `web voice agent: WS ${WEB_STREAM_PATH} (${WEB_ENABLED() ? "on" : "off"}, max ${MAX_CONCURRENT} concurrent)` +
+      `  socket origin: ${WEB_WS_ORIGIN() ?? "same as the page"}`
+  );
 }

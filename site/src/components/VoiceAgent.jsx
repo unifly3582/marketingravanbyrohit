@@ -32,6 +32,7 @@ export default function VoiceAgent() {
   const { pathname } = useLocation()
 
   const [available, setAvailable] = useState(null) // null = still checking
+  const [wsOrigin, setWsOrigin] = useState(null)
   const [open, setOpen] = useState(false)
   const [state, setState] = useState(STATES.idle)
   const [level, setLevel] = useState(0)
@@ -50,7 +51,11 @@ export default function VoiceAgent() {
   useEffect(() => {
     let cancelled = false
     fetchVoiceConfig()
-      .then((cfg) => !cancelled && setAvailable(!!cfg.enabled))
+      .then((cfg) => {
+        if (cancelled) return
+        setAvailable(!!cfg.enabled)
+        setWsOrigin(cfg.wsOrigin ?? null)
+      })
       .catch(() => !cancelled && setAvailable(false))
     return () => { cancelled = true }
   }, [])
@@ -75,7 +80,7 @@ export default function VoiceAgent() {
     setPartial({ user: '', agent: '' })
     setActivity([])
 
-    const client = new VoiceAgentClient({ page: pathname })
+    const client = new VoiceAgentClient({ page: pathname, wsOrigin })
     clientRef.current = client
 
     client.addEventListener('state', (e) => setState(e.detail))
@@ -107,7 +112,7 @@ export default function VoiceAgent() {
     client.addEventListener('whatsapp', () => note('WhatsApp follow-up sent', 'good'))
 
     await client.start()
-  }, [navigate, note, pathname])
+  }, [navigate, note, pathname, wsOrigin])
 
   const endSession = useCallback(() => {
     clientRef.current?.stop()

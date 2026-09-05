@@ -31,9 +31,18 @@ export const STATES = {
  * Events: state, transcript, tool, navigate, identity, level, error, end.
  */
 export class VoiceAgentClient extends EventTarget {
-  constructor({ page = '/' } = {}) {
+  /**
+   * @param {object} opts
+   * @param {string} [opts.page]
+   * @param {string|null} [opts.wsOrigin]
+   *   Origin to open the socket on, from /api/voice/web/config. Lets the audio
+   *   skip a CDN that is fine for pages and costly for realtime — see the note
+   *   on WEB_VOICE_WS_ORIGIN in server/voice/index.mjs. Null means same-origin.
+   */
+  constructor({ page = '/', wsOrigin = null } = {}) {
     super()
     this.page = page
+    this.wsOrigin = wsOrigin
     this.state = STATES.idle
     this.ws = null
     this.stream = null
@@ -139,9 +148,14 @@ export class VoiceAgentClient extends EventTarget {
   _openSocket() {
     return new Promise((resolve, reject) => {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+      // A configured origin already carries its own scheme; otherwise follow
+      // the page's, so an https page never opens an insecure socket.
+      const base = this.wsOrigin
+        ? this.wsOrigin.replace(/^http/, 'ws').replace(/\/+$/, '')
+        : `${proto}//${location.host}`
       // The worklet emits 8-bit µ-law; say so, or the server will read it as
       // PCM16 and hear noise.
-      const url = `${proto}//${location.host}/api/voice/web?codec=mulaw&page=${encodeURIComponent(this.page)}`
+      const url = `${base}/api/voice/web?codec=mulaw&page=${encodeURIComponent(this.page)}`
       const ws = new WebSocket(url)
       ws.binaryType = 'arraybuffer'
       this.ws = ws
