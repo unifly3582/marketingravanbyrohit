@@ -445,7 +445,7 @@ export default function Hero() {
       {/* full-width hero panel */}
       <div
         ref={panelRef}
-        className="theme-light relative min-h-[640px] overflow-hidden rounded-3xl border border-line md:min-h-[560px] lg:min-h-[82vh]"
+        className="theme-light relative min-h-[640px] overflow-hidden rounded-3xl border border-line md:min-h-[560px] lg:min-h-[min(82vh,820px)]"
       >
           <ShaderGrain className="absolute inset-0 z-0 h-full w-full" />
           <div ref={layerRef} className="absolute inset-0 z-0" aria-hidden="true" />

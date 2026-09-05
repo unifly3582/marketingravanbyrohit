@@ -277,3 +277,9 @@ button:focus-visible {
     scroll-behavior: auto;
   }
 }
+
+/* progress bar under the active head in the "What we do" picker */
+@keyframes grow-x {
+  from { width: 0; }
+  to { width: 100%; }
+}
