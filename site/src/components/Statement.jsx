@@ -4,11 +4,8 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
 gsap.registerPlugin(ScrollTrigger)
 
-const LINE_A = 'Think of us as'
-const LINE_A2 = 'ten senior teams.'
+const LINE_A = 'Think of us as ten senior teams.'
 const LINE_B = 'Without hiring one.'
-const PARA =
-  'You bring the goals. The ten heads bring the agents, the pipelines, the campaigns and the craft — and they never clock out.'
 
 /*
  * beew-style scrubbed letter reveal. Every letter starts as a blurred ghost;
@@ -43,48 +40,35 @@ export default function Statement() {
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: ref.current,
-        start: 'top 85%',
-        end: 'bottom 45%',
+        start: 'top 80%',
+        end: 'top 25%',
         scrub: true,
       },
     })
-
-    // Heading and paragraph reveal together: each group gets its own wave,
-    // both starting at 0 and both spanning the same timeline length. The
-    // longer group's stagger is scaled down so its wave finishes in step.
-    const groups = [
-      ref.current.querySelectorAll('.ltr-h'),
-      ref.current.querySelectorAll('.ltr-p'),
-    ].filter((g) => g.length)
-    const span = Math.max(...groups.map((g) => g.length))
-    for (const group of groups) {
-      const stagger = span / group.length
-      tl.fromTo(
-        group,
-        { color: DIM, filter: 'blur(10px)' },
-        { color: ACCENT, filter: 'blur(0px)', duration: FRONT, ease: 'none', stagger },
-        0,
-      )
-      tl.to(
-        group,
-        { color: (i, el) => el.dataset.final, duration: TRAIL, ease: 'none', stagger },
-        FRONT + HOLD,
-      )
-    }
+    tl.fromTo(
+      letters,
+      { color: DIM, filter: 'blur(10px)' },
+      { color: ACCENT, filter: 'blur(0px)', duration: FRONT, ease: 'none', stagger: 1 },
+      0,
+    )
+    tl.to(
+      letters,
+      { color: (i, el) => el.dataset.final, duration: TRAIL, ease: 'none', stagger: 1 },
+      FRONT + HOLD,
+    )
     return () => {
       tl.scrollTrigger?.kill()
       tl.kill()
     }
   }, [])
 
-  // `group` is 'h' (heading) or 'p' (paragraph): each runs its own wave
-  const renderLine = (line, final, group = 'h') =>
+  const renderLine = (line, final) =>
     line.split(' ').map((w, wi, arr) => (
       <span key={final + wi} className="inline-block whitespace-nowrap">
         {[...w].map((ch, ci) => (
           <span
             key={ci}
-            className={`ltr ltr-${group} inline-block`}
+            className="ltr inline-block"
             data-final={final}
             style={{ color: DIM, filter: 'blur(10px)', willChange: 'color, filter' }}
           >
@@ -96,23 +80,20 @@ export default function Statement() {
     ))
 
   return (
-    <section ref={ref} className="container-x py-14 text-center md:py-20">
-      <h2 className="mx-auto max-w-5xl text-[2.4rem] font-bold leading-[1.05] md:text-7xl">
+    <section className="container-x py-32 text-center">
+      <h2 ref={ref} className="mx-auto max-w-3xl text-3xl font-bold leading-tight md:text-5xl">
         <span className="sr-only">
-          {LINE_A} {LINE_A2} {LINE_B}
+          {LINE_A} {LINE_B}
         </span>
         <span aria-hidden="true">
           {renderLine(LINE_A, FINAL_A)}
           <br />
-          {renderLine(LINE_A2, FINAL_A)}
-          <br />
           {renderLine(LINE_B, FINAL_B)}
         </span>
       </h2>
-      {/* the paragraph rides the same scrubbed wave, after the headline */}
-      <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed md:mt-8 md:text-xl">
-        <span className="sr-only">{PARA}</span>
-        <span aria-hidden="true">{renderLine(PARA, FINAL_B, 'p')}</span>
+      <p className="mx-auto mt-6 max-w-xl text-muted">
+        You bring the goals. The ten heads bring the agents, the pipelines,
+        the campaigns and the craft — and they never clock out.
       </p>
     </section>
   )

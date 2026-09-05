@@ -1,5 +1,4 @@
 import Hero from '../components/Hero.jsx'
-import Statement from '../components/Statement.jsx'
 import Services from '../components/Services.jsx'
 import Process from '../components/Process.jsx'
 import WhyUs from '../components/WhyUs.jsx'
@@ -20,7 +19,6 @@ export default function Home() {
   return (
     <>
       <Hero />
-      <Statement />
       <Services />
       <Process />
       <WhyUs />
