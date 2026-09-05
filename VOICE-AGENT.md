@@ -192,6 +192,37 @@ So what a visitor experiences depends heavily on their own connection, and
 µ-law is worth about 40% of it. On a decent connection the agent answers in
 well under a second.
 
+### The CDN was most of what was left
+
+"Fast on the dev server, sluggish live" had one more cause, and it was not the
+code: **localhost has a 0 ms round trip and Cloudflare had a 167 ms one.**
+
+| Path to the same Mumbai server | Round trip |
+|---|---|
+| localhost (dev) | 0 ms |
+| straight to the VPS | 52 ms |
+| through Cloudflare | 167 ms, spiking to 630 ms after audio bursts |
+
+Cloudflare was serving Indian visitors from **Singapore**. A voice turn pays
+that several times — microphone frames going up, the end-of-speech decision,
+the reply coming back — and the jitter lands as stuttering rather than as
+lateness. Downstream bandwidth was measured and ruled out first: 170 kB/s
+delivered against 47 kB/s needed.
+
+So the audio now uses **voice.marketingravan.com**, an unproxied ("DNS only")
+record straight to the origin with its own Let's Encrypt certificate, while the
+site keeps Cloudflare. Measured after: **44 ms**, down from 161 ms.
+
+The browser learns where to connect from `/api/voice/web/config`, so
+`WEB_VOICE_WS_ORIGIN` is the only switch; unset, it falls back to the page's own
+origin and nothing breaks. Setup lives in
+`deploy/nginx-voice-marketingravan.conf`.
+
+The trade-off is real and worth stating: that hostname exposes the origin IP and
+sits outside Cloudflare's DDoS protection. Only the voice socket is served
+there — everything else on that vhost returns 404 — and the existing per-IP,
+concurrency and daily caps still apply.
+
 The playbook is inlined only while it fits `INLINE_PLAYBOOK_CHAR_BUDGET`
 (12 000 chars, ~40x the current playbook). Past that, `playbookFitsInline`
 returns false, `search_playbook` comes back automatically, and retrieval
@@ -363,6 +394,32 @@ copied by `deploy.sh` — diff and patch by hand. It had drifted badly (it said
 hijacked the default vhost for every other site on the box.
 
 ---
+
+## Deploying without blanking the site
+
+`vite build` empties `dist` before writing it, so for a moment during a deploy
+the assets a request asks for do not exist. On 2026-09-05 Cloudflare caught that
+window, cached a **522 for the shared module runtime chunk**, and the live site
+rendered a blank page — the origin served that file in 58 ms while the edge kept
+returning the error, and the same URL with `?bust=1` returned 200 instantly.
+
+Content hashing did not save us: the runtime chunk's contents never change, so
+every rebuild pointed `index.html` straight back at the poisoned URL, and
+rotating the build stamp in `main.jsx` only rehashed the chunk containing it.
+
+`vite.config.js` now puts a build id in every asset filename, so a deploy can
+never reference a URL the edge has already seen. If a blank page ever appears
+again, check one asset with and without a cache-buster before suspecting the
+code:
+
+```bash
+curl -o /dev/null -w '%{http_code}
+' https://marketingravan.com/assets/<file>
+curl -o /dev/null -w '%{http_code}
+' https://marketingravan.com/assets/<file>?bust=1
+```
+
+Different answers mean a cached edge error, not a broken build.
 
 ## Known gaps
 
