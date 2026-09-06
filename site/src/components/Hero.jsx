@@ -225,7 +225,7 @@ export default function Hero() {
         </div>
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -bottom-[0.2em] right-[0.5%] z-[1] hidden select-none whitespace-nowrap font-display text-[clamp(2rem,8.2vw,10rem)] font-extrabold leading-none tracking-[-0.045em] md:block"
+          className="pointer-events-none absolute -bottom-[0.2em] right-[7%] z-[1] hidden select-none whitespace-nowrap font-display text-[clamp(2rem,8.2vw,10rem)] font-extrabold leading-none tracking-[-0.045em] md:block"
         >
           <span className="bg-gradient-to-b from-gold/60 to-ember/25 bg-clip-text text-transparent">RAVAN</span>
         </div>
@@ -233,13 +233,13 @@ export default function Hero() {
           aria-hidden="true"
           className="pointer-events-none absolute bottom-[2%] left-[1.5%] z-[6] select-none font-display text-[13vw] font-extrabold leading-none tracking-[-0.04em] md:hidden"
         >
-          <span className="block bg-gradient-to-b from-gold/60 to-ember/25 bg-clip-text text-transparent [writing-mode:vertical-rl]">MARKETING</span>
+          <span className="block text-gold/60 [writing-mode:vertical-rl]">MARKETING</span>
         </div>
         <div
           aria-hidden="true"
           className="pointer-events-none absolute bottom-[2%] right-[1.5%] z-[6] select-none font-display text-[13vw] font-extrabold leading-none tracking-[-0.04em] md:hidden"
         >
-          <span className="block bg-gradient-to-b from-gold/60 to-ember/25 bg-clip-text text-transparent [writing-mode:vertical-rl]">RAVAN</span>
+          <span className="block text-gold/60 [writing-mode:vertical-rl]">RAVAN</span>
         </div>
 
         {/* what we do */}
