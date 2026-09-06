@@ -211,7 +211,7 @@ export default function Hero() {
   const advance = () => setK((v) => v + 1)
 
   return (
-    <section id="top" className="container-x pt-[5.5rem] pb-4 max-md:!px-0 md:pt-24">
+    <section id="top" className="container-x pt-[5.5rem] pb-0 max-md:!px-0 md:pt-24 md:pb-2">
       {/* full-width hero panel */}
       <div className="theme-light relative flex min-h-[660px] flex-col overflow-hidden rounded-3xl border border-line max-md:rounded-none max-md:border-x-0 md:min-h-[580px] lg:min-h-[min(78vh,780px)]">
         <ShaderGrain className="absolute inset-0 z-0 h-full w-full" />
