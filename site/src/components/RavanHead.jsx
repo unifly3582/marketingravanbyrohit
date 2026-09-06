@@ -52,17 +52,30 @@ export default function RavanHead({ src = FALLBACK_SRC, poseRef = null, classNam
         const scene = new THREE.Scene()
         const camera = new THREE.PerspectiveCamera(30, host.clientWidth / host.clientHeight, 0.05, 100)
 
-        // warm studio: soft daylight key, gold fill, ember rim
-        scene.add(new THREE.HemisphereLight(0xfff4e0, 0x241710, 1.0))
-        const key = new THREE.DirectionalLight(0xffffff, 2.4)
-        key.position.set(2.5, 3, 4)
+        // character-portrait studio, matched to the concept renders: a soft
+        // warm-white key from upper left, a low warm fill from the right, a
+        // gold rim from behind right and an ember kicker from behind left.
+        // A dim room environment gives the gold crown something to reflect.
+        scene.add(new THREE.HemisphereLight(0xfff1dc, 0x1a100a, 0.55))
+        const key = new THREE.DirectionalLight(0xfff5e8, 2.8)
+        key.position.set(-2.5, 3.2, 4)
         scene.add(key)
-        const rim = new THREE.DirectionalLight(0xe2571e, 1.8)
-        rim.position.set(-2.5, 1.5, -3)
-        scene.add(rim)
-        const fill = new THREE.DirectionalLight(0xf0a32f, 0.8)
-        fill.position.set(-3, 0.5, 3)
+        const fill = new THREE.DirectionalLight(0xffd9b3, 0.5)
+        fill.position.set(3, -0.2, 3)
         scene.add(fill)
+        const rim = new THREE.DirectionalLight(0xf0a32f, 2.2)
+        rim.position.set(2.5, 2, -3)
+        scene.add(rim)
+        const kick = new THREE.DirectionalLight(0xe2571e, 1.0)
+        kick.position.set(-2.5, 1, -2.5)
+        scene.add(kick)
+        try {
+          const { RoomEnvironment } = await import('three/examples/jsm/environments/RoomEnvironment.js')
+          const pmrem = new THREE.PMREMGenerator(renderer)
+          scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+          scene.environmentIntensity = 0.35
+          pmrem.dispose()
+        } catch { /* env is a nicety; lights alone still work */ }
 
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/')
