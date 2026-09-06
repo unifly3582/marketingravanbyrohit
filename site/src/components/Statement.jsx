@@ -98,7 +98,7 @@ export default function Statement() {
     ))
 
   return (
-    <section ref={ref} className="container-x pt-14 pb-6 text-center md:pt-20 md:pb-8">
+    <section ref={ref} className="container-x pt-8 pb-2 text-center md:pt-20 md:pb-8">
       <h2 className="mx-auto max-w-5xl text-[2.4rem] font-bold leading-[1.05] md:text-7xl">
         <span className="sr-only">
           {LINE_A} {LINE_A2} {LINE_B}

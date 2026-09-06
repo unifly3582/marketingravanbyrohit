@@ -211,9 +211,9 @@ export default function Hero() {
   const advance = () => setK((v) => v + 1)
 
   return (
-    <section id="top" className="container-x pt-[5.5rem] pb-4 md:pt-24">
+    <section id="top" className="container-x pt-[5.5rem] pb-4 max-md:!px-0 md:pt-24">
       {/* full-width hero panel */}
-      <div className="theme-light relative flex min-h-[660px] flex-col overflow-hidden rounded-3xl border border-line md:min-h-[580px] lg:min-h-[min(78vh,780px)]">
+      <div className="theme-light relative flex min-h-[660px] flex-col overflow-hidden rounded-3xl border border-line max-md:rounded-none max-md:border-x-0 md:min-h-[580px] lg:min-h-[min(78vh,780px)]">
         <ShaderGrain className="absolute inset-0 z-0 h-full w-full" />
 
         {/* the wordmark along the foot of the panel, behind Ravan */}
@@ -225,13 +225,13 @@ export default function Hero() {
         </div>
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute bottom-[2%] left-[1.5%] z-[1] select-none font-display text-[13vw] font-extrabold leading-none tracking-[-0.04em] md:hidden"
+          className="pointer-events-none absolute bottom-[2%] left-[1.5%] z-[6] select-none font-display text-[13vw] font-extrabold leading-none tracking-[-0.04em] md:hidden"
         >
           <span className="block bg-gradient-to-b from-gold/60 to-ember/25 bg-clip-text text-transparent [writing-mode:vertical-rl]">MARKETING</span>
         </div>
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute bottom-[2%] right-[1.5%] z-[1] select-none font-display text-[13vw] font-extrabold leading-none tracking-[-0.04em] md:hidden"
+          className="pointer-events-none absolute bottom-[2%] right-[1.5%] z-[6] select-none font-display text-[13vw] font-extrabold leading-none tracking-[-0.04em] md:hidden"
         >
           <span className="block bg-gradient-to-b from-gold/60 to-ember/25 bg-clip-text text-transparent [writing-mode:vertical-rl]">RAVAN</span>
         </div>
