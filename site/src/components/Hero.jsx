@@ -14,20 +14,22 @@ import ShaderGrain from './ShaderGrain.jsx'
  * away and the next one rises. Tap or click him to advance.
  */
 
-/* the portraits, keyed by heads.js icon. One personality take per head; the
- * alternates (`*-2`) are generated alongside and can be swapped in here. */
+/* the portraits, keyed by heads.js icon. Take 3 of each is the locked-frame
+ * set (same head size, shoulder line and chest cut for all ten, generated
+ * against a composition reference in scripts/gen-agents.mjs); takes 1 and 2
+ * are the earlier free-framed looks, still on disk if a swap is wanted. */
 const PORTRAITS = import.meta.glob('../assets/agents/*.webp', { eager: true, import: 'default' })
 const PICK = {
-  agent: 'agent-1',
-  sdr: 'sdr-2',
-  voice: 'voice-1',
-  geo: 'geo-1',
-  erp: 'erp-1',
-  ads: 'ads-1',
-  bi: 'bi-1',
-  uiux: 'uiux-1',
-  api: 'api-1',
-  shield: 'shield-1',
+  agent: 'agent-3',
+  sdr: 'sdr-3',
+  voice: 'voice-3',
+  geo: 'geo-3',
+  erp: 'erp-3',
+  ads: 'ads-3',
+  bi: 'bi-3',
+  uiux: 'uiux-3',
+  api: 'api-3',
+  shield: 'shield-3',
 }
 const portraitFor = (icon) => PORTRAITS[`../assets/agents/${PICK[icon] ?? icon + '-1'}.webp`]
 
