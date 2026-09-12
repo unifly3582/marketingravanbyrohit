@@ -149,7 +149,7 @@ function VoiceDemo() {
 }
 
 const CONTENT = {
-  n: 3,
+  n: 6,
   hero: {
     line1: 'Calls answered in a heartbeat,',
     line2: 'in the language your customer speaks.',

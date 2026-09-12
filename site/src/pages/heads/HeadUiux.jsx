@@ -188,7 +188,7 @@ function UiuxDemo() {
 }
 
 const CONTENT = {
-  n: 8,
+  n: 1,
   hero: {
     line1: 'Websites that feel like products,',
     line2: 'and load like lightning.',

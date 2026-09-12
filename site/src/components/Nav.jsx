@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { Arrow } from './icons.jsx'
 import logo from '../assets/logo-mark.png'
 
 const LINKS = [
@@ -31,10 +30,10 @@ export default function Nav() {
         scrolled ? 'bg-ground/85 backdrop-blur-md border-b border-line' : 'bg-transparent'
       }`}
     >
-      <nav className="container-x flex items-center justify-between py-3">
-        <Link to="/" className="flex items-center gap-3">
-          <img src={logo} alt="Marketing Ravan" className="h-11 w-11 rounded-full object-cover object-top" />
-          <span className="font-display text-sm font-bold tracking-wide">
+      <nav className="container-x flex items-center justify-between py-1 md:py-3">
+        <Link to="/" className="flex items-center gap-2 md:gap-3">
+          <img src={logo} alt="Marketing Ravan" className="h-7 w-7 rounded-full object-cover object-top md:h-11 md:w-11" />
+          <span className="font-display text-xs font-bold tracking-wide md:text-sm">
             MARKETING <span className="text-gold">RAVAN</span>
           </span>
         </Link>
@@ -56,16 +55,13 @@ export default function Nav() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Link to="/contact" className="btn-primary hidden !py-2.5 !px-5 text-xs md:inline-flex">
-            Let's Talk <Arrow className="h-3.5 w-3.5" />
-          </Link>
           <button
-            className="btn-ghost !p-2.5 md:hidden"
+            className="btn-ghost h-7 w-7 justify-center !p-0 md:hidden"
             aria-label="Toggle menu"
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
           >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
               <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
@@ -95,9 +91,13 @@ export default function Nav() {
               </NavLink>
             ),
           )}
-          <Link to="/contact" onClick={() => setOpen(false)} className="btn-primary mt-3 w-full justify-center">
-            Let's Talk
-          </Link>
+          <NavLink
+            to="/contact"
+            onClick={() => setOpen(false)}
+            className="block py-2.5 text-sm font-semibold uppercase tracking-widest text-cream/85"
+          >
+            Contact
+          </NavLink>
         </div>
       )}
     </header>

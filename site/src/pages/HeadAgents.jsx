@@ -6,7 +6,7 @@ import { HeadIcon, Arrow, Check } from '../components/icons.jsx'
 import { HeadNext } from './heads/HeadLayout.jsx'
 
 /*
- * Head 01 — Agentic AI & Workflow Automation.
+ * Head 09 — AI Automation (agentic AI & workflow automation).
  * Dedicated page: the hero sells "a digital employee", the centerpiece is a
  * self-playing invoice-to-books demo (WhatsApp thread + agent console side
  * by side), followed by job cards, the human-in-the-loop trust section,
@@ -275,7 +275,7 @@ export default function HeadAgents() {
               <HeadIcon name="agent" className="h-6 w-6" />
             </span>
             <span className="font-display text-sm font-extrabold tracking-[0.2em] text-gold">
-              HEAD 01 / 10 — AGENTS
+              HEAD 09 / 10 — AI AUTOMATION
             </span>
           </motion.div>
 
@@ -475,7 +475,7 @@ export default function HeadAgents() {
       </section>
 
       <div className="pt-16">
-        <HeadNext n={1} />
+        <HeadNext n={9} />
       </div>
 
       <Contact />

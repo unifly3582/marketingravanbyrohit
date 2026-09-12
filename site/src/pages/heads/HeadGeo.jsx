@@ -188,7 +188,7 @@ function GeoDemo() {
 }
 
 const CONTENT = {
-  n: 4,
+  n: 10,
   hero: {
     line1: 'Be the answer,',
     line2: 'not the tenth blue link.',

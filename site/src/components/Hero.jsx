@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import { HEADS } from '../data/heads.js'
 import { HeadIcon, Arrow } from './icons.jsx'
 import ShaderGrain from './ShaderGrain.jsx'
+import { PERSONA, portraitFor } from '../lib/portraits.js'
 
 /*
  * The hero: RAVAN IN THE MIDDLE. A giant MARKETING RAVAN wordmark runs along
@@ -14,59 +15,25 @@ import ShaderGrain from './ShaderGrain.jsx'
  * away and the next one rises. Tap or click him to advance.
  */
 
-/* the portraits, keyed by heads.js icon. Take 3 of each is the locked-frame
- * set (same head size, shoulder line and chest cut for all ten, generated
- * against a composition reference in scripts/gen-agents.mjs); takes 1 and 2
- * are the earlier free-framed looks, still on disk if a swap is wanted. */
-const PORTRAITS = import.meta.glob('../assets/agents/*.webp', { eager: true, import: 'default' })
-const PICK = {
-  agent: 'agent-3',
-  sdr: 'sdr-3',
-  voice: 'voice-3',
-  geo: 'geo-3',
-  erp: 'erp-3',
-  ads: 'ads-3',
-  bi: 'bi-3',
-  uiux: 'uiux-3',
-  api: 'api-3',
-  shield: 'shield-3',
-}
-const portraitFor = (icon) => PORTRAITS[`../assets/agents/${PICK[icon] ?? icon + '-1'}.webp`]
-
-/* the persona each head plays on its card */
-const PERSONA = {
-  agent: 'The Operator',
-  sdr: 'The Closer',
-  voice: 'The Orator',
-  geo: 'The Sage',
-  erp: 'The Quartermaster',
-  ads: 'The Showman',
-  bi: 'The Oracle',
-  uiux: 'The Artisan',
-  api: 'The Engineer',
-  shield: 'The Guardian',
-}
-
-/* the order heads take the front of the deck: marketing first, then web,
- * sales, ops. Drives the card and the rotating headline word together. */
-const STAGE_ORDER = ['ads', 'geo', 'uiux', 'sdr', 'voice', 'agent', 'erp', 'api', 'bi', 'shield']
+/* the order heads take the front of the deck: the site order from heads.js
+ * (website, ads, social, campaigns, then the AI agents, search last). */
+const STAGE_ORDER = HEADS.map((h) => h.icon)
 const STAGE = STAGE_ORDER.map((icon) => HEADS.find((h) => h.icon === icon)).filter(Boolean)
 const DECK_MS = 4200 // a new head steps up every DECK_MS
 
 /* the rotating word in the headline. Runs on its own clock, independent of
  * which head is on the deck, so the breadth reads quickly. Marketing first. */
 const WORDS = [
-  'Meta ads',
-  'Google ads',
-  'SEO',
-  'GEO',
   'website',
-  'sales follow-ups',
+  'Meta ads',
+  'social media',
+  'Google ads',
+  'WhatsApp',
   'customer calls',
+  'online store',
   'ERP',
-  'integrations',
-  'analytics',
-  'brand reputation',
+  'daily busywork',
+  'SEO',
 ]
 const WORD_MS = 2000
 
@@ -213,7 +180,7 @@ export default function Hero() {
   const advance = () => setK((v) => v + 1)
 
   return (
-    <section id="top" className="container-x pt-[6.5rem] pb-0 max-md:!px-0 md:pt-24 md:pb-2">
+    <section id="top" className="container-x pt-10 pb-0 max-md:!px-0 md:pt-24 md:pb-2">
       {/* full-width hero panel */}
       <div className="theme-light relative flex min-h-[660px] flex-col overflow-hidden rounded-3xl border border-line max-md:rounded-none max-md:border-x-0 md:min-h-[580px] lg:min-h-[min(78vh,780px)]">
         <ShaderGrain className="absolute inset-0 z-0 h-full w-full" />
@@ -292,8 +259,8 @@ export default function Hero() {
             transition={{ duration: 0.7, delay: 0.16 }}
             className="mt-3 max-w-lg text-[0.82rem] leading-relaxed text-muted md:mt-4 md:max-w-none md:whitespace-nowrap md:text-[0.95rem]"
           >
-            Ads. SEO. Websites. AI agents. Voice. ERP. Ten expert heads, one
-            monthly retainer.
+            Websites. Meta ads. Social media. WhatsApp and call agents. ERP.
+            Ten expert heads, one monthly retainer.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 18 }}

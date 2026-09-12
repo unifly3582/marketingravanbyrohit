@@ -70,7 +70,7 @@ export default function WhyUs() {
               reorder point. You get craft at machine speed — not one or the other.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
-              {['Agentic AI', 'Smart ERP', 'Voice AI', 'GEO', 'Predictive BI', 'DCO Ads', 'API Integration', 'Brand Shield'].map((t) => (
+              {['Website Design', 'Meta Ads', 'Social Media', 'Digital Campaigns', 'WhatsApp AI', 'AI Calling', 'Ecommerce AI', 'ERP AI', 'AI Automation', 'SEO & AI Search'].map((t) => (
                 <span key={t} className="chip">{t}</span>
               ))}
             </div>

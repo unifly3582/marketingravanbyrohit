@@ -16,15 +16,15 @@ import HeadAgents from './pages/HeadAgents.jsx'
 const AgentWorkflows = lazy(() => import('./pages/AgentWorkflows.jsx'))
 // The other nine head pages each carry their own demo; split per route.
 const HEAD_PAGES = {
+  uiux: lazy(() => import('./pages/heads/HeadUiux.jsx')),
+  ads: lazy(() => import('./pages/heads/HeadAds.jsx')),
+  social: lazy(() => import('./pages/heads/HeadSocial.jsx')),
+  campaign: lazy(() => import('./pages/heads/HeadCampaign.jsx')),
   sdr: lazy(() => import('./pages/heads/HeadSdr.jsx')),
   voice: lazy(() => import('./pages/heads/HeadVoice.jsx')),
-  geo: lazy(() => import('./pages/heads/HeadGeo.jsx')),
+  ecom: lazy(() => import('./pages/heads/HeadEcom.jsx')),
   erp: lazy(() => import('./pages/heads/HeadErp.jsx')),
-  ads: lazy(() => import('./pages/heads/HeadAds.jsx')),
-  bi: lazy(() => import('./pages/heads/HeadBi.jsx')),
-  uiux: lazy(() => import('./pages/heads/HeadUiux.jsx')),
-  api: lazy(() => import('./pages/heads/HeadApi.jsx')),
-  shield: lazy(() => import('./pages/heads/HeadShield.jsx')),
+  geo: lazy(() => import('./pages/heads/HeadGeo.jsx')),
 }
 
 function ScrollToTop() {

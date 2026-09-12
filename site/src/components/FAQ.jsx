@@ -1,7 +1,7 @@
 const QA = [
   {
     q: 'What exactly is a "head"?',
-    a: 'A head is one complete capability — strategy, setup, automation and reporting for one discipline (for example the Autonomous AI Sales Engine, or GEO). You subscribe to heads the way you would hire specialists, except each head ships in days and works around the clock.',
+    a: 'A head is one complete capability — strategy, setup, automation and reporting for one discipline (for example WhatsApp AI, or Meta Ads). You subscribe to heads the way you would hire specialists, except each head ships in days and works around the clock.',
   },
   {
     q: 'Do the AI agents replace my team?',

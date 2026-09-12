@@ -1,248 +1,259 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { HEADS } from '../data/heads.js'
-import { HeadIcon, Arrow } from './icons.jsx'
-import RavanHead from './RavanHead.jsx'
-
-import imgAgents from '../assets/work-agents.jpg'
-import imgSdr from '../assets/work-sdr.jpg'
-import imgVoice from '../assets/work-voice.jpg'
-import imgGeo from '../assets/work-geo.jpg'
-import imgErp from '../assets/work-erp.jpg'
-import imgAds from '../assets/work-ads.jpg'
-import imgBi from '../assets/work-bi.jpg'
-import imgUiux from '../assets/work-uiux.jpg'
-import imgApi from '../assets/work-api.jpg'
-import imgShield from '../assets/work-shield.jpg'
+import { motion, AnimatePresence, useInView } from 'motion/react'
+import { HEADS, GROUPS } from '../data/heads.js'
+import { HeadIcon, Arrow, Check } from './icons.jsx'
+import { PERSONA, portraitFor } from '../lib/portraits.js'
+import ShaderGrain from './ShaderGrain.jsx'
 
 /*
- * "What we do": one 3D Ravan head sits between "Ten heads." and "Ten
- * services." and cycles through the ten. Each time a head appears, the stage
- * beneath shows what that head does. Below, a colour-coded grid lists all
- * ten at a glance. Replaces the ten viewport-sized stacked cards.
+ * "What we do": the same Ravan who fronts the hero steps onto a second
+ * stage, one head at a time. Left, the cut-out portrait stands on the foot
+ * of the panel over a pool of the group's colour with the head's number
+ * watermarked behind him; right, the service in the client's words — the
+ * name, the promise, what you get and the number it is built to hit. A
+ * ten-button picker runs along the foot; below, all ten at a glance in the
+ * two outcome groups (Grow / Automate).
  */
 
-const VISUALS = {
-  agent: imgAgents, sdr: imgSdr, voice: imgVoice, geo: imgGeo, erp: imgErp,
-  ads: imgAds, bi: imgBi, uiux: imgUiux, api: imgApi, shield: imgShield,
-}
+const STAGE = HEADS
+const groupOf = (key) => GROUPS.find((g) => g.key === key)
 
-/* which personality model plays each head (same casting as the hero) */
-const MODEL_FOR_ICON = {
-  agent: 'head-engineer', sdr: 'head-closer', voice: 'head-orator', geo: 'head-sage',
-  erp: 'head-engineer', ads: 'head-showman', bi: 'head-sage', uiux: 'head-showman',
-  api: 'head-engineer', shield: 'head-orator',
-}
-const modelFor = (icon) => `/models/${MODEL_FOR_ICON[icon] ?? 'ravan-head2'}-web.glb`
-
-/* three outcome groups, each with its own gradient */
-const GROUPS = [
-  { key: 'sell', title: 'Sell more', blurb: 'Fill the funnel and convert it, around the clock.',
-    icons: ['ads', 'geo', 'uiux', 'sdr', 'voice'], from: '#F0A32F', to: '#E2571E' },
-  { key: 'run', title: 'Run leaner', blurb: 'Take the repetitive work off your team.',
-    icons: ['agent', 'erp', 'api'], from: '#5FD3A3', to: '#2E9E6E' },
-  { key: 'know', title: 'Know and protect', blurb: 'See what is coming and guard the brand.',
-    icons: ['bi', 'shield'], from: '#8B7CFF', to: '#3E8BFF' },
-]
-const groupOf = (icon) => GROUPS.find((g) => g.icons.includes(icon))
-
-/* stage order: marketing first, then web, sales, ops, intelligence */
-const STAGE = GROUPS.flatMap((g) => g.icons).map((icon) => HEADS.find((h) => h.icon === icon))
-
-/* one plain-language line per head */
-const LINE = {
-  agent: 'AI agents that process invoices, update your CRM and book meetings on their own.',
-  sdr: '24/7 bots on WhatsApp, email and LinkedIn that qualify leads and book calls.',
-  voice: 'Natural-sounding voice agents for inbound support, telesales and follow-ups.',
-  geo: 'Get your brand cited by ChatGPT, Perplexity and Gemini, plus programmatic pages.',
-  erp: 'Receipts, PDFs and invoices read by AI straight into your books and stock.',
-  ads: 'Ad copy, visuals and landing pages generated per customer segment, in real time.',
-  bi: 'Forecast revenue, flag churn before it happens and price dynamically.',
-  uiux: 'Fast, interactive websites in the Linear, Apple and Stripe school.',
-  api: 'Connect legacy ERPs and modern SaaS with APIs, webhooks and low-code.',
-  shield: 'Monitor reviews, social and forums, and respond to feedback automatically.',
-}
-
-const CYCLE_MS = 4800  // how long each head holds the stage
-const SWAP_MS = 380    // fade-out / fade-in of the 3D head
+const CYCLE_MS = 5200 // how long each head holds the stage
 const pad = (n) => String(n).padStart(2, '0')
 const grad = (g, dir = '135deg') => `linear-gradient(${dir}, ${g.from}, ${g.to})`
 
+/* the swap, same feel as the hero deck: out sinks into the panel foot, in
+ * rises through it */
+const ENTER = { y: 80, opacity: 0, scale: 0.95 }
+const STAND = { y: 0, opacity: 1, scale: 1 }
+const EXIT = { y: 60, opacity: 0, scale: 0.97 }
+const SPRING = { type: 'spring', stiffness: 150, damping: 20, mass: 0.9 }
+
+/* dark ember grain behind the stage: the hero's silver canvas, in the
+ * site's night palette */
+const STAGE_GRAIN = ['#0D0907', '#1A120C', '#2A1A0F', '#3A1F10']
+
 export default function Services() {
+  const [reduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [idx, setIdx] = useState(0)
-  const [hidden, setHidden] = useState(false) // 3D head mid-swap
-  const [paused, setPaused] = useState(false)
-  const timer = useRef(null)
-  const swapping = useRef(false)
+  const [hover, setHover] = useState(false)
+  const [hidden, setHidden] = useState(false)
+  const stageRef = useRef(null)
+  const inView = useInView(stageRef, { margin: '-10% 0px -10% 0px' })
 
   const head = STAGE[idx]
-  const group = groupOf(head.icon)
+  const group = groupOf(head.group)
+  const paused = hover || hidden || !inView || reduced
 
-  /* fade the head out, swap, fade back in */
-  const goTo = useCallback((next) => {
-    if (swapping.current) return
-    swapping.current = true
-    setHidden(true)
-    setTimeout(() => {
-      setIdx(next)
-      setHidden(false)
-      swapping.current = false
-    }, SWAP_MS)
-  }, [])
-
-  /* auto-advance; restarts whenever the head changes or hover pause lifts */
+  /* auto-advance; a manual pick restarts the clock so the chosen head gets
+     its full hold */
   useEffect(() => {
     if (paused) return
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    timer.current = setTimeout(() => goTo((idx + 1) % STAGE.length), CYCLE_MS)
-    return () => clearTimeout(timer.current)
-  }, [idx, paused, goTo])
+    const id = setTimeout(() => setIdx((i) => (i + 1) % STAGE.length), CYCLE_MS)
+    return () => clearTimeout(id)
+  }, [idx, paused])
+
+  useEffect(() => {
+    const onVis = () => setHidden(document.hidden)
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
+
+  const advance = () => setIdx((i) => (i + 1) % STAGE.length)
+  const swap = reduced ? { duration: 0.2 } : SPRING
 
   return (
-    <section id="heads" className="relative overflow-hidden pt-4 pb-24 md:pt-6">
-      {/* ambient glow in the current group's colours */}
+    <section id="heads" className="relative overflow-hidden pt-6 pb-24 md:pt-10">
+      {/* ambient pool in the current group's colours */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-24 h-[60vh] w-[110vw] -translate-x-1/2 transition-[background] duration-700"
-        style={{ background: `radial-gradient(ellipse at 50% 30%, ${group.from}22, ${group.to}0d 40%, transparent 70%)` }}
+        className="pointer-events-none absolute left-1/2 top-40 h-[70vh] w-[120vw] -translate-x-1/2 transition-[background] duration-700"
+        style={{ background: `radial-gradient(ellipse at 50% 30%, ${group.from}1f, ${group.to}0a 40%, transparent 70%)` }}
       />
 
       <div className="container-x relative">
-        {/* headline with the 3D head between the two halves */}
+        {/* headline */}
         <div id="services" className="text-center">
           <p className="eyebrow justify-center">What we do</p>
-          <h2 className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-4xl font-bold md:text-6xl">
-            <span>Ten heads.</span>
-            <span className="relative h-28 w-28 shrink-0 md:h-40 md:w-40">
-              {/* ring + glow behind the head */}
-              <span
-                aria-hidden="true"
-                className="absolute inset-0 rounded-full opacity-80 blur-xl transition-[background] duration-700"
-                style={{ background: `radial-gradient(circle, ${group.from}66, ${group.to}22 60%, transparent 72%)` }}
-              />
-              <span
-                aria-hidden="true"
-                className="absolute inset-1 rounded-full border transition-colors duration-700"
-                style={{ borderColor: `${group.from}66` }}
-              />
-              <span
-                className={`absolute inset-0 transition-all ease-out ${
-                  hidden ? 'scale-50 opacity-0 blur-sm' : 'scale-100 opacity-100'
-                }`}
-                style={{ transitionDuration: `${SWAP_MS}ms` }}
-              >
-                <RavanHead src={modelFor(head.icon)} className="h-full w-full" />
-              </span>
-            </span>
-            <span>Ten services.</span>
+          <h2 className="mt-5 text-4xl font-bold leading-[1.05] md:text-6xl">
+            Ten heads.{' '}
+            <span className="bg-gradient-to-r from-gold to-ember bg-clip-text text-transparent">One growth team.</span>
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-muted">
-            Each head is one complete capability: strategy, setup, automation and
-            reporting for a single discipline. Subscribe to one, five, or all ten.
+            Website, ads and social to be seen. WhatsApp, calls, store and books run by AI agents.
+            Each head is one service, done completely. Take one, five, or all ten.
           </p>
         </div>
 
-        {/* the stage: what the current head does */}
+        {/* the stage */}
         <div
-          className="relative mt-10 overflow-hidden rounded-3xl border border-line"
-          style={{ background: `linear-gradient(135deg, ${group.from}1f, transparent 45%), linear-gradient(315deg, ${group.to}14, transparent 50%), var(--color-card)` }}
-          onMouseEnter={() => setPaused(true)}
-          onMouseLeave={() => setPaused(false)}
+          ref={stageRef}
+          className="relative mt-10 overflow-hidden rounded-3xl border border-line bg-card max-md:-mx-4 max-md:rounded-2xl md:mt-14"
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
         >
-          {/* watermark numeral */}
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute -top-8 right-6 select-none font-display text-[10rem] font-extrabold leading-none text-cream/[0.04] md:text-[14rem]"
-          >
-            {pad(head.n)}
-          </span>
+          <ShaderGrain colors={STAGE_GRAIN} className="absolute inset-0 z-0 h-full w-full opacity-90" />
 
-          <div className="grid items-center gap-8 p-7 md:p-10 lg:grid-cols-[1fr_0.9fr]">
-            {/* same CSS fade as the head: content swaps while faded out */}
+          <div className="relative z-10 grid lg:grid-cols-[0.9fr_1.1fr]">
+            {/* the head on stage */}
             <div
-              className={`transition-all ease-out ${hidden ? 'translate-y-3 opacity-0' : 'translate-y-0 opacity-100'}`}
-              style={{ transitionDuration: `${SWAP_MS}ms` }}
+              className="relative min-h-[300px] cursor-pointer select-none overflow-hidden sm:min-h-[360px] lg:min-h-[500px]"
+              onClick={advance}
+              role="button"
+              tabIndex={0}
+              aria-label={`Head ${head.n}: ${head.title}. Show the next head`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  advance()
+                }
+              }}
             >
-              <div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <span
-                    className="rounded-full px-3 py-1 text-[0.62rem] font-bold uppercase tracking-[0.2em] text-[#14100c]"
-                    style={{ background: grad(group, '90deg') }}
-                  >
-                    {group.title}
-                  </span>
-                  <span className="text-[0.62rem] font-bold uppercase tracking-[0.2em] text-muted">
-                    Head {pad(head.n)} of 10 · {head.short}
-                  </span>
-                </div>
-                <h3 className="mt-5 text-3xl font-bold leading-[1.08] md:text-5xl">{head.title}</h3>
-                <p className="mt-4 max-w-lg text-[1rem] leading-relaxed text-muted">{LINE[head.icon]}</p>
+              {/* watermark numeral */}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={head.n}
+                  aria-hidden="true"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.4 }}
+                  className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 select-none font-display text-[13rem] font-extrabold leading-none tracking-[-0.06em] text-cream/[0.05] sm:text-[17rem] lg:top-6 lg:text-[21rem]"
+                >
+                  {pad(head.n)}
+                </motion.span>
+              </AnimatePresence>
 
-                <p className="mt-6 text-[0.62rem] font-bold uppercase tracking-[0.2em] text-muted">What this head does</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {head.tags.map((t) => (
+              {/* pool of light at his feet */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute left-1/2 top-[38%] h-[95%] w-[95%] -translate-x-1/2 rounded-full blur-2xl transition-[background] duration-700"
+                style={{ background: `radial-gradient(circle at 50% 55%, ${group.from}59 0%, ${group.to}26 40%, transparent 68%)` }}
+              />
+
+              <div className="lineup-float absolute inset-x-0 bottom-0 top-4">
+                <AnimatePresence initial={false}>
+                  <motion.div
+                    key={head.n}
+                    className="lineup-head"
+                    initial={reduced ? { opacity: 0 } : ENTER}
+                    animate={STAND}
+                    exit={reduced ? { opacity: 0 } : EXIT}
+                    transition={swap}
+                  >
+                    <img src={portraitFor(head.icon)} alt={`${PERSONA[head.icon]} — ${head.title}`} draggable="false" />
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              {/* persona tag at his shoulder */}
+              <div className="absolute left-4 top-4 z-10 md:left-6 md:top-6">
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.span
+                    key={head.n}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6, transition: { duration: 0.15 } }}
+                    transition={{ duration: 0.3, delay: 0.1 }}
+                    className="inline-flex items-center gap-2 rounded-full border border-cream/15 bg-ground/60 py-1.5 pl-1.5 pr-3 backdrop-blur-md"
+                  >
                     <span
-                      key={t}
-                      className="rounded-full border px-3 py-1 text-[0.7rem] font-semibold text-cream/90"
-                      style={{ borderColor: `${group.from}55`, background: `${group.from}14` }}
+                      className="flex h-6 w-6 items-center justify-center rounded-full text-[#14100c]"
+                      style={{ background: grad(group) }}
                     >
-                      {t}
+                      <HeadIcon name={head.icon} className="h-3 w-3" />
                     </span>
-                  ))}
-                </div>
-
-                <div className="mt-7 flex flex-wrap items-center gap-5">
-                  <span
-                    className="bg-clip-text font-display text-xl font-extrabold text-transparent md:text-2xl"
-                    style={{ backgroundImage: grad(group, '90deg') }}
-                  >
-                    {head.metric}
-                  </span>
-                  <Link
-                    to={head.href ?? '/contact'}
-                    className="inline-flex items-center gap-2 text-sm font-bold text-cream transition-colors hover:text-gold"
-                  >
-                    Explore this head <Arrow className="h-4 w-4" />
-                  </Link>
-                </div>
+                    <span className="font-display text-[0.58rem] font-extrabold uppercase tracking-[0.16em] text-cream/85">
+                      Head {pad(head.n)} · {PERSONA[head.icon]}
+                    </span>
+                  </motion.span>
+                </AnimatePresence>
               </div>
             </div>
 
-            {/* product visual */}
-            <div
-              className={`relative overflow-hidden rounded-2xl border border-line transition-all ease-out ${
-                hidden ? 'scale-[0.98] opacity-0' : 'scale-100 opacity-100'
-              }`}
-              style={{ transitionDuration: `${SWAP_MS}ms` }}
-            >
-                <img
-                  src={VISUALS[head.icon]}
-                  alt={`${head.title} — interface concept`}
-                  loading="lazy"
-                  className="block aspect-video w-full object-cover"
-                />
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-0"
-                  style={{ background: `linear-gradient(180deg, transparent 55%, ${group.to}55)` }}
-                />
+            {/* what this head does */}
+            <div className="relative flex flex-col justify-center border-t border-line p-6 md:p-10 lg:border-l lg:border-t-0 lg:pl-12">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={head.n}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10, transition: { duration: 0.18 } }}
+                  transition={reduced ? { duration: 0.2 } : { duration: 0.45, ease: 'easeOut' }}
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span
+                      className="rounded-full px-3 py-1 text-[0.6rem] font-bold uppercase tracking-[0.2em] text-[#14100c]"
+                      style={{ background: grad(group, '90deg') }}
+                    >
+                      {group.title}
+                    </span>
+                    <span className="text-[0.6rem] font-bold uppercase tracking-[0.2em] text-muted">
+                      Head {pad(head.n)} of 10
+                    </span>
+                  </div>
+
+                  <p
+                    className="mt-5 bg-clip-text font-display text-[2.1rem] font-extrabold uppercase leading-[0.95] tracking-[-0.03em] text-transparent sm:text-5xl lg:text-[3.6rem]"
+                    style={{ backgroundImage: grad(group, '90deg') }}
+                  >
+                    {head.short}
+                  </p>
+                  <h3 className="mt-3 text-xl font-bold leading-snug md:text-2xl">{head.title}</h3>
+                  <p className="mt-3 max-w-lg text-[0.95rem] leading-relaxed text-muted">{head.desc}</p>
+
+                  <p className="mt-6 text-[0.6rem] font-bold uppercase tracking-[0.2em] text-muted">What you get</p>
+                  <ul className="mt-2.5 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                    {head.tags.map((t) => (
+                      <li key={t} className="flex items-center gap-2.5 text-[0.88rem] font-semibold text-cream/90">
+                        <span
+                          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[#14100c]"
+                          style={{ background: grad(group) }}
+                        >
+                          <Check className="h-3 w-3" />
+                        </span>
+                        {t}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3">
+                    <span className="min-w-0">
+                      <span className="block text-[0.58rem] font-bold uppercase tracking-[0.2em] text-muted">Built to hit</span>
+                      <span
+                        className="block bg-clip-text font-display text-xl font-extrabold text-transparent md:text-2xl"
+                        style={{ backgroundImage: grad(group, '90deg') }}
+                      >
+                        {head.metric}
+                      </span>
+                    </span>
+                    <Link
+                      to={head.href ?? '/contact'}
+                      className="btn-ghost !py-2.5 !text-[0.8rem]"
+                    >
+                      See how it works <Arrow className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
             </div>
           </div>
 
-          {/* head picker with a progress bar under the active one */}
-          <div className="border-t border-line px-4 py-3 md:px-6">
-            <div className="flex gap-1 overflow-x-auto md:grid md:grid-cols-10 md:gap-2">
+          {/* the picker along the foot, progress under the active head */}
+          <div className="relative z-10 border-t border-line bg-ground/50 px-3 py-2.5 backdrop-blur-sm md:px-5">
+            <div className="flex gap-1 overflow-x-auto md:grid md:grid-cols-10 md:gap-1.5">
               {STAGE.map((h, i) => {
-                const g = groupOf(h.icon)
+                const g = groupOf(h.group)
                 const active = i === idx
                 return (
                   <button
                     key={h.n}
                     type="button"
-                    onClick={() => goTo(i)}
+                    onClick={() => setIdx(i)}
                     aria-pressed={active}
                     title={h.title}
-                    className={`group relative flex min-w-[64px] flex-col items-center gap-1.5 rounded-xl px-2 py-2 text-[0.58rem] font-bold uppercase tracking-[0.12em] transition-colors ${
+                    className={`group relative flex min-w-[76px] flex-col items-center gap-1.5 rounded-xl px-1.5 pb-2.5 pt-2 text-center text-[0.52rem] font-bold uppercase leading-tight tracking-[0.1em] transition-colors ${
                       active ? 'text-cream' : 'text-muted hover:text-cream'
                     }`}
                   >
@@ -256,7 +267,7 @@ export default function Services() {
                     >
                       <HeadIcon name={h.icon} className="h-4 w-4" />
                     </span>
-                    {h.short}
+                    <span className="line-clamp-2">{h.short}</span>
                     <span className="absolute inset-x-2 bottom-0 h-0.5 overflow-hidden rounded-full bg-cream/10">
                       {active && (
                         <span
@@ -264,7 +275,7 @@ export default function Services() {
                           className="block h-full rounded-full"
                           style={{
                             background: grad(g, '90deg'),
-                            animation: `grow-x ${CYCLE_MS}ms linear forwards`,
+                            animation: reduced ? 'none' : `grow-x ${CYCLE_MS}ms linear forwards`,
                             animationPlayState: paused ? 'paused' : 'running',
                           }}
                         />
@@ -277,38 +288,53 @@ export default function Services() {
           </div>
         </div>
 
-        {/* all ten at a glance, colour-coded by group */}
-        <div className="mt-14 grid gap-8 lg:grid-cols-3">
+        {/* all ten at a glance, in the two outcome groups */}
+        <div className="mt-14 grid gap-8 lg:grid-cols-2 lg:gap-10">
           {GROUPS.map((g) => (
             <div key={g.key}>
-              <div className="mb-4">
-                <div className="flex items-center gap-3">
-                  <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ background: grad(g) }} />
-                  <h3 className="font-display text-lg font-bold">{g.title}</h3>
+              <div className="mb-4 flex items-end justify-between gap-4">
+                <div>
+                  <h3
+                    className="bg-clip-text font-display text-2xl font-extrabold uppercase tracking-tight text-transparent"
+                    style={{ backgroundImage: grad(g, '90deg') }}
+                  >
+                    {g.title}
+                  </h3>
+                  <p className="mt-1 text-xs text-muted">{g.blurb}</p>
                 </div>
-                <p className="mt-1 pl-[1.4rem] text-xs text-muted">{g.blurb}</p>
+                <span className="shrink-0 text-[0.6rem] font-bold uppercase tracking-[0.2em] text-muted">
+                  {HEADS.filter((h) => h.group === g.key).length} heads
+                </span>
               </div>
               <div className="flex flex-col gap-2">
-                {g.icons.map((icon) => {
-                  const h = HEADS.find((x) => x.icon === icon)
-                  return (
-                    <Link
-                      key={icon}
-                      to={h.href ?? '/contact'}
-                      className="group flex items-center gap-3 rounded-xl border border-line bg-card/70 px-3 py-2.5 transition-colors hover:border-cream/25"
-                      style={{ borderLeft: `3px solid ${g.from}` }}
+                {HEADS.filter((h) => h.group === g.key).map((h) => (
+                  <Link
+                    key={h.n}
+                    to={h.href ?? '/contact'}
+                    onMouseEnter={() => setIdx(h.n - 1)}
+                    className="group flex items-center gap-4 rounded-2xl border border-line bg-card/70 px-4 py-3 transition-colors hover:border-cream/25"
+                  >
+                    <span className="w-6 shrink-0 font-display text-sm font-extrabold" style={{ color: g.from }}>
+                      {pad(h.n)}
+                    </span>
+                    <span
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                      style={{ color: g.from, background: `${g.from}1a` }}
                     >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ color: g.from, background: `${g.from}1a` }}>
-                        <HeadIcon name={icon} className="h-4 w-4" />
+                      <HeadIcon name={h.icon} className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-display text-[0.8rem] font-extrabold uppercase tracking-[0.08em] transition-colors group-hover:text-gold">
+                        {h.short}
                       </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold transition-colors group-hover:text-gold">{h.title}</span>
-                        <span className="block text-[0.65rem] uppercase tracking-wider text-muted">{h.metric}</span>
-                      </span>
-                      <Arrow className="h-3.5 w-3.5 shrink-0 text-muted transition-transform group-hover:translate-x-1" />
-                    </Link>
-                  )
-                })}
+                      <span className="block truncate text-[0.8rem] text-muted">{h.title}</span>
+                    </span>
+                    <span className="hidden shrink-0 text-right text-[0.62rem] font-bold uppercase tracking-wider text-muted sm:block">
+                      {h.metric}
+                    </span>
+                    <Arrow className="h-3.5 w-3.5 shrink-0 text-muted transition-transform group-hover:translate-x-1" />
+                  </Link>
+                ))}
               </div>
             </div>
           ))}

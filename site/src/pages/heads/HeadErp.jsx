@@ -187,7 +187,7 @@ function ErpDemo() {
 }
 
 const CONTENT = {
-  n: 5,
+  n: 8,
   hero: {
     line1: 'Every receipt, PDF and invoice,',
     line2: 'in your books before lunch.',

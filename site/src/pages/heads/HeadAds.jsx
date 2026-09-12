@@ -199,7 +199,7 @@ function AdsDemo() {
 }
 
 const CONTENT = {
-  n: 6,
+  n: 2,
   hero: {
     line1: 'One campaign,',
     line2: 'a thousand ads — each one personal.',

@@ -20,6 +20,18 @@
         "server/index.mjs"
       ],
       "port": 8787
+    },
+    {
+      "name": "marketing-ravan-api-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "server/index.mjs"
+      ],
+      "port": 8790,
+      "env": {
+        "PORT": "8790",
+        "ADMIN_PASSWORD": "preview-only"
+      }
     }
   ]
 }

@@ -139,7 +139,7 @@ function SdrDemo() {
 }
 
 const CONTENT = {
-  n: 2,
+  n: 5,
   hero: {
     line1: 'A sales team that never sleeps,',
     line2: 'and never forgets a lead.',
