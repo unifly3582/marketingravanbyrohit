@@ -8,9 +8,12 @@
 // They share the prompt, the tools and the tracer, so a run looks identical in
 // the UI whichever one produced it, and switching is an env var.
 
-import { conversationId, windowOpen } from "../db.mjs";
+import { conversationId, windowOpen, conversationByPhone, recentMessages } from "../db.mjs";
 import { buildToolSpecs } from "./tools.mjs";
-import { currentOffer, userTurn, voiceUserTurn } from "./prompt.mjs";
+import { currentOffer, userTurn, voiceUserTurn, threadContext } from "./prompt.mjs";
+
+/** How much of the thread rides in the prompt. Voice turns from the website count. */
+const HISTORY_IN_PROMPT = 12;
 import { startRun } from "./trace.mjs";
 import { loadEngine, engineSupports, engineFor } from "./engines/index.mjs";
 import { requireModel, productionModel, demoModel } from "./models.mjs";
@@ -123,7 +126,20 @@ export async function runAgent({
       await guard.ok({ window_open: open, mode: open ? "free-form text" : "approved template only" });
     }
 
-    const [offer, engineModule] = await Promise.all([currentOffer(), loadEngine(engineId)]);
+    // The thread so far, including turns the website voice agent had with
+    // this person, and whether a human has been asked for. Without this a
+    // visitor who continues on WhatsApp meets an agent that has forgotten
+    // the conversation they just had. The message being answered is already
+    // in the thread (the webhook stores before it runs), so it is dropped
+    // from the history rather than shown twice.
+    const [offer, engineModule, conversation, history] = await Promise.all([
+      currentOffer(),
+      loadEngine(engineId),
+      demo || channel !== "whatsapp" ? null : conversationByPhone(phone10).catch(() => null),
+      demo || channel !== "whatsapp" ? [] : recentMessages(phone10, HISTORY_IN_PROMPT + 1).catch(() => []),
+    ]);
+    const priorTurns = history.filter((m, i) => !(i === history.length - 1 && m.direction === "in" && m.body === text));
+    const context = channel === "whatsapp" ? threadContext(priorTurns.slice(-HISTORY_IN_PROMPT), conversation) : "";
     // `outcome` is filled in by the tools: the reply as actually sent/spoken,
     // whether the thread was escalated, and (voice only) whether the model
     // asked to end the call. Authoritative over the model's trailing text.
@@ -131,7 +147,9 @@ export async function runAgent({
     const specs = buildToolSpecs({ tracer, phone10, demo, outcome, channel });
 
     const userMessage =
-      channel === "voice" ? voiceUserTurn(contactName, phone10, text) : userTurn(contactName, phone10, text);
+      channel === "voice"
+        ? voiceUserTurn(contactName, phone10, text)
+        : (context ? `${context}\n\n` : "") + userTurn(contactName, phone10, text);
 
     const result = await engineModule.run({
       tracer,

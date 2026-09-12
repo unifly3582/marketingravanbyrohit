@@ -66,8 +66,62 @@ Three exits, all live:
 | Tool | What happens |
 |---|---|
 | `request_callback` | Our outbound voice agent phones them, on the number just captured, within seconds |
-| `send_whatsapp_followup` | Sends the approved WhatsApp intro template so the thread continues where they'll see it |
-| `escalate_to_human` | Flags the conversation `needs_human` and tells them a person is coming |
+| `send_whatsapp_message` | Sends a WhatsApp message in the agent's own words: free text inside the 24-hour window, otherwise the text rides inside the approved `web_handoff` utility template, which asks them to reply. The panel shows the exact message that went out. |
+| `escalate_to_human` | With a number: flags the thread `needs_human` (reason, summary, run id), messages them on WhatsApp, and the WhatsApp agent carries on there until a person takes over. Without one: opens the WhatsApp handoff form in the panel and stays on the line until they say it is filled in. |
+
+`capture_contact` also recognises a returning number: the result carries
+`known_lead` and the last eight messages of their thread (WhatsApp and earlier
+voice turns), so the agent greets them as someone it has spoken to before.
+
+### 6b. The WhatsApp handoff (2026-09-05)
+
+A small form inside the panel — name, WhatsApp number, one optional line —
+that opens when:
+
+- the agent calls `escalate_to_human` for a visitor who has not given a number;
+- the microphone is denied, the socket fails, or the server refuses the session
+  (rate cap, agent switched off);
+- the session ends on the five-minute ceiling or on idle;
+- the visitor clicks **Continue on WhatsApp**, which is always visible in the
+  panel footer. No microphone needed.
+
+`POST /api/handoff` (public, rate limited: 5 per IP per hour, 300 per day)
+does four things: upserts the lead with `source = web-voice`, attaches the
+voice transcript to their thread (a live session adopts the number and writes
+it on close; a finished one is read back from its run by id), flags the
+conversation `needs_human` with the reason, note and run id, and sends the
+`web_handoff` template with their name and their own words in it. The response
+carries a token the panel polls (`GET /api/handoff/:token`) for delivery ticks
+and for whether they have replied — never the phone number.
+
+**We ask the customer to message us first.** The template ends with "reply to
+this message", and the panel also offers a `wa.me` link with the opening line
+written for them. A visitor's reply is what opens WhatsApp's 24-hour window;
+before it, only templates can be sent. After it, the WhatsApp agent — and any
+person in the dashboard — can write freely.
+
+The template is `web_handoff`, category UTILITY, two body parameters, created
+with `node server/wa-templates.mjs create` (submitted 2026-09-05, id
+`2056040541943829`, pending review at the time of writing). While it is
+pending the send falls back to `WA_DEFAULT_TEMPLATE` so the thread still
+exists on their phone. `WA_HANDOFF_TEMPLATE` overrides the name.
+
+### 6c. Who answers on WhatsApp
+
+`conversations.mode` is `ai` or `human`. Every thread starts in `ai`: the
+WhatsApp agent answers inbound messages on its own (`AGENT_AUTOREPLY` now
+defaults to on; set it to `false` to silence it everywhere). Its prompt carries
+the last twelve messages of the thread, website voice turns included and
+marked as spoken, plus the handoff reason when a person has been asked for —
+so a visitor who continues on WhatsApp meets an agent that remembers the
+conversation.
+
+A person takes a thread over by replying from the dashboard (that flips the
+mode to `human` automatically) or with **Take over** in the thread header; the
+webhook then skips the agent for that number until **Hand back to AI**. The
+dashboard's Chats tab has a **Needs human** filter with a count, a **From
+website** filter, a red banner on flagged threads with the reason, the
+visitor's note, a link to the voice session on `/live`, and **Mark handled**.
 
 ### 7. Ends cleanly
 
@@ -228,6 +282,43 @@ The playbook is inlined only while it fits `INLINE_PLAYBOOK_CHAR_BUDGET`
 returns false, `search_playbook` comes back automatically, and retrieval
 genuinely earns its round trip again. Nothing to remember, nothing to switch.
 
+### The second hostname was the last thing left (2026-09-05, later)
+
+"Fast on the dev server, slow live" came back the same day, with the bypass host
+in place and working. The reason was not on the server: **the visitor's home
+router refused to resolve `voice.marketingravan.com`** ("no A/AAAA records")
+while 1.1.1.1, 8.8.8.8 and every public resolver returned it. A name that was
+queried before the record existed can sit in a resolver's negative cache for a
+long time, and some consumer routers and ISP resolvers ignore the TTL entirely.
+
+The client did exactly what it was built to do — the background reachability
+check failed, the fast route was never offered, and the session opened on the
+page's own origin through Cloudflare. Which is the slow path: ~390 ms to first
+byte on the config endpoint via Singapore, against ~100 ms straight to Mumbai
+(TLS included). Same server, same code, 4x the round trip, paid several times a
+turn. Nothing in the UI said so, because falling back is silent by design.
+
+Two hostnames means two things that can fail, and when one of them is the fast
+one, the failure mode is "works, but slowly", which is the hardest kind to
+notice. So the fix is to stop needing the second name: **serve the whole site
+straight from the VPS**, TLS terminated by nginx with a Let's Encrypt
+certificate, Cloudflare kept only as the DNS host with the proxy off.
+
+- `deploy/nginx-marketingravan.conf` now carries the 443 listener. Its
+  http→https redirect keys on `X-Forwarded-Proto`, so it does not loop while
+  Cloudflare's "Flexible" proxy is still in front.
+- `deploy/go-direct.sh` issues the certificate and installs the vhost. It is
+  safe to run before the DNS change; nothing it does alters what Cloudflare
+  sees on :80.
+- Then: Cloudflare DNS → `marketingravan.com` and `www` → proxy OFF (grey
+  cloud). Once browsers land on :443 directly, `WEB_VOICE_WS_ORIGIN` can be
+  removed from `/etc/marketingravan.env` and the voice vhost retired — one
+  hostname, one path, no fallback to be quietly slower on.
+
+What is given up: Cloudflare's cache and DDoS front for the pages. The cached
+522 outage described below was a cost of that cache, not a benefit, and the
+audience is in India where the Mumbai VPS is already the nearest server.
+
 ### Observability
 
 Every session is one run in `agent_runs` (`workflow: "web-voice"`) with a step
@@ -315,7 +406,9 @@ does* is a paragraph in there, not a code path.
 **Server**
 - `server/voice/gemini-live.mjs` — Live API wire protocol; zod → Gemini function declarations
 - `server/voice/web-session.mjs` — one session: browser ↔ Gemini, tools, transcript, tracing, teardown
-- `server/agent/web-tools.mjs` — `navigate_site`, `capture_contact`, `request_callback`, `send_whatsapp_followup`, `end_session`
+- `server/agent/web-tools.mjs` — `navigate_site`, `capture_contact`, `request_callback`, `send_whatsapp_message`, `escalate_to_human`, `end_session`
+- `server/wa-templates.mjs` — list templates / create the `web_handoff` utility template
+- `server/index.mjs` — `POST /api/handoff`, `GET /api/handoff/:token`, admin mode/resolve endpoints, the human-mode gate in the webhook
 - `server/agent/prompt.mjs` — `WEB_BRAND`
 - `server/agent/tools.mjs` — shared tools, now resolving the customer at call time
 - `server/agent/graph.mjs`, `server/agent/models.mjs` — graph + model registry
@@ -323,6 +416,7 @@ does* is a paragraph in there, not a code path.
 
 **Site**
 - `site/src/components/VoiceAgent.jsx` — floating launcher + panel
+- `site/src/components/WhatsAppHandoff.jsx` — the handoff form, the sent-message card with delivery ticks, the `wa.me` link
 - `site/src/lib/voiceAgent.js` — mic, socket, scheduled playback, barge-in
 - `site/public/voice-worklet.js` — capture on the audio thread, resample to 16 kHz
 

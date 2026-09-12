@@ -5,8 +5,14 @@ import express from "express";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { sb, upsertLead, recordCall, completeCall, windowOpen, clearUnread, unwrap } from "./db.mjs";
-import { phone10, sendTemplate, sendText, ingest, listTemplates } from "./wa.mjs";
+import { randomUUID } from "node:crypto";
+import {
+  sb, upsertLead, recordCall, completeCall, windowOpen, clearUnread, unwrap,
+  conversationByPhone, setConversationMode, flagHandoff, resolveHandoff, insertMessage, touchConversation,
+  setConversationSource, messagesSince,
+} from "./db.mjs";
+import { phone10, sendTemplate, sendText, ingest, listTemplates, sendHandoff, sendDemoIntro, HANDOFF_TEMPLATE } from "./wa.mjs";
+import { sessionsByRun } from "./voice/web-session.mjs";
 import { workflowList, workflow } from "./agent/graph.mjs";
 import { runWhatsAppAgent } from "./agent/whatsapp-agent.mjs";
 import { engineCatalog, defaultEngineId, engineFor, ENGINE_IDS } from "./agent/engines/index.mjs";
@@ -22,8 +28,12 @@ const PORT = Number(env("PORT", 8787));
 const PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", "http://147.93.28.140:8100");
 const ADMIN_PASSWORD = env("ADMIN_PASSWORD");
 const AGENT_TOOL_TOKEN = env("AGENT_TOOL_TOKEN");
-// Off by default: turning this on lets the agent reply to real customers unattended.
-const AGENT_AUTOREPLY = env("AGENT_AUTOREPLY", "false") === "true";
+// The WhatsApp agent answers inbound messages on its own. On by default since
+// 2026-09-05: the website hands conversations to WhatsApp expecting someone to
+// pick them up, and "someone" is the agent until a person takes the thread
+// over from the dashboard (conversations.mode = 'human'). Set to "false" to
+// silence it everywhere at once.
+const AGENT_AUTOREPLY = env("AGENT_AUTOREPLY", "true") !== "false";
 const DEMO_ENABLED = env("AGENT_DEMO_ENABLED", "true") === "true";
 
 // SARVAM_ORG_ID/SARVAM_WORKSPACE_ID/SARVAM_SAMVAAD_API_KEY are for the old
@@ -74,6 +84,20 @@ const limitCall = makeLimiter({
 });
 
 // The demo spends real model tokens for anonymous visitors — cap it tightly.
+// The handoff form sends a real WhatsApp template per submit.
+const limitHandoff = makeLimiter({
+  perIpPerHour: Number(env("HANDOFF_PER_IP_PER_HOUR", 5)),
+  globalPerDay: Number(env("HANDOFF_PER_DAY", 300)),
+  dailyMessage: "We cannot take more WhatsApp requests today. Message us directly instead.",
+});
+
+// A live WhatsApp demo sends a real template to whatever number was typed in.
+const limitWaDemo = makeLimiter({
+  perIpPerHour: Number(env("WA_DEMO_PER_IP_PER_HOUR", 3)),
+  globalPerDay: Number(env("WA_DEMO_PER_DAY", 200)),
+  dailyMessage: "We cannot start more WhatsApp demos today. Message us directly instead.",
+});
+
 const limitDemo = makeLimiter({
   perIpPerHour: Number(env("AGENT_DEMO_PER_IP_PER_HOUR", 5)),
   globalPerDay: Number(env("AGENT_DEMO_PER_DAY", 200)),
@@ -215,6 +239,13 @@ app.post(WA_WEBHOOK_PATH, ...webhookBody, (req, res) => {
     console.log("wa webhook", out.kind, out.count ?? "");
     if (!AGENT_AUTOREPLY) return;
     for (const m of out.inbound) {
+      // A person who took the thread over from the dashboard owns it until
+      // they hand it back; the agent must not talk over them.
+      const conv = await conversationByPhone(m.phone10).catch(() => null);
+      if (conv?.mode === "human") {
+        console.log("agent skipped (human mode)", m.phone10);
+        continue;
+      }
       const r = await runWhatsAppAgent({
         phone10: m.phone10,
         text: m.text ?? `[${m.type}]`,
@@ -225,6 +256,226 @@ app.post(WA_WEBHOOK_PATH, ...webhookBody, (req, res) => {
     }
   })().catch((e) => console.error("wa webhook error", e.message));
 });
+
+// ---------------- website → WhatsApp handoff ----------------
+//
+// The voice panel opens a small form when the agent escalates, when the
+// microphone or the connection fails, or when the visitor simply asks to
+// continue on WhatsApp. Submitting it does four things: creates the lead,
+// attaches the voice transcript to their thread, flags the thread for a
+// person, and sends the approved handoff template — which asks them to reply,
+// because a reply is what opens WhatsApp's 24-hour window and lets the agent
+// (or a person) answer in free text after that.
+
+/** Handoff tokens → what the panel may poll about, so it never needs the phone number. */
+const handoffs = new Map();
+const HANDOFF_TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
+setInterval(() => {
+  const cutoff = Date.now() - HANDOFF_TOKEN_TTL_MS;
+  for (const [k, v] of handoffs) if (v.at < cutoff) handoffs.delete(k);
+}, 15 * 60 * 1000).unref();
+
+const WA_BUSINESS_PHONE = () => String(env("WA_BUSINESS_PHONE", "")).replace(/\D/g, "");
+/** A click-to-chat link with the opening line written for them. */
+function waLink(name, note) {
+  const who = name ? `I'm ${name}. ` : "";
+  const about = note ? ` about ${note}` : "";
+  const text = `Hi, ${who}I was talking to Ravan on your website${about}. Can we continue here?`;
+  return `https://wa.me/${WA_BUSINESS_PHONE()}?text=${encodeURIComponent(text)}`;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Write a finished voice session's transcript onto a thread. A live session
+ * does this itself when it ends; this is for a form submitted after the
+ * session already closed (mic denied, connection dropped, quota refused).
+ */
+async function attachRunTranscript(runId, p10) {
+  const run = unwrap(
+    await sb.from("agent_runs").select("id, workflow, output").eq("id", runId).maybeSingle(),
+    "handoff run"
+  );
+  if (!run || run.workflow !== "web-voice") return 0;
+  // The session already wrote it to this number's thread.
+  if (run.output?.lead?.phone10 === p10) return 0;
+  const turns = Array.isArray(run.output?.transcript) ? run.output.transcript : [];
+  for (const t of turns) {
+    await insertMessage(p10, {
+      direction: t.role === "user" ? "in" : "out",
+      type: "voice",
+      text: t.text,
+      source: "web-voice",
+      timestamp: t.at,
+    }).catch(() => {});
+  }
+  await sb.from("agent_runs").update({ phone10: p10 }).eq("id", runId);
+  return turns.length;
+}
+
+app.post("/api/handoff", wrap(async (req, res) => {
+  const denied = limitHandoff(req.ip);
+  if (denied) return res.status(429).json({ error: denied });
+  const p10 = phone10(req.body?.phone);
+  if (!p10) return res.status(400).json({ error: "Enter a 10-digit Indian mobile number." });
+  const name = String(req.body?.name ?? "").trim().slice(0, 80) || null;
+  const note = String(req.body?.note ?? "").trim().replace(/\s+/g, " ").slice(0, 400) || null;
+  const reason = String(req.body?.reason ?? "Visitor asked to continue on WhatsApp").trim().slice(0, 200);
+  const page = String(req.body?.page ?? "").slice(0, 120) || null;
+  const runId = UUID_RE.test(String(req.body?.runId ?? "")) ? req.body.runId : null;
+
+  await upsertLead(p10, { name, source: "web-voice", status: "new" });
+
+  // Transcript: a live session adopts the identity and writes it on close;
+  // an ended one is read back from its run.
+  const session = runId ? sessionsByRun.get(runId) : null;
+  let transcriptTurns = 0;
+  if (session) session.adoptHandoff({ phone10: p10, name, note });
+  else if (runId) transcriptTurns = await attachRunTranscript(runId, p10).catch((e) => { console.error("handoff transcript", e.message); return 0; });
+
+  await flagHandoff(p10, { reason, note, runId, source: "web-voice", contactName: name });
+  if (note) {
+    await insertMessage(p10, { direction: "in", type: "text", text: note, source: "web-form" }).catch(() => {});
+    await touchConversation(p10, { text: note, direction: "in", contactName: name, openWindow: false, bumpUnread: true }).catch(() => {});
+  }
+
+  // The template, with the visitor's own words in it. If it is not approved
+  // yet (or the send fails) fall back to the plain intro template so the
+  // thread still exists on their phone.
+  let sent = null, sendError = null;
+  try {
+    sent = await sendHandoff(p10, {
+      name,
+      summary: note ? `You asked on our website to continue on WhatsApp about: ${note}.` : "You asked on our website to continue on WhatsApp.",
+      source: "web-voice",
+    });
+  } catch (e) {
+    sendError = e.message;
+    console.error("handoff template", HANDOFF_TEMPLATE.name, e.message);
+    try { sent = await sendTemplate(p10, env("WA_DEFAULT_TEMPLATE", "marketing"), "en", [], "web-voice"); }
+    catch (e2) { console.error("handoff fallback template", e2.message); }
+  }
+
+  const token = randomUUID();
+  handoffs.set(token, { p10, messageId: sent?.messageId ?? null, at: Date.now() });
+  console.log(`handoff ${p10} (${name ?? "no name"}) from ${page ?? "?"}: ${reason}${session ? " [live session]" : transcriptTurns ? ` [${transcriptTurns} turns attached]` : ""}${sent ? "" : " — template NOT sent"}`);
+  res.json({
+    ok: true,
+    token,
+    sent: !!sent,
+    text: sent?.text ?? null,
+    error: sent ? null : sendError,
+    waLink: waLink(name, note),
+  });
+}));
+
+/** What the panel shows after the form: did it deliver, did they reply, is a person on it. */
+app.get("/api/handoff/:token", wrap(async (req, res) => {
+  const h = handoffs.get(req.params.token);
+  if (!h) return res.status(404).json({ error: "unknown" });
+  const [msg, conv] = await Promise.all([
+    h.messageId
+      ? sb.from("messages").select("status").eq("wa_message_id", h.messageId).maybeSingle().then((r) => r.data)
+      : null,
+    conversationByPhone(h.p10).catch(() => null),
+  ]);
+  const replied = !!(conv?.window_open_until && new Date(conv.window_open_until).getTime() > h.at);
+  res.json({
+    status: msg?.status ?? (h.messageId ? "sent" : "not_sent"),
+    replied,
+    mode: conv?.mode ?? "ai",
+    human: conv?.mode === "human",
+  });
+}));
+
+// ---------------- website → live WhatsApp demo ----------------
+//
+// "Show me the WhatsApp agent" on the website, done for real: the visitor
+// types their number, the demo template lands on their phone, they reply to
+// it from WhatsApp, and the same WhatsApp agent that serves clients answers
+// them. The panel on the site mirrors the thread as it happens, read-only —
+// the conversation belongs on their phone; the website only watches.
+//
+// The mirror is deliberately narrow. It shows nothing from before the demo
+// was requested, the token expires, and the request is rate-limited, because
+// a number typed into a public form is not proof of who is typing.
+
+/** Demo tokens → what the panel may poll about, so it never needs the phone number. */
+const demos = new Map();
+const DEMO_TOKEN_TTL_MS = 60 * 60 * 1000;
+
+function pruneDemos() {
+  const cutoff = Date.now() - DEMO_TOKEN_TTL_MS;
+  for (const [token, d] of demos) if (d.at < cutoff) demos.delete(token);
+}
+
+app.post("/api/demo/whatsapp", wrap(async (req, res) => {
+  const denied = limitWaDemo(req.ip);
+  if (denied) return res.status(429).json({ error: denied });
+  const p10 = phone10(req.body?.phone);
+  if (!p10) return res.status(400).json({ error: "Enter a 10-digit Indian mobile number." });
+  const name = String(req.body?.name ?? "").trim().slice(0, 80) || null;
+  const page = String(req.body?.page ?? "").slice(0, 120) || null;
+  const device = req.body?.device === "mobile" ? "mobile" : "desktop";
+  const startedAt = new Date();
+
+  // The lead first: whoever asked for a demo is someone to follow up with,
+  // whether or not the template goes through.
+  await upsertLead(p10, { name, source: "web-demo", status: "new" });
+  await setConversationSource(p10, "web-demo", name).catch((e) => console.error("demo source", e.message));
+  const note = `Requested a live WhatsApp demo from the website${page ? ` (${page})` : ""}, on ${device}.`;
+  await insertMessage(p10, { direction: "in", type: "text", text: note, source: "web-form" }).catch(() => {});
+  await touchConversation(p10, { text: note, direction: "in", contactName: name, openWindow: false, bumpUnread: true }).catch(() => {});
+
+  let sent = null, sendError = null;
+  try {
+    sent = await sendDemoIntro(p10, { name, source: "web-demo" });
+  } catch (e) {
+    sendError = e.message;
+    console.error("demo template", e.message);
+  }
+
+  pruneDemos();
+  const token = randomUUID();
+  demos.set(token, { p10, at: startedAt.getTime(), since: startedAt.toISOString(), messageId: sent?.messageId ?? null });
+  console.log(`wa demo ${p10} (${name ?? "no name"}) from ${page ?? "?"} on ${device}${sent ? ` via ${sent.template}` : " — template NOT sent"}`);
+  res.json({
+    ok: true,
+    token,
+    sent: !!sent,
+    text: sent?.text ?? null,
+    error: sent ? null : sendError,
+    waLink: waLink(name, "the WhatsApp agent demo"),
+  });
+}));
+
+/** The thread since the demo started, for the read-only mirror in the panel. */
+app.get("/api/demo/whatsapp/:token", wrap(async (req, res) => {
+  pruneDemos();
+  const d = demos.get(req.params.token);
+  if (!d) return res.status(404).json({ error: "expired" });
+  const [rows, conv] = await Promise.all([
+    messagesSince(d.p10, d.since).catch(() => []),
+    conversationByPhone(d.p10).catch(() => null),
+  ]);
+  const messages = rows
+    .filter((m) => m.source !== "web-form")
+    .map((m) => ({
+      id: m.id,
+      direction: m.direction,
+      text: m.body ?? (m.type && m.type !== "text" ? `[${m.type}]` : ""),
+      status: m.status ?? null,
+      at: m.created_at,
+    }));
+  const replied = messages.some((m) => m.direction === "in");
+  res.json({
+    messages,
+    replied,
+    mode: conv?.mode ?? "ai",
+    human: conv?.mode === "human",
+    status: messages.find((m) => m.direction === "out")?.status ?? (d.messageId ? "sent" : "not_sent"),
+  });
+}));
 
 // ---------------- voice-agent tool: send WhatsApp mid-call ----------------
 
@@ -341,6 +592,7 @@ app.get("/api/admin/overview", admin, wrap(async (req, res) => {
     countOf("agent_runs", (q) => q.eq("demo", false)),
     countOf("agent_runs", (q) => q.eq("demo", false).eq("status", "failed")),
   ]);
+  const needsHuman = await countOf("conversations", (q) => q.eq("human_handoff", true));
   const unreadRows = unwrap(await sb.from("conversations").select("unread"), "unread");
   const spend = unwrap(
     await sb.from("agent_runs").select("cost_usd").gte("created_at", midnight.toISOString()),
@@ -349,6 +601,7 @@ app.get("/api/admin/overview", admin, wrap(async (req, res) => {
   res.json({
     leads, calls, connected, conversations, calls_today: callsToday,
     unread: unreadRows.reduce((n, r) => n + (r.unread ?? 0), 0),
+    needs_human: needsHuman,
     agent_runs: runs,
     agent_failures: runsFailed,
     agent_spend_today: Number(spend.reduce((n, r) => n + Number(r.cost_usd ?? 0), 0).toFixed(4)),
@@ -444,17 +697,40 @@ app.post("/api/admin/send", admin, wrap(async (req, res) => {
   const p10 = phone10(req.body?.phone);
   if (!p10) return res.status(400).json({ error: "invalid phone" });
   try {
+    let r;
     if (req.body?.template) {
-      const r = await sendTemplate(p10, req.body.template, req.body.language ?? "en", req.body.params ?? []);
-      return res.json({ ok: true, messageId: r.messageId });
+      r = await sendTemplate(p10, req.body.template, req.body.language ?? "en", req.body.params ?? []);
+    } else {
+      if (!(await windowOpen(p10)))
+        return res.status(409).json({ error: "24-hour window closed — send an approved template instead." });
+      r = await sendText(p10, String(req.body?.text ?? "").trim());
     }
-    if (!(await windowOpen(p10)))
-      return res.status(409).json({ error: "24-hour window closed — send an approved template instead." });
-    const r = await sendText(p10, String(req.body?.text ?? "").trim());
-    res.json({ ok: true, messageId: r.messageId });
+    // A person typing in the thread is a person taking it over: the agent
+    // steps back until the dashboard hands the thread back.
+    const conv = await setConversationMode(p10, "human").catch(() => null);
+    res.json({ ok: true, messageId: r.messageId, mode: conv?.mode ?? "human" });
   } catch (e) {
     res.status(502).json({ error: e.message });
   }
+}));
+
+/** Who answers this thread: the agent, or a person. */
+app.post("/api/admin/conversations/mode", admin, wrap(async (req, res) => {
+  const p10 = phone10(req.body?.phone);
+  if (!p10) return res.status(400).json({ error: "invalid phone" });
+  const mode = req.body?.mode === "human" ? "human" : "ai";
+  const conv = await setConversationMode(p10, mode);
+  if (!conv) return res.status(404).json({ error: "no such conversation" });
+  res.json({ ok: true, mode: conv.mode });
+}));
+
+/** Clear the needs-a-person flag once someone has dealt with it. */
+app.post("/api/admin/conversations/resolve", admin, wrap(async (req, res) => {
+  const p10 = phone10(req.body?.phone);
+  if (!p10) return res.status(400).json({ error: "invalid phone" });
+  const conv = await resolveHandoff(p10);
+  if (!conv) return res.status(404).json({ error: "no such conversation" });
+  res.json({ ok: true });
 }));
 
 app.post("/api/admin/call", admin, wrap(async (req, res) => {
@@ -575,6 +851,7 @@ app.post("/api/admin/offers", admin, wrap(async (req, res) => {
 // ---------------- dashboard page ----------------
 
 app.get(["/admin", "/admin/"], (req, res) => res.sendFile(join(dir, "public", "admin.html")));
+app.get("/admin/logo-mark.png", (req, res) => res.sendFile(join(dir, "public", "logo-mark.png")));
 
 // ---------------- voice pipeline (Vobiz call audio <-> Sarvam STT/TTS <-> Gemini brain) ----------------
 

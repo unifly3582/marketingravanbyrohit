@@ -79,6 +79,73 @@ export async function windowOpen(phone10) {
   return !!(row?.window_open_until && new Date(row.window_open_until).getTime() > Date.now());
 }
 
+/** The conversation row for a number, or null. */
+export async function conversationByPhone(phone10) {
+  return unwrap(
+    await sb.from("conversations").select("*").eq("phone10", phone10).maybeSingle(),
+    "conversationByPhone"
+  );
+}
+
+/**
+ * Who answers this thread: 'ai' lets the WhatsApp agent reply to inbound
+ * messages, 'human' silences it until someone hands it back.
+ */
+export async function setConversationMode(phone10, mode) {
+  if (!["ai", "human"].includes(mode)) throw new Error(`setConversationMode: bad mode "${mode}"`);
+  return unwrap(
+    await sb.from("conversations").update({ mode }).eq("phone10", phone10).select().maybeSingle(),
+    "setConversationMode"
+  );
+}
+
+/**
+ * Where this thread came from, for the dashboard and the agent's briefing.
+ * Creates the thread if it does not exist yet. Does not touch the mode or
+ * the human queue — a demo thread is the agent's to answer.
+ */
+export async function setConversationSource(phone10, source, contactName = null) {
+  await conversationId(phone10, contactName);
+  return unwrap(
+    await sb.from("conversations").update({ source }).eq("phone10", phone10).select().maybeSingle(),
+    "setConversationSource"
+  );
+}
+
+/**
+ * Mark a thread as needing a person, with why. The thread is created if it
+ * does not exist yet, so an escalation from the website lands somewhere
+ * visible even for a number that has never messaged us.
+ *
+ * The AI keeps answering (mode stays whatever it was, 'ai' by default) — the
+ * flag is a queue for humans, not a gag for the agent. A person takes over by
+ * replying from the dashboard or flipping the mode explicitly.
+ */
+export async function flagHandoff(phone10, { reason, note = null, runId = null, source = null, contactName = null } = {}) {
+  await conversationId(phone10, contactName);
+  const patch = {
+    human_handoff: true,
+    status: "needs_human",
+    handoff_reason: reason ?? null,
+    handoff_at: new Date().toISOString(),
+  };
+  if (note) patch.handoff_note = note;
+  if (runId) patch.handoff_run_id = runId;
+  if (source) patch.source = source;
+  return unwrap(
+    await sb.from("conversations").update(patch).eq("phone10", phone10).select().maybeSingle(),
+    "flagHandoff"
+  );
+}
+
+/** A person has dealt with it: clear the queue flag, keep the history. */
+export async function resolveHandoff(phone10) {
+  return unwrap(
+    await sb.from("conversations").update({ human_handoff: false, status: "active" }).eq("phone10", phone10).select().maybeSingle(),
+    "resolveHandoff"
+  );
+}
+
 export async function clearUnread(phone10) {
   unwrap(await sb.from("conversations").update({ unread: 0 }).eq("phone10", phone10), "clearUnread");
 }
@@ -109,6 +176,26 @@ export async function insertMessage(phone10, fields) {
   return data ?? null;
 }
 
+/**
+ * Messages on a thread from a moment onward, oldest first — what the website
+ * mirrors while a live demo runs. The cut-off matters: the visitor typed a
+ * number into a public form, and nothing that was said before they did so
+ * may leave the server.
+ */
+export async function messagesSince(phone10, sinceIso, limit = 60) {
+  const convId = await conversationId(phone10);
+  return unwrap(
+    await sb
+      .from("messages")
+      .select("id, direction, body, type, source, status, created_at")
+      .eq("conversation_id", convId)
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: true })
+      .limit(limit),
+    "messagesSince"
+  );
+}
+
 export async function updateMessageStatus(waMessageId, status) {
   unwrap(
     await sb.from("messages").update({ status }).eq("wa_message_id", waMessageId),
@@ -121,7 +208,7 @@ export async function recentMessages(phone10, limit = 20) {
   const rows = unwrap(
     await sb
       .from("messages")
-      .select("direction, role, body, type, created_at")
+      .select("direction, role, body, type, source, created_at")
       .eq("conversation_id", convId)
       .order("created_at", { ascending: false })
       .limit(limit),

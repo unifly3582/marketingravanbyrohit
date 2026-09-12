@@ -158,7 +158,10 @@ ws.on("message", (data, isBinary) => {
       console.log(`  \x1b[32m[call] dialing ${msg.phone10}\x1b[0m`);
       break;
     case "whatsapp":
-      console.log(`  \x1b[32m[wa] template sent to ${msg.phone10}\x1b[0m`);
+      console.log(`  \x1b[32m[wa] ${msg.mode ?? "message"} sent to ${msg.phone10}: ${msg.text ?? ""}\x1b[0m`);
+      break;
+    case "handoff":
+      console.log(`  \x1b[35m[handoff] ${msg.flagged ? "thread flagged" : "form opened"} — ${msg.reason}${msg.summary ? " / " + msg.summary : ""}\x1b[0m`);
       break;
     case "turn_end": {
       if (firstAudioAt && askedAt) {

@@ -6,11 +6,14 @@
 // as WhatsApp and the phone line. What is added here is everything that only
 // makes sense when the customer is looking at a web page:
 //
-//   navigate_site         drive the visitor's browser to the page being discussed
-//   capture_contact       turn an anonymous visitor into a lead mid-sentence
-//   request_callback      hand off to the outbound phone agent
-//   send_whatsapp_followup  put the conversation somewhere they'll see it later
-//   end_session           close the session politely
+//   navigate_site          drive the visitor's browser to the page being discussed
+//   offer_choices          put tappable answers under the agent's question
+//   capture_contact        turn an anonymous visitor into a lead mid-sentence
+//   request_callback       hand off to the outbound phone agent
+//   send_whatsapp_message  send them something on WhatsApp, in their words
+//   escalate_to_human      flag the thread for a person — or, for an anonymous
+//                          visitor, open the WhatsApp handoff form in the panel
+//   end_session            close the session politely
 //
 // navigate_site is the point of the whole feature. Everything else the agent
 // says could be said on the phone; making the page move while it talks is the
@@ -23,22 +26,25 @@
 // resolves who they are at call time rather than at build time.
 
 import { z } from "zod";
-import { upsertLead, conversationId, insertMessage, touchConversation } from "../db.mjs";
-import { phone10 as normalizePhone, sendTemplate } from "../wa.mjs";
+import { upsertLead, conversationId, touchConversation, recentMessages, flagHandoff, conversationByPhone } from "../db.mjs";
+import { phone10 as normalizePhone, sendMessage } from "../wa.mjs";
+
+/** How much of an existing thread the agent is shown when a returning visitor gives their number. */
+const HISTORY_ON_CAPTURE = 8;
 
 /** Where the agent is allowed to send the browser. Anything else is refused. */
 export const SITE_MAP = [
   { path: "/", label: "Home", about: "The agency overview and the ten heads." },
-  { path: "/heads/agents", label: "Agentic AI & workflow automation", about: "Multi-step AI agents across your apps." },
-  { path: "/heads/sdr", label: "Autonomous AI sales engine", about: "AI SDR on WhatsApp, email and LinkedIn." },
-  { path: "/heads/voice", label: "Voice AI & call automation", about: "Voice agents for support and telesales." },
-  { path: "/heads/geo", label: "GEO & programmatic SEO", about: "Being cited by ChatGPT, Perplexity and Gemini." },
-  { path: "/heads/erp", label: "AI-driven ERP & supply chain", about: "OCR from invoices straight into the ledger." },
-  { path: "/heads/ads", label: "Hyper-personalised ad campaigns", about: "Creative and targeting at ROAS." },
-  { path: "/heads/bi", label: "Business intelligence", about: "Dashboards and decision support." },
-  { path: "/heads/uiux", label: "UI/UX and product design", about: "Design work." },
-  { path: "/heads/api", label: "API and integration work", about: "Connecting systems." },
-  { path: "/heads/shield", label: "AI shield", about: "Brand safety and monitoring." },
+  { path: "/heads/sdr", label: "WhatsApp agents for sales & support", about: "AI agents that answer, qualify and book on WhatsApp." },
+  { path: "/heads/voice", label: "Voice agents", about: "Voice agents that pick up every call and never miss a lead." },
+  { path: "/heads/agents", label: "AI agents for everyday business tasks", about: "Multi-step AI agents and workflow automation across your apps." },
+  { path: "/heads/ecom", label: "Agents for online stores", about: "Agents that run and grow an e-commerce store." },
+  { path: "/heads/erp", label: "Invoices, stock & accounts by AI", about: "OCR from invoices straight into the ledger, stock and accounts." },
+  { path: "/heads/ads", label: "Facebook & Instagram ads", about: "Paid social campaigns that bring buyers." },
+  { path: "/heads/social", label: "Social media, managed daily", about: "Content and posting handled every day." },
+  { path: "/heads/campaign", label: "Google, YouTube & email campaigns", about: "Full-funnel campaigns." },
+  { path: "/heads/geo", label: "GEO & SEO", about: "Ranking on Google, ChatGPT and Perplexity." },
+  { path: "/heads/uiux", label: "Websites & product design", about: "Websites that turn visitors into customers." },
   { path: "/works", label: "Work", about: "Case studies and shipped projects." },
   { path: "/pricing", label: "Pricing", about: "Packages and what they include." },
   { path: "/about", label: "About", about: "Who we are." },
@@ -105,6 +111,29 @@ export function buildWebToolSpecs({ tracer, identity, outcome, emit, dialOut, de
     },
 
     {
+      name: "offer_choices",
+      node: "choices",
+      label: "Offer choices",
+      description:
+        "Show two to six tappable answers under what you just said. The visitor taps one and " +
+        "it arrives as their reply, exactly as written. Use it every time a question has a " +
+        "small set of likely answers — what kind of business, how leads reach them, which " +
+        "service, where to send something. Keep each option under six words. Ask the question " +
+        "out loud first, then call this; never read the options aloud one by one. A typed or " +
+        "spoken answer that is not on the list is fine too.",
+      schema: z.object({
+        options: z.array(z.string().max(48)).min(2).max(6).describe("The answers, in the visitor's language"),
+        prompt: z.string().max(120).optional().describe("Optional short label above the options"),
+      }),
+      run: traced("choices", "Offer choices", async ({ options, prompt }) => {
+        const clean = [...new Set(options.map((o) => o.trim()).filter(Boolean))].slice(0, 6);
+        if (clean.length < 2) return { shown: false, error: "Need at least two distinct options." };
+        emit({ type: "choices", options: clean, prompt: prompt ?? null });
+        return { shown: true, options: clean };
+      }),
+    },
+
+    {
       name: "capture_contact",
       node: "lead",
       label: "Capture contact",
@@ -136,7 +165,13 @@ export function buildWebToolSpecs({ tracer, identity, outcome, emit, dialOut, de
           return { saved: false, held_in_session: true, name, phone10: p10, email, company, intent };
         }
 
-        const lead = await upsertLead(p10, { name, status: "new" });
+        // A number we have seen before means a thread we can pick back up:
+        // hand the agent the tail of it so it greets them as a return visit,
+        // not a stranger. Checked before the upsert, which would create it.
+        const existing = await conversationByPhone(p10).catch(() => null);
+        const history = existing ? await recentMessages(p10, HISTORY_ON_CAPTURE).catch(() => []) : [];
+
+        const lead = await upsertLead(p10, { name, status: "new", source: "web-voice" });
         identity.conversationId = await conversationId(p10, name ?? null);
         if (intent || company) {
           await touchConversation(p10, {
@@ -147,7 +182,26 @@ export function buildWebToolSpecs({ tracer, identity, outcome, emit, dialOut, de
             bumpUnread: false,
           }).catch(() => {});
         }
-        return { saved: true, lead_id: lead?.id ?? null, phone10: p10, name, email, company, intent };
+        return {
+          saved: true,
+          lead_id: lead?.id ?? null,
+          phone10: p10,
+          name: name ?? existing?.contact_name ?? null,
+          email,
+          company,
+          intent,
+          known_lead: !!existing,
+          whatsapp_window_open: !!(existing?.window_open_until && new Date(existing.window_open_until) > new Date()),
+          previous_messages: history.map((m) => ({
+            from: m.direction === "in" ? "customer" : "us",
+            via: m.type === "voice" ? "voice" : "whatsapp",
+            text: m.body,
+            at: m.created_at,
+          })),
+          hint: existing
+            ? "You have spoken with this person before — acknowledge it and pick up where the thread left off."
+            : undefined,
+        };
       }),
     },
 
@@ -174,35 +228,127 @@ export function buildWebToolSpecs({ tracer, identity, outcome, emit, dialOut, de
     },
 
     {
-      name: "send_whatsapp_followup",
+      name: "send_whatsapp_message",
       node: "whatsapp",
-      label: "Send WhatsApp follow-up",
+      label: "Send WhatsApp message",
       description:
-        "Send them our approved WhatsApp intro so the conversation continues somewhere they " +
-        "will actually see it later. Use it near the end of a good conversation, or when they " +
-        "ask for something in writing. Tell them it is coming before you send it.",
+        "Send them a WhatsApp message, in your words, on the number you captured. Use it when " +
+        "they ask for something in writing, to send a summary of what you discussed, a price " +
+        "from the playbook, or a link — or near the end of a good conversation so it continues " +
+        "somewhere they will see it. Write it as a short WhatsApp message in their language. " +
+        "Tell them it is on its way before you send it. Claim only what the tool result " +
+        "confirms was actually sent.",
       schema: z.object({
+        text: z
+          .string()
+          .max(700)
+          .describe("The message, one to three short sentences, in the visitor's language"),
         reason: z.string().describe("Why, one short phrase"),
       }),
-      run: traced("whatsapp", "Send WhatsApp follow-up", async ({ reason }) => {
+      run: traced("whatsapp", "Send WhatsApp message", async ({ text, reason }) => {
         if (!identity.phone10)
           return { sent: false, error: "No number captured yet. Use capture_contact first, then try again." };
-        if (demo) return { sent: false, simulated: true, phone10: identity.phone10, reason };
-        const r = await sendTemplate(
-          identity.phone10,
-          process.env.WA_DEFAULT_TEMPLATE ?? "hi_intro",
-          "en",
-          [],
-          "web-voice"
-        );
-        await insertMessage(identity.phone10, {
-          direction: "out",
-          type: "template",
-          text: `[intro template sent from the website voice agent — ${reason}]`,
+        if (demo) return { sent: false, simulated: true, phone10: identity.phone10, text, reason };
+        // Free text only inside WhatsApp's 24-hour window. Otherwise the text
+        // rides inside the approved handoff template, which asks them to
+        // reply — the reply is what opens the window for everything after.
+        const r = await sendMessage(identity.phone10, text, { name: identity.name, source: "web-voice" });
+        emit({ type: "whatsapp", phone10: identity.phone10, mode: r.mode, text: r.text });
+        return {
+          sent: true,
+          message_id: r.messageId,
+          mode: r.mode,
+          delivered_as: r.text,
+          note:
+            r.mode === "template"
+              ? "They have not messaged us on WhatsApp yet, so it went inside our approved template " +
+                "and asks them to reply. Tell them to reply to it to continue there."
+              : undefined,
+          reason,
+        };
+      }),
+    },
+
+    {
+      name: "escalate_to_human",
+      node: "escalate",
+      label: "Escalate to human",
+      description:
+        "Hand this to a person. Use it when they ask for a human, when it turns into a dispute, " +
+        "a refund or a legal question, when the playbook cannot answer something they need " +
+        "decided, or when the voice connection is failing them. If you already have their " +
+        "number the thread is flagged for the team and the conversation continues on WhatsApp. " +
+        "If you do not, a WhatsApp form opens in the panel asking for their name and number — " +
+        "tell them to fill it in and that the team will message them there.",
+      schema: z.object({
+        reason: z.string().describe("Why this needs a person, one sentence"),
+        summary: z
+          .string()
+          .optional()
+          .describe("One sentence on what they want, for the human who picks it up"),
+        urgency: z.enum(["normal", "high"]).optional(),
+      }),
+      run: traced("escalate", "Escalate to human", async ({ reason, summary, urgency }) => {
+        outcome.escalated = true;
+        outcome.handoffReason = reason;
+        outcome.handoffSummary = summary ?? null;
+        if (demo) return { escalated: false, simulated: true, reason, urgency: urgency ?? "normal" };
+
+        if (!identity.phone10) {
+          // Anonymous. The panel opens the WhatsApp form; the form's submit
+          // creates the lead, flags the thread and sends the handoff template.
+          emit({ type: "handoff", reason, summary: summary ?? null, name: identity.name });
+          return {
+            escalated: true,
+            form_opened: true,
+            reason,
+            next:
+              "A WhatsApp form is now on their screen. Tell them to enter their name and WhatsApp " +
+              "number in it, and that the team will message them there. Do NOT call end_session — " +
+              "stay on the line until they say they have filled it in or say goodbye.",
+          };
+        }
+
+        await flagHandoff(identity.phone10, {
+          reason,
+          note: summary ?? null,
+          runId: tracer.id,
           source: "web-voice",
-        }).catch(() => {});
-        emit({ type: "whatsapp", phone10: identity.phone10 });
-        return { sent: true, message_id: r.messageId, reason };
+          contactName: identity.name,
+        });
+        // Put something in their hand: the handoff message, with the reason in
+        // it, so the thread exists on their phone before anyone picks it up.
+        let sent = null;
+        try {
+          sent = await sendMessage(
+            identity.phone10,
+            summary
+              ? `You asked to speak with someone about: ${summary}. A person from the team is picking this up.`
+              : "You asked to speak with someone from the team, and a person is picking this up.",
+            { name: identity.name, source: "web-voice" }
+          );
+          emit({ type: "whatsapp", phone10: identity.phone10, mode: sent.mode, text: sent.text });
+        } catch (err) {
+          console.error("escalate: whatsapp send failed", err.message);
+        }
+        emit({
+          type: "handoff",
+          reason,
+          summary: summary ?? null,
+          name: identity.name,
+          phone10: identity.phone10,
+          flagged: true,
+        });
+        return {
+          escalated: true,
+          thread_flagged: true,
+          whatsapp_sent: !!sent,
+          reason,
+          urgency: urgency ?? "normal",
+          next: sent
+            ? "Tell them a message is on their WhatsApp and a person will continue there."
+            : "Tell them the team has been notified and will reach them on WhatsApp.",
+        };
       }),
     },
 

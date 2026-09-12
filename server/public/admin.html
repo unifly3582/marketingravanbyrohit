@@ -4,264 +4,383 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ravan Command</title>
+<link rel="icon" href="/admin/logo-mark.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
+  /* Same tokens as site/src/index.css so the dashboard reads as part of marketingravan.com. */
   :root {
-    --bg:#f0f2f5; --panel:#ffffff; --line:#e4e7eb; --line-2:#d5d9de;
-    --text:#111b21; --muted:#667781; --faint:#8696a0;
-    --accent:#008069; --accent-2:#00a884; --accent-soft:#e7f8f3;
-    --out:#d9fdd3; --in:#ffffff; --chat-bg:#efeae2;
-    --blue:#53bdeb; --red:#d93025; --amber:#b45309; --amber-soft:#fef3c7; --red-soft:#fde8e6;
-    --shadow:0 1px 2px rgba(11,20,26,.08), 0 1px 1px rgba(11,20,26,.04);
-    --radius:12px;
+    --ground:#0D0907; --surface:#16100C; --card:#1D1510; --card2:#241A12;
+    --cream:#F4EADB; --muted:#A3937F; --faint:#6F6354;
+    --gold:#F0A32F; --ember:#E2571E; --maroon:#8E1F1F;
+    --line:rgba(244,234,219,.09); --line-2:rgba(244,234,219,.16);
+    --gold-soft:rgba(240,163,47,.12); --ember-soft:rgba(226,87,30,.14); --maroon-soft:rgba(142,31,31,.28);
+    --green:#4ade80; --green-soft:rgba(74,222,128,.12); --blue:#7cc4ff;
+    --display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+    --body:"Instrument Sans","Segoe UI",system-ui,sans-serif;
+    --radius:14px; --side:248px; --topbar:56px;
+    --shadow:0 1px 0 rgba(255,255,255,.02) inset, 0 8px 30px rgba(0,0,0,.35);
   }
   * { box-sizing:border-box; margin:0; }
-  [hidden] { display:none !important; } /* flex/grid display rules must not beat the hidden attribute */
+  [hidden] { display:none !important; }
   html,body { height:100%; }
-  body { background:var(--bg); color:var(--text); font:14px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing:antialiased; }
-  a { color:var(--accent); }
-  button { font:inherit; cursor:pointer; }
-  input,textarea,select { font:inherit; color:var(--text); background:#fff; border:1px solid var(--line-2); border-radius:8px; padding:9px 12px; width:100%; outline:none; }
-  input:focus,textarea:focus,select:focus { border-color:var(--accent-2); box-shadow:0 0 0 3px rgba(0,168,132,.15); }
-  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line-2); background:#fff; color:var(--text); border-radius:8px; padding:8px 14px; font-weight:500; white-space:nowrap; }
-  .btn:hover { background:#f7f8fa; }
-  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
-  .btn.primary:hover { background:#006f5b; }
-  .btn.danger { color:var(--red); border-color:#f3c2be; }
-  .btn.sm { padding:5px 10px; font-size:12px; }
-  .btn:disabled { opacity:.5; cursor:not-allowed; }
-  .muted { color:var(--muted); } .faint { color:var(--faint); }
-  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:600; background:#eef0f2; color:var(--muted); }
-  .pill.ok { background:var(--accent-soft); color:var(--accent); }
-  .pill.warn { background:var(--amber-soft); color:var(--amber); }
-  .pill.bad { background:var(--red-soft); color:var(--red); }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
-  label { display:block; font-size:12px; font-weight:600; color:var(--muted); margin:12px 0 5px; }
-  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
-  th,td { text-align:left; padding:11px 14px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; }
-  th { background:#fafbfc; color:var(--muted); font-weight:600; font-size:12px; }
-  tr:last-child td { border-bottom:0; }
-  tr.click { cursor:pointer; } tr.click:hover td { background:#f7f9fb; }
+  body { background:var(--ground); color:var(--cream); font:14px/1.5 var(--body); -webkit-font-smoothing:antialiased; overflow-x:hidden; }
+  ::selection { background:var(--ember); color:var(--cream); }
+  a { color:var(--gold); text-decoration:none; } a:hover { text-decoration:underline; }
+  h1,h2,h3 { font-family:var(--display); letter-spacing:-.01em; }
+  button { font:inherit; cursor:pointer; color:inherit; }
+  input,textarea,select { font:inherit; color:var(--cream); background:var(--surface); border:1px solid var(--line-2); border-radius:10px; padding:10px 13px; width:100%; outline:none; transition:border-color .2s, box-shadow .2s; }
+  input::placeholder,textarea::placeholder { color:var(--faint); }
+  input:focus,textarea:focus,select:focus { border-color:rgba(240,163,47,.6); box-shadow:0 0 0 3px rgba(240,163,47,.12); }
+  input[type=checkbox] { width:auto; accent-color:var(--gold); }
+  ::-webkit-scrollbar { width:10px; height:10px; } ::-webkit-scrollbar-thumb { background:rgba(244,234,219,.12); border-radius:99px; border:3px solid var(--ground); } ::-webkit-scrollbar-track { background:transparent; }
 
-  /* ---- app chrome ---- */
-  .top { background:var(--panel); border-bottom:1px solid var(--line); height:56px; display:flex; align-items:center; padding:0 20px; gap:24px; position:sticky; top:0; z-index:5; }
-  .brand { font-weight:700; font-size:16px; display:flex; align-items:center; gap:10px; }
-  .brand i { width:28px; height:28px; border-radius:8px; background:var(--accent); display:inline-flex; align-items:center; justify-content:center; color:#fff; font-style:normal; font-size:14px; }
-  .tabs { display:flex; gap:2px; height:100%; }
-  .tabs button { background:none; border:0; border-bottom:2px solid transparent; color:var(--muted); padding:0 12px; font-weight:500; height:100%; }
-  .tabs button.on { color:var(--accent); border-bottom-color:var(--accent); }
-  .tabs button:hover { color:var(--text); }
-  .tabs .badge { display:inline-flex; align-items:center; justify-content:center; background:var(--accent-2); color:#fff; border-radius:999px; min-width:18px; height:18px; padding:0 5px; font-size:11px; font-weight:700; margin-left:4px; vertical-align:middle; }
-  .top .sp { flex:1; }
-  .page { max-width:1180px; margin:0 auto; padding:22px 20px; }
-  .page.full { max-width:none; padding:0; height:calc(100vh - 56px); }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; border:1px solid var(--line-2); background:transparent; color:var(--cream); border-radius:999px; padding:9px 16px; font-weight:600; font-size:13px; letter-spacing:.02em; white-space:nowrap; transition:border-color .2s, background .2s, transform .2s, box-shadow .2s; }
+  .btn:hover { border-color:rgba(240,163,47,.5); background:rgba(240,163,47,.06); }
+  .btn.primary { background:linear-gradient(120deg,var(--gold),var(--ember)); border-color:transparent; color:#1a0d05; font-weight:700; box-shadow:0 8px 24px rgba(226,87,30,.25); }
+  .btn.primary:hover { transform:translateY(-1px); box-shadow:0 12px 30px rgba(226,87,30,.38); }
+  .btn.danger { color:#ff8b6b; border-color:rgba(226,87,30,.35); } .btn.danger:hover { background:var(--ember-soft); }
+  .btn.sm { padding:6px 12px; font-size:12px; }
+  .btn.icon { padding:7px 10px; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; transform:none; box-shadow:none; }
+  .muted { color:var(--muted); } .faint { color:var(--faint); }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; background:rgba(244,234,219,.07); color:var(--muted); border:1px solid var(--line); white-space:nowrap; }
+  .pill.ok { background:var(--gold-soft); color:var(--gold); border-color:rgba(240,163,47,.25); }
+  .pill.good { background:var(--green-soft); color:var(--green); border-color:rgba(74,222,128,.25); }
+  .pill.warn { background:var(--ember-soft); color:#ff9b7a; border-color:rgba(226,87,30,.3); }
+  .pill.bad { background:var(--maroon-soft); color:#ff8b8b; border-color:rgba(142,31,31,.5); }
+  .pill.you { background:rgba(124,196,255,.12); color:var(--blue); border-color:rgba(124,196,255,.3); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:22px; box-shadow:var(--shadow); }
+  .card + .card { margin-top:16px; }
+  label { display:block; font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:16px 0 7px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .eyebrow { display:inline-flex; align-items:center; gap:.6rem; font-size:.68rem; font-weight:700; letter-spacing:.18em; color:var(--gold); text-transform:uppercase; }
+  .eyebrow::before { content:""; width:1.6rem; height:1px; background:linear-gradient(90deg,var(--ember),var(--gold)); }
+
+  .tablewrap { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); overflow:auto; box-shadow:var(--shadow); }
+  table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; padding:12px 16px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; }
+  th { background:var(--surface); color:var(--muted); font-weight:700; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; }
+  tr:last-child td { border-bottom:0; }
+  tr.click { cursor:pointer; } tr.click:hover td { background:rgba(244,234,219,.03); }
+
+  /* ---- shell ---- */
+  #app { display:grid; grid-template-columns:var(--side) 1fr; min-height:100vh; }
+  .scrim { display:none; position:fixed; inset:0; background:rgba(13,9,7,.6); z-index:25; }
+  .side-nav { position:sticky; top:0; height:100vh; background:var(--surface); border-right:1px solid var(--line); display:flex; flex-direction:column; padding:18px 14px; gap:6px; }
+  .brand { display:flex; align-items:center; gap:11px; padding:6px 8px 18px; border-bottom:1px solid var(--line); margin-bottom:12px; }
+  .brand img { width:38px; height:38px; border-radius:50%; object-fit:cover; object-position:top; box-shadow:0 0 0 2px rgba(240,163,47,.25); }
+  .brand b { font-family:var(--display); font-size:13px; font-weight:700; letter-spacing:.06em; line-height:1.2; display:block; }
+  .brand b em { color:var(--gold); font-style:normal; }
+  .brand span { font-size:10.5px; color:var(--muted); letter-spacing:.14em; text-transform:uppercase; }
+  .nav-label { font-size:10px; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:var(--faint); padding:10px 12px 4px; }
+  .nav a { display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:11px; color:var(--muted); font-weight:600; font-size:13.5px; letter-spacing:.01em; transition:background .15s, color .15s; text-decoration:none; }
+  .nav a svg { width:18px; height:18px; flex:none; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; opacity:.85; }
+  .nav a:hover { background:rgba(244,234,219,.04); color:var(--cream); text-decoration:none; }
+  .nav a.on { background:linear-gradient(90deg,rgba(240,163,47,.16),rgba(240,163,47,.04)); color:var(--cream); box-shadow:inset 3px 0 0 var(--gold); }
+  .nav a.on svg { color:var(--gold); opacity:1; }
+  .nav a .sp { flex:1; }
+  .badge { display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(120deg,var(--gold),var(--ember)); color:#1a0d05; border-radius:999px; min-width:20px; height:20px; padding:0 7px; font-size:11px; font-weight:800; }
+  .badge.red { background:var(--maroon); color:#fff; }
+  .side-foot { margin-top:auto; border-top:1px solid var(--line); padding-top:14px; display:flex; flex-direction:column; gap:10px; }
+  .agentstate { display:flex; align-items:center; gap:9px; padding:10px 12px; border-radius:11px; background:var(--card); border:1px solid var(--line); font-size:12px; color:var(--muted); }
+  .agentstate i { width:8px; height:8px; border-radius:50%; background:var(--faint); flex:none; box-shadow:0 0 0 3px rgba(244,234,219,.05); }
+  .agentstate.on i { background:var(--green); box-shadow:0 0 0 3px var(--green-soft); }
+  .agentstate b { color:var(--cream); font-weight:600; display:block; }
+
+  .main { min-width:0; display:flex; flex-direction:column; min-height:100vh; }
+  .topbar { display:none; }
+  .pagehead { padding:30px 36px 8px; display:flex; align-items:flex-end; gap:18px; flex-wrap:wrap; }
+  .pagehead h1 { font-size:30px; font-weight:700; margin-top:6px; }
+  .pagehead p { color:var(--muted); font-size:13.5px; margin-top:4px; }
+  .pagehead .sp { flex:1; }
+  .page { padding:22px 36px 40px; max-width:1240px; width:100%; }
+  .page.full { max-width:none; padding:0; flex:1; display:flex; min-height:0; }
 
   /* ---- login ---- */
-  #login { max-width:360px; margin:14vh auto; }
-  #login h1 { font-size:20px; margin-bottom:4px; }
+  #login { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; position:relative; overflow:hidden; }
+  #login::before { content:""; position:absolute; left:50%; top:-20%; width:70vmax; height:70vmax; transform:translateX(-50%); border-radius:50%; background:radial-gradient(circle, rgba(240,163,47,.22) 0%, rgba(226,87,30,.1) 35%, rgba(226,87,30,0) 65%); pointer-events:none; }
+  #login .card { position:relative; width:100%; max-width:400px; padding:34px; }
+  #login .brand { border:0; margin:0 0 10px; padding:0 0 10px; }
+  #login h1 { font-size:26px; margin-top:8px; }
+  #login p { color:var(--muted); font-size:13.5px; margin:6px 0 20px; }
 
   /* ---- overview ---- */
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:18px; }
-  .stat { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); }
-  .stat b { font-size:26px; display:block; font-weight:700; } .stat span { color:var(--muted); font-size:12px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:20px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); position:relative; overflow:hidden; }
+  .stat::after { content:""; position:absolute; right:-30px; top:-30px; width:90px; height:90px; border-radius:50%; background:radial-gradient(circle, rgba(240,163,47,.14), transparent 70%); }
+  .stat b { font-family:var(--display); font-size:30px; font-weight:700; display:block; line-height:1.1; }
+  .stat span { color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; display:block; margin-top:6px; }
+  .stat.hot b { color:var(--gold); } .stat.alert b { color:#ff8b6b; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
 
   /* ---- chats ---- */
-  .chat { display:grid; grid-template-columns:360px 1fr; height:100%; background:var(--panel); }
-  .side { border-right:1px solid var(--line); display:flex; flex-direction:column; min-width:0; }
-  .side .search { padding:10px 12px; border-bottom:1px solid var(--line); display:flex; gap:8px; align-items:center; }
-  .side .search input { background:#f0f2f5; border-color:transparent; padding:8px 12px; }
-  .filters { display:flex; gap:6px; padding:8px 12px; border-bottom:1px solid var(--line); }
-  .filters button { border:1px solid var(--line-2); background:#fff; color:var(--muted); border-radius:999px; padding:3px 12px; font-size:12px; }
-  .filters button.on { background:var(--accent-soft); border-color:transparent; color:var(--accent); font-weight:600; }
-  .convs { flex:1; overflow:auto; }
-  .conv { display:grid; grid-template-columns:44px 1fr auto; gap:0 12px; padding:10px 14px; cursor:pointer; border-bottom:1px solid #f1f3f5; align-items:center; }
-  .conv:hover { background:#f5f6f6; } .conv.on { background:#f0f2f5; }
-  .av { width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600; font-size:15px; grid-row:span 2; }
-  .conv .name { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chat { display:grid; grid-template-columns:340px 1fr; flex:1; min-height:0; height:100vh; background:var(--ground); overflow:hidden; }
+  .side { border-right:1px solid var(--line); background:var(--surface); display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .side .search { padding:14px 14px 10px; display:flex; gap:8px; align-items:center; }
+  .side .search h2 { font-size:18px; font-weight:700; padding:0 4px; }
+  .side .search input { background:var(--card); border-color:transparent; padding:9px 13px; border-radius:999px; }
+  .filters { display:flex; gap:6px; padding:4px 14px 12px; border-bottom:1px solid var(--line); overflow-x:auto; scrollbar-width:none; } .filters::-webkit-scrollbar { display:none; }
+  .filters button { border:1px solid var(--line); background:transparent; color:var(--muted); border-radius:999px; padding:4px 12px; font-size:11.5px; font-weight:600; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
+  .filters button.on { background:var(--gold-soft); border-color:rgba(240,163,47,.35); color:var(--gold); }
+  .convs { flex:1; overflow:auto; padding:6px 8px; }
+  .conv { display:grid; grid-template-columns:42px 1fr auto; gap:0 12px; padding:10px 10px; cursor:pointer; border-radius:12px; align-items:center; margin-bottom:2px; }
+  .conv:hover { background:rgba(244,234,219,.04); } .conv.on { background:var(--card); box-shadow:inset 0 0 0 1px var(--line-2); }
+  .av { width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#1a0d05; font-weight:700; font-size:14px; grid-row:span 2; font-family:var(--display); }
+  .conv .name { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:13.5px; }
   .conv .when { font-size:11px; color:var(--faint); justify-self:end; }
-  .conv .prev { color:var(--muted); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .conv .badge { justify-self:end; background:var(--accent-2); color:#fff; border-radius:999px; min-width:20px; height:20px; padding:0 6px; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
-  .conv .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent-2); margin-left:6px; vertical-align:middle; }
+  .conv .prev { color:var(--muted); font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .conv .badge { justify-self:end; }
+  .conv .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green); margin-left:6px; vertical-align:middle; box-shadow:0 0 0 3px var(--green-soft); }
+  .conv .flags { display:flex; gap:4px; margin-top:4px; grid-column:2 / span 2; flex-wrap:wrap; }
+  .conv .flags .pill { padding:0 7px; font-size:9.5px; }
   .empty { padding:40px 20px; text-align:center; color:var(--muted); }
 
-  .thread { display:flex; flex-direction:column; min-width:0; background:var(--chat-bg); }
-  .thread .head { background:#f0f2f5; border-bottom:1px solid var(--line); padding:10px 16px; display:flex; align-items:center; gap:12px; min-height:60px; }
-  .thread .head .av { width:40px; height:40px; grid-row:auto; font-size:14px; }
-  .thread .head .who b { display:block; font-weight:600; } .thread .head .who span { font-size:12px; color:var(--muted); }
+  .thread { display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--ground); }
+  .thread .head { background:var(--surface); border-bottom:1px solid var(--line); padding:10px 18px; display:flex; align-items:center; gap:12px; min-height:64px; flex-wrap:wrap; }
+  .thread .head .av { width:38px; height:38px; grid-row:auto; font-size:13px; }
+  .thread .head .who b { display:block; font-weight:700; font-family:var(--display); font-size:15px; } .thread .head .who span { font-size:12px; color:var(--muted); }
   .thread .head .sp { flex:1; }
-  .msgs { flex:1; overflow:auto; padding:18px 8%; display:flex; flex-direction:column; gap:4px;
-          background-image:radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px); background-size:22px 22px; }
-  .day { align-self:center; background:#fff; color:var(--muted); font-size:11.5px; font-weight:500; padding:4px 12px; border-radius:8px; box-shadow:var(--shadow); margin:10px 0 6px; }
-  .m { max-width:65%; padding:7px 9px 5px 10px; border-radius:10px; box-shadow:var(--shadow); white-space:pre-wrap; word-break:break-word; font-size:14px; line-height:1.4; position:relative; }
-  .m.in { background:var(--in); align-self:flex-start; border-top-left-radius:2px; }
-  .m.out { background:var(--out); align-self:flex-end; border-top-right-radius:2px; }
+  .msgs { flex:1; overflow:auto; padding:22px 7%; display:flex; flex-direction:column; gap:4px;
+          background-image:radial-gradient(rgba(244,234,219,.05) 1px, transparent 1px); background-size:24px 24px; }
+  .day { align-self:center; background:var(--card); color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:4px 12px; border-radius:999px; border:1px solid var(--line); margin:12px 0 8px; }
+  .m { max-width:62%; padding:9px 12px 6px; border-radius:14px; white-space:pre-wrap; word-break:break-word; font-size:14px; line-height:1.45; position:relative; border:1px solid var(--line); }
+  .m.in { background:var(--card); align-self:flex-start; border-top-left-radius:4px; }
+  .m.out { background:linear-gradient(135deg,rgba(240,163,47,.16),rgba(226,87,30,.12)); border-color:rgba(240,163,47,.22); align-self:flex-end; border-top-right-radius:4px; }
   .m + .m.in, .m + .m.out { margin-top:2px; }
-  .m.in + .m.out, .m.out + .m.in { margin-top:10px; }
-  .m .meta { display:flex; justify-content:flex-end; gap:5px; align-items:center; font-size:10.5px; color:var(--faint); margin-top:3px; }
-  .m .tick { font-size:12px; letter-spacing:-2px; } .m .tick.read { color:var(--blue); } .m .tick.failed { color:var(--red); letter-spacing:0; font-size:10.5px; }
-  .m .kind { display:inline-flex; align-items:center; gap:6px; background:rgba(0,0,0,.05); border-radius:8px; padding:6px 10px; margin-bottom:4px; font-size:13px; color:var(--muted); }
-  .m .btnreply { display:inline-block; border:1px solid var(--accent-2); color:var(--accent); border-radius:8px; padding:3px 12px; font-weight:500; }
-  .m .tpl { font-size:10.5px; color:var(--faint); text-transform:uppercase; letter-spacing:.4px; margin-bottom:3px; }
-  .m.voice { border-left:3px solid var(--accent-2); }
+  .m.in + .m.out, .m.out + .m.in { margin-top:12px; }
+  .m .meta { display:flex; justify-content:flex-end; gap:6px; align-items:center; font-size:10.5px; color:var(--faint); margin-top:4px; }
+  .m .tick { font-size:12px; letter-spacing:-2px; } .m .tick.read { color:var(--gold); } .m .tick.failed { color:#ff8b6b; letter-spacing:0; font-size:10.5px; }
+  .m .kind { display:inline-flex; align-items:center; gap:6px; background:rgba(244,234,219,.06); border-radius:8px; padding:6px 10px; margin-bottom:4px; font-size:13px; color:var(--muted); }
+  .m .btnreply { display:inline-block; border:1px solid rgba(240,163,47,.5); color:var(--gold); border-radius:999px; padding:3px 12px; font-weight:600; }
+  .m .tpl { font-size:10px; color:var(--gold); text-transform:uppercase; letter-spacing:.12em; font-weight:700; margin-bottom:4px; }
+  .m.voice { border-left:3px solid var(--gold); }
+  .m.form { border-left:3px solid var(--blue); }
   .m .src { font-size:10px; color:var(--faint); }
-  .compose { background:#f0f2f5; border-top:1px solid var(--line); padding:10px 14px; display:flex; gap:10px; align-items:flex-end; }
-  .compose textarea { resize:none; max-height:140px; min-height:42px; border-radius:10px; }
-  .compose .btn { height:42px; }
-  .closed { background:var(--amber-soft); color:var(--amber); padding:10px 16px; font-size:13px; display:flex; gap:10px; align-items:center; border-top:1px solid #fde68a; }
-  .closed .sp { flex:1; }
-  .nochat { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--muted); gap:8px; }
-  .nochat b { font-size:18px; color:var(--text); font-weight:600; }
+  .m.voice .src { color:var(--gold); }
+  .compose { background:var(--surface); border-top:1px solid var(--line); padding:12px 16px; display:flex; gap:10px; align-items:flex-end; }
+  .compose textarea { resize:none; max-height:140px; min-height:44px; border-radius:14px; background:var(--card); }
+  .compose .btn { height:44px; }
+  .bar { padding:10px 18px; font-size:13px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-bottom:1px solid var(--line); }
+  .bar .sp { flex:1; }
+  .closed { background:var(--ember-soft); color:#ffb39a; border-top:1px solid rgba(226,87,30,.3); border-bottom:0; }
+  .handoff { background:var(--maroon-soft); color:#ffc9c9; border-bottom-color:rgba(142,31,31,.5); }
+  .handoff b { color:#ff8b8b; }
+  .modebar { background:var(--gold-soft); color:var(--gold); border-bottom-color:rgba(240,163,47,.2); }
+  .modebar.human { background:rgba(124,196,255,.1); color:var(--blue); border-bottom-color:rgba(124,196,255,.25); }
+  .nochat { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--muted); gap:8px; text-align:center; padding:24px; }
+  .nochat b { font-family:var(--display); font-size:22px; color:var(--cream); font-weight:700; }
   .back { display:none; }
 
-  /* ---- template picker ---- */
-  dialog { margin:auto; border:0; border-radius:14px; padding:0; max-width:560px; width:94%; box-shadow:0 20px 60px rgba(0,0,0,.25); color:var(--text); }
-  dialog::backdrop { background:rgba(17,27,33,.45); }
-  .dlg-h { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; } .dlg-h b { font-size:15px; flex:1; }
-  .dlg-b { padding:16px 20px; max-height:65vh; overflow:auto; }
-  .dlg-f { padding:12px 20px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px; }
-  .tplitem { border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px; cursor:pointer; }
-  .tplitem:hover { border-color:var(--accent-2); } .tplitem.on { border-color:var(--accent); background:var(--accent-soft); }
+  /* ---- dialog ---- */
+  dialog { margin:auto; border:1px solid var(--line-2); border-radius:18px; padding:0; max-width:580px; width:94%; box-shadow:0 30px 80px rgba(0,0,0,.6); color:var(--cream); background:var(--card); }
+  dialog::backdrop { background:rgba(13,9,7,.7); backdrop-filter:blur(4px); }
+  .dlg-h { padding:16px 22px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; } .dlg-h b { font-family:var(--display); font-size:16px; flex:1; }
+  .dlg-b { padding:18px 22px; max-height:65vh; overflow:auto; }
+  .dlg-f { padding:14px 22px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px; }
+  .tplitem { border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; cursor:pointer; background:var(--surface); }
+  .tplitem:hover { border-color:rgba(240,163,47,.4); } .tplitem.on { border-color:var(--gold); background:var(--gold-soft); }
   .tplitem b { display:block; } .tplitem p { color:var(--muted); font-size:13px; white-space:pre-wrap; margin-top:4px; }
-  pre.json { background:#f6f8fa; border:1px solid var(--line); border-radius:10px; padding:12px; font-size:12px; overflow:auto; max-height:60vh; white-space:pre-wrap; word-break:break-all; }
-  .turn { margin-bottom:8px; } .turn b { color:var(--accent); }
+  pre.json { background:var(--ground); border:1px solid var(--line); border-radius:10px; padding:12px; font-size:12px; overflow:auto; max-height:60vh; white-space:pre-wrap; word-break:break-all; color:var(--muted); }
+  .turn { margin-bottom:8px; } .turn b { color:var(--gold); }
   .urlbox { display:flex; gap:8px; align-items:center; }
-  .urlbox code { flex:1; background:#f6f8fa; border:1px solid var(--line); border-radius:8px; padding:10px 12px; font-size:13px; word-break:break-all; }
-  ol.steps { padding-left:20px; color:var(--muted); font-size:13px; } ol.steps li { margin:4px 0; } ol.steps code { background:#f0f2f5; padding:1px 5px; border-radius:4px; }
+  .urlbox code { flex:1; background:var(--ground); border:1px solid var(--line); border-radius:10px; padding:11px 13px; font-size:13px; word-break:break-all; color:var(--gold); }
+  ol.steps { padding-left:20px; color:var(--muted); font-size:13px; } ol.steps li { margin:5px 0; } ol.steps code { background:var(--ground); padding:1px 6px; border-radius:5px; color:var(--cream); }
 
-  @media (max-width: 760px) {
-    .chat { grid-template-columns:1fr; }
+  @media (max-width: 900px) {
+    #app { grid-template-columns:1fr; }
+    .topbar { display:flex; align-items:center; gap:12px; height:var(--topbar); padding:0 14px; background:var(--surface); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:20; }
+    .topbar .brand { border:0; margin:0; padding:0; flex:1; } .topbar .brand img { width:30px; height:30px; } .topbar .brand span { display:none; }
+    .side-nav { position:fixed; left:0; top:0; bottom:0; width:min(84vw, 300px); z-index:30; transform:translateX(-102%); transition:transform .25s ease; box-shadow:0 0 60px rgba(0,0,0,.6); }
+    body.menu .side-nav { transform:none; }
+    body.menu .scrim { display:block; }
+    .pagehead { padding:20px 16px 4px; } .pagehead h1 { font-size:24px; }
+    .page { padding:14px 16px 32px; }
+    .chat { grid-template-columns:1fr; height:calc(100vh - var(--topbar)); }
     .chat.open .side { display:none; }
     .chat:not(.open) .thread { display:none; }
     .back { display:inline-flex; }
-    .msgs { padding:14px 12px; } .m { max-width:85%; }
-    body { overflow-x:hidden; }
-    .top { gap:10px; padding:0 10px; }
-    .brand span { display:none; }
-    .tabs { overflow-x:auto; scrollbar-width:none; } .tabs::-webkit-scrollbar { display:none; }
-    .tabs button { padding:0 8px; font-size:13px; white-space:nowrap; }
+    .msgs { padding:14px 12px; } .m { max-width:86%; }
     .thread .head { padding:8px 10px; gap:8px; }
     .thread .head .btn .lbl { display:none; }
-    .msgs { padding:14px 10px; }
+    .grid2 { grid-template-columns:1fr; }
   }
 </style>
 </head>
 <body>
 <div id="login" hidden>
   <div class="card">
-    <h1>Ravan Command</h1>
-    <p class="muted" style="margin-bottom:14px">Calls · WhatsApp · Leads</p>
+    <div class="brand"><img src="/admin/logo-mark.png" alt=""><div><b>MARKETING <em>RAVAN</em></b><span>Command</span></div></div>
+    <span class="eyebrow">Dashboard</span>
+    <h1>Sign in</h1>
+    <p>Calls, WhatsApp, leads and the agent playbook.</p>
     <input id="pw" type="password" placeholder="Dashboard password" onkeydown="if(event.key==='Enter')login()">
-    <button class="btn primary" style="width:100%;justify-content:center;margin-top:10px" onclick="login()">Sign in</button>
-    <p id="loginerr" class="muted" style="margin-top:8px"></p>
+    <button class="btn primary" style="width:100%;margin-top:12px" onclick="login()">Enter</button>
+    <p id="loginerr" class="muted" style="margin:10px 0 0;min-height:1.2em"></p>
   </div>
 </div>
 
 <div id="app" hidden>
-  <div class="top">
-    <div class="brand"><i>R</i><span>Ravan Command</span></div>
-    <div class="tabs">
-      <button data-t="inbox" class="on">Chats <span id="unreadTotal" class="badge" hidden></span></button>
-      <button data-t="overview">Overview</button>
-      <button data-t="calls">Calls</button>
-      <button data-t="webhook">Webhook</button>
-      <button data-t="offers">Offers</button>
-      <button data-t="playbook">Playbook</button>
+  <div class="scrim" onclick="document.body.classList.remove('menu')"></div>
+  <aside class="side-nav">
+    <div class="brand"><img src="/admin/logo-mark.png" alt=""><div><b>MARKETING <em>RAVAN</em></b><span>Command</span></div></div>
+    <div class="nav-label">Inbox</div>
+    <nav class="nav">
+      <a href="#chats" data-t="inbox" class="on">
+        <svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.4A8 8 0 1 1 21 12z"/></svg>Chats<span class="sp"></span><span id="unreadTotal" class="badge" hidden></span>
+      </a>
+      <a href="#calls" data-t="calls">
+        <svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>Calls
+      </a>
+    </nav>
+    <div class="nav-label">Agent</div>
+    <nav class="nav">
+      <a href="#overview" data-t="overview">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>Overview<span class="sp"></span><span id="humanTotal" class="badge red" hidden title="Threads that need a person"></span>
+      </a>
+      <a href="#offers" data-t="offers">
+        <svg viewBox="0 0 24 24"><path d="M20 12l-8 8-9-9V4h7l10 8z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg>Offers
+      </a>
+      <a href="#playbook" data-t="playbook">
+        <svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16H6a2 2 0 0 1-2-2z"/><path d="M8 3v18M12 8h5M12 12h5"/></svg>Playbook
+      </a>
+    </nav>
+    <div class="nav-label">System</div>
+    <nav class="nav">
+      <a href="#webhook" data-t="webhook">
+        <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Webhook
+      </a>
+    </nav>
+    <div class="side-foot">
+      <div class="agentstate" id="agentstate"><i></i><div><b>AI auto-reply</b><span id="agentstateTxt">checking…</span></div></div>
+      <button class="btn sm" onclick="logout()">Sign out</button>
     </div>
-    <span class="sp"></span>
-    <button class="btn sm" onclick="logout()">Sign out</button>
-  </div>
+  </aside>
 
-  <!-- ================= CHATS ================= -->
-  <div id="t-inbox" class="page full">
-    <div class="chat" id="chat">
-      <div class="side">
-        <div class="search"><input id="q" placeholder="Search name or number" oninput="drawConvs()"></div>
-        <div class="filters">
-          <button class="on" data-f="all" onclick="setFilter('all')">All</button>
-          <button data-f="unread" onclick="setFilter('unread')">Unread</button>
-          <button data-f="open" onclick="setFilter('open')">Window open</button>
+  <div class="main">
+    <div class="topbar">
+      <button class="btn icon" aria-label="Menu" onclick="document.body.classList.toggle('menu')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <div class="brand"><img src="/admin/logo-mark.png" alt=""><div><b>MARKETING <em>RAVAN</em></b></div></div>
+      <span id="unreadTop" class="badge" hidden></span>
+    </div>
+
+    <div class="pagehead" id="pagehead" hidden>
+      <div><span class="eyebrow" id="peyebrow">Ravan Command</span><h1 id="ptitle"></h1><p id="psub"></p></div>
+      <span class="sp"></span>
+      <button class="btn sm" onclick="refresh()">↻ Refresh</button>
+    </div>
+
+    <!-- ================= CHATS ================= -->
+    <div id="t-inbox" class="page full">
+      <div class="chat" id="chat">
+        <div class="side">
+          <div class="search"><h2>Chats</h2><span style="flex:1"></span></div>
+          <div class="search" style="padding-top:0"><input id="q" placeholder="Search name or number" oninput="drawConvs()"></div>
+          <div class="filters">
+            <button class="on" data-f="all" onclick="setFilter('all')">All</button>
+            <button data-f="unread" onclick="setFilter('unread')">Unread</button>
+            <button data-f="open" onclick="setFilter('open')">Window open</button>
+            <button data-f="human" onclick="setFilter('human')">Needs human <span id="humanTotal2" class="badge red" hidden></span></button>
+            <button data-f="web" onclick="setFilter('web')">From website</button>
+          </div>
+          <div class="convs" id="convs"></div>
         </div>
-        <div class="convs" id="convs"></div>
+        <div class="thread">
+          <div class="head" id="thead" hidden></div>
+          <div class="bar handoff" id="handoffbar" hidden></div>
+          <div class="bar modebar" id="modebar" hidden></div>
+          <div class="nochat" id="nochat"><span class="eyebrow">Inbox</span><b>Pick a conversation</b><span>WhatsApp messages and website voice handoffs show up on the left.</span></div>
+          <div class="msgs" id="msgs" hidden></div>
+          <div class="bar closed" id="closed" hidden>
+            <span>⏳</span><span>The 24-hour reply window is closed. Free text will not deliver — send an approved template to reopen it.</span>
+            <span class="sp"></span><button class="btn sm primary" onclick="openTemplates()">Send template</button>
+          </div>
+          <div class="compose" id="compose" hidden>
+            <button class="btn icon" title="Send a template" onclick="openTemplates()">📋</button>
+            <textarea id="reply" rows="1" placeholder="Type a message…" title="Enter to send, Shift+Enter for a new line" oninput="growReply()" onkeydown="replyKey(event)"></textarea>
+            <button class="btn primary" id="sendBtn" onclick="sendReply()">Send</button>
+          </div>
+        </div>
       </div>
-      <div class="thread">
-        <div class="head" id="thead" hidden></div>
-        <div class="nochat" id="nochat"><b>Pick a conversation</b><span>Incoming WhatsApp messages show up on the left.</span></div>
-        <div class="msgs" id="msgs" hidden></div>
-        <div class="closed" id="closed" hidden>
-          <span>⏳</span><span>The 24-hour reply window is closed. Free text will not deliver — send an approved template to reopen it.</span>
-          <span class="sp"></span><button class="btn sm primary" onclick="openTemplates()">Send template</button>
+    </div>
+
+    <!-- ================= OVERVIEW ================= -->
+    <div id="t-overview" class="page" hidden>
+      <div class="stats" id="stats"></div>
+      <div class="grid2">
+        <div class="card">
+          <span class="eyebrow">Voice agent</span>
+          <label>Dial a number with the AI voice agent</label>
+          <div class="row"><input id="dialNum" placeholder="10-digit mobile" style="max-width:240px"><button class="btn primary" onclick="dial()">Call via AI</button><span id="dialmsg" class="muted"></span></div>
         </div>
-        <div class="compose" id="compose" hidden>
-          <button class="btn" title="Send a template" onclick="openTemplates()">📋</button>
-          <textarea id="reply" rows="1" placeholder="Type a message…" title="Enter to send, Shift+Enter for a new line" oninput="growReply()" onkeydown="replyKey(event)"></textarea>
-          <button class="btn primary" id="sendBtn" onclick="sendReply()">Send</button>
+        <div class="card">
+          <span class="eyebrow">Needs a person</span>
+          <div id="humanList" style="margin-top:12px"></div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- ================= OVERVIEW ================= -->
-  <div id="t-overview" class="page" hidden>
-    <div class="cards" id="stats"></div>
-    <div class="card" style="max-width:560px">
-      <label>Dial a number with the AI voice agent</label>
-      <div class="row"><input id="dialNum" placeholder="10-digit mobile" style="max-width:240px"><button class="btn primary" onclick="dial()">Call via AI</button><span id="dialmsg" class="muted"></span></div>
+    <!-- ================= CALLS ================= -->
+    <div id="t-calls" class="page" hidden>
+      <div class="tablewrap"><table><thead><tr><th>When</th><th>Number</th><th>Name</th><th>Status</th><th>Duration</th><th></th></tr></thead><tbody id="callrows"></tbody></table></div>
     </div>
-  </div>
 
-  <!-- ================= CALLS ================= -->
-  <div id="t-calls" class="page" hidden>
-    <table><thead><tr><th>When</th><th>Number</th><th>Name</th><th>Status</th><th>Duration</th><th></th></tr></thead><tbody id="callrows"></tbody></table>
-  </div>
+    <!-- ================= WEBHOOK ================= -->
+    <div id="t-webhook" class="page" hidden>
+      <div class="card" style="margin-bottom:16px">
+        <span class="eyebrow">Inbound endpoint</span>
+        <label>Webhook URL — paste into the BSP panel (crm.marketingravan.com → WhatsApp → Webhook)</label>
+        <div class="urlbox"><code id="whurl">…</code><button class="btn" onclick="copyUrl()">Copy</button></div>
+        <p class="muted" id="whmeta" style="margin-top:10px;font-size:13px"></p>
+        <ol class="steps" style="margin-top:12px">
+          <li>The panel sends <code>GET …?challange=&lt;random&gt;</code>; this server echoes the value back with 200, which is what makes the panel accept the URL.</li>
+          <li>After that every message, button tap, delivery status and phone-app echo is POSTed here, stored raw, then parsed into conversations and messages.</li>
+          <li>Send a WhatsApp to the business number and watch it appear below within seconds, then under Chats.</li>
+        </ol>
+      </div>
+      <div class="tablewrap"><table><thead><tr><th style="width:60px">#</th><th style="width:150px">Received</th><th style="width:110px">Kind</th><th>Summary</th></tr></thead><tbody id="whrows"></tbody></table></div>
+      <p class="empty" id="whempty" hidden>No webhook deliveries yet — the BSP has not called this URL.</p>
+    </div>
 
-  <!-- ================= WEBHOOK ================= -->
-  <div id="t-webhook" class="page" hidden>
-    <div class="card" style="margin-bottom:16px">
-      <label style="margin-top:0">Webhook URL — paste into the BSP panel (crm.marketingravan.com → WhatsApp → Webhook)</label>
-      <div class="urlbox"><code id="whurl">…</code><button class="btn" onclick="copyUrl()">Copy</button></div>
-      <p class="muted" id="whmeta" style="margin-top:8px;font-size:13px"></p>
-      <ol class="steps" style="margin-top:10px">
-        <li>The panel sends <code>GET …?challange=&lt;random&gt;</code>; this server echoes the value back with 200, which is what makes the panel accept the URL.</li>
-        <li>After that every message, button tap, delivery status and phone-app echo is POSTed here, stored raw, then parsed into conversations and messages.</li>
-        <li>Send a WhatsApp to the business number and watch it appear below within seconds, then under Chats.</li>
-      </ol>
+    <!-- ================= OFFERS ================= -->
+    <div id="t-offers" class="page" hidden>
+      <div class="grid2">
+        <div class="card">
+          <span class="eyebrow">What the agent pitches</span>
+          <label>Offer name</label><input id="oname">
+          <label>Pitch — what the agent should discuss/offer</label><textarea id="opitch" rows="5"></textarea>
+          <label>Goal of the call</label><input id="ogoal" placeholder="e.g. book a strategy meeting">
+          <div class="row" style="margin-top:16px"><label style="margin:0;display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;color:var(--cream)"><input type="checkbox" id="oactive"> Active</label>
+          <button class="btn primary" onclick="saveOffer()">Save offer</button><span id="omsg" class="muted"></span></div>
+        </div>
+        <div class="tablewrap"><table><thead><tr><th>Name</th><th>Goal</th><th>Active</th></tr></thead><tbody id="offerrows"></tbody></table></div>
+      </div>
     </div>
-    <table><thead><tr><th style="width:60px">#</th><th style="width:150px">Received</th><th style="width:110px">Kind</th><th>Summary</th></tr></thead><tbody id="whrows"></tbody></table>
-    <p class="empty" id="whempty" hidden>No webhook deliveries yet — the BSP has not called this URL.</p>
-  </div>
 
-  <!-- ================= OFFERS ================= -->
-  <div id="t-offers" class="page" hidden>
-    <div class="card" style="max-width:640px;margin-bottom:16px">
-      <label style="margin-top:0">Offer name</label><input id="oname">
-      <label>Pitch — what the agent should discuss/offer</label><textarea id="opitch" rows="5"></textarea>
-      <label>Goal of the call</label><input id="ogoal" placeholder="e.g. book a strategy meeting">
-      <div class="row" style="margin-top:12px"><label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="oactive" style="width:auto"> active</label>
-      <button class="btn primary" onclick="saveOffer()">Save offer</button><span id="omsg" class="muted"></span></div>
+    <!-- ================= PLAYBOOK ================= -->
+    <div id="t-playbook" class="page" hidden>
+      <div class="grid2" style="margin-bottom:16px">
+        <div class="card">
+          <span class="eyebrow">Rules the agent quotes</span>
+          <p class="muted" style="font-size:13px;margin-top:8px">The agent quotes these word for word and will not state a price or policy that is not here. Saving re-embeds the rule automatically.</p>
+          <label>Title</label><input id="pbtitle" placeholder="e.g. Website pricing">
+          <label>Rule — write it as you want it quoted to a customer</label><textarea id="pbrule" rows="4"></textarea>
+          <label>Category</label><input id="pbcat" placeholder="pricing / delivery / policy / general" value="general">
+          <div class="row" style="margin-top:16px"><label style="margin:0;display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;color:var(--cream)"><input type="checkbox" id="pbactive" checked> Active</label>
+          <button class="btn primary" onclick="savePolicy()">Save rule</button>
+          <button class="btn" onclick="clearPolicy()">New</button>
+          <span id="pbmsg" class="muted"></span></div>
+        </div>
+        <div class="card">
+          <span class="eyebrow">Test retrieval</span>
+          <label>Ask the way a customer would, in any language</label>
+          <div class="row"><input id="pbq" placeholder="kitna paisa lagega website ka" style="flex:1"><button class="btn" onclick="testPolicy()">Search</button></div>
+          <div id="pbresults" class="muted" style="margin-top:12px;font-size:13px"></div>
+        </div>
+      </div>
+      <div class="tablewrap"><table><thead><tr><th>Title</th><th>Category</th><th>Embedded</th><th></th></tr></thead><tbody id="pbrows"></tbody></table></div>
     </div>
-    <table><thead><tr><th>Name</th><th>Goal</th><th>Active</th></tr></thead><tbody id="offerrows"></tbody></table>
-  </div>
-
-  <!-- ================= PLAYBOOK ================= -->
-  <div id="t-playbook" class="page" hidden>
-    <div class="card" style="max-width:760px;margin-bottom:16px">
-      <p class="muted" style="font-size:13px">The agent quotes these rules word for word and will not state a price or policy that is not here. Saving re-embeds the rule automatically.</p>
-      <label>Title</label><input id="pbtitle" placeholder="e.g. Website pricing">
-      <label>Rule — write it as you want it quoted to a customer</label><textarea id="pbrule" rows="4"></textarea>
-      <label>Category</label><input id="pbcat" placeholder="pricing / delivery / policy / general" value="general">
-      <div class="row" style="margin-top:12px"><label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="pbactive" style="width:auto" checked> active</label>
-      <button class="btn primary" onclick="savePolicy()">Save rule</button>
-      <button class="btn" onclick="clearPolicy()">New</button>
-      <span id="pbmsg" class="muted"></span></div>
-    </div>
-    <div class="card" style="max-width:760px;margin-bottom:16px">
-      <label style="margin-top:0">Test retrieval — ask the way a customer would, in any language</label>
-      <div class="row"><input id="pbq" placeholder="kitna paisa lagega website ka" style="flex:1"><button class="btn" onclick="testPolicy()">Search</button></div>
-      <div id="pbresults" class="muted" style="margin-top:10px;font-size:13px"></div>
-    </div>
-    <table><thead><tr><th>Title</th><th>Category</th><th>Embedded</th><th></th></tr></thead><tbody id="pbrows"></tbody></table>
   </div>
 </div>
 
@@ -288,20 +407,41 @@ async function api(path, opts = {}) {
 function showLogin() { $("app").hidden = true; $("login").hidden = false; }
 async function login() {
   TOKEN = $("pw").value.trim();
-  try { await api("/api/admin/overview"); localStorage.setItem("mr_token", TOKEN); $("login").hidden = true; $("app").hidden = false; refresh(); }
+  try { await api("/api/admin/overview"); localStorage.setItem("mr_token", TOKEN); $("login").hidden = true; $("app").hidden = false; loadStatus(); refresh(); }
   catch { $("loginerr").textContent = "Wrong password."; }
 }
 function logout() { localStorage.removeItem("mr_token"); TOKEN = ""; showLogin(); }
 
-// ---------------- tabs ----------------
+// ---------------- navigation ----------------
 const TABS = ["inbox","overview","calls","webhook","offers","playbook"];
+const TITLES = {
+  inbox:    ["Inbox", "Chats", "WhatsApp threads and website handoffs."],
+  overview: ["Agent", "Overview", "Where the leads, calls and threads stand today."],
+  calls:    ["Inbox", "Calls", "Every call the voice agent has placed or received."],
+  webhook:  ["System", "Webhook", "Raw deliveries from the WhatsApp BSP, newest first."],
+  offers:   ["Agent", "Offers", "What the agent is pitching right now."],
+  playbook: ["Agent", "Playbook", "The rules the agent may quote to a customer."],
+};
 function showTab(t) {
-  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x.dataset.t === t));
+  document.querySelectorAll(".nav a[data-t]").forEach(x => x.classList.toggle("on", x.dataset.t === t));
   TABS.forEach(x => $("t-"+x).hidden = x !== t);
+  const [eyebrow, title, sub] = TITLES[t];
+  $("peyebrow").textContent = eyebrow; $("ptitle").textContent = title; $("psub").textContent = sub;
+  $("pagehead").hidden = t === "inbox";
+  document.body.classList.remove("menu");
   location.hash = t === "inbox" ? "chats" : t;
 }
-document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { showTab(b.dataset.t); refresh(); });
-const activeTab = () => document.querySelector(".tabs button.on").dataset.t;
+document.querySelectorAll(".nav a[data-t]").forEach(a => a.onclick = (e) => { e.preventDefault(); showTab(a.dataset.t); refresh(); });
+const activeTab = () => document.querySelector(".nav a.on").dataset.t;
+
+/** Sidebar footer: is the WhatsApp agent answering customers on its own? */
+async function loadStatus() {
+  try {
+    const w = await api("/api/admin/webhook?limit=1");
+    $("agentstate").classList.toggle("on", !!w.autoreply);
+    $("agentstateTxt").textContent = w.autoreply ? "answering new WhatsApp messages" : "off — a person replies";
+  } catch { $("agentstateTxt").textContent = "unknown"; }
+}
 
 // ---------------- formatting ----------------
 const pad = (n) => String(n).padStart(2, "0");
@@ -328,7 +468,8 @@ function dayLabel(iso) {
   if (diff === 0) return "Today"; if (diff === 1) return "Yesterday";
   return d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
 }
-const AV_COLORS = ["#00a884","#3b82f6","#8b5cf6","#ec4899","#f59e0b","#14b8a6","#ef4444","#6366f1"];
+// Warm palette drawn from the site: gold, ember, and a few tints that sit with them.
+const AV_COLORS = ["#F0A32F","#E2571E","#D9A066","#C97B3C","#E8B84A","#B8542A","#F2C57C","#D4692F"];
 function avatar(c, cls = "av") {
   const name = c.contact_name || "";
   const initials = name ? name.trim().split(/\s+/).slice(0,2).map(w => w[0]).join("").toUpperCase() : (c.phone10 || "?").slice(-2);
@@ -346,9 +487,13 @@ function drawConvs() {
   if (q) list = list.filter(c => (c.contact_name || "").toLowerCase().includes(q) || (c.phone10 || "").includes(q));
   if (filter === "unread") list = list.filter(c => c.unread > 0);
   if (filter === "open") list = list.filter(isOpen);
+  if (filter === "human") list = convCache.filter(c => c.human_handoff).sort((a, b) => new Date(b.handoff_at || 0) - new Date(a.handoff_at || 0));
+  if (filter === "web") list = list.filter(c => c.source === "web-voice" || c.source === "web-demo");
   $("convs").innerHTML = renderConvs(list, currentPhone);
   const total = convCache.reduce((n, c) => n + (c.unread || 0), 0);
-  $("unreadTotal").hidden = !total; $("unreadTotal").textContent = total;
+  for (const id of ["unreadTotal", "unreadTop"]) { $(id).hidden = !total; $(id).textContent = total; }
+  const humans = convCache.filter(c => c.human_handoff).length;
+  for (const id of ["humanTotal", "humanTotal2"]) { $(id).hidden = !humans; $(id).textContent = humans; }
 }
 function renderConvs(convs, selected) {
   if (!convs.length) return `<div class="empty">No conversations here yet.</div>`;
@@ -358,7 +503,17 @@ function renderConvs(convs, selected) {
       <div class="when">${esc(fmtListTime(c.last_message_at))}</div>
       <div class="prev">${c.last_direction==='out' ? '<span class="faint">You: </span>' : ''}${esc((c.last_message_text||"").replace(/\s+/g," ").slice(0,60))}</div>
       ${c.unread ? `<div class="badge">${c.unread}</div>` : "<div></div>"}
+      ${convFlags(c)}
     </div>`).join("");
+}
+function convFlags(c) {
+  const f = [];
+  if (c.human_handoff) f.push('<span class="pill bad">needs human</span>');
+  if (c.mode === "human") f.push('<span class="pill you">you</span>');
+  else if (c.last_message_at) f.push('<span class="pill ok">AI</span>');
+  if (c.source === "web-voice") f.push('<span class="pill">website</span>');
+  if (c.source === "web-demo") f.push('<span class="pill">demo</span>');
+  return f.length ? `<div class="flags">${f.join("")}</div>` : "";
 }
 async function loadConvs() { convCache = await api("/api/admin/conversations"); drawConvs(); }
 
@@ -384,8 +539,10 @@ function bubble(m) {
     ticks = s === "read" ? '<span class="tick read">✓✓</span>' : s === "delivered" ? '<span class="tick">✓✓</span>'
           : s === "failed" ? '<span class="tick failed">failed</span>' : '<span class="tick">✓</span>';
   }
-  const src = out && m.source && m.source !== "reply" ? `<span class="src">${esc(m.source)}</span>` : (m.type === "voice" ? '<span class="src">call</span>' : "");
-  return `<div class="m ${out?'out':'in'} ${m.type==='voice'?'voice':''}">${body}<div class="meta">${src}<span>${esc(fmtTime(m.timestamp))}</span>${ticks}</div></div>`;
+  const SRC = { "web-voice": m.type === "voice" ? "🎙 website voice" : "website agent", "web-form": "website form", agent: "AI agent", "voice-agent": "phone agent", "phone-echo": "phone app" };
+  const srcLabel = m.type === "voice" ? (SRC[m.source] || "call") : (m.source && m.source !== "reply" ? (SRC[m.source] || m.source) : "");
+  const src = srcLabel ? `<span class="src">${esc(srcLabel)}</span>` : "";
+  return `<div class="m ${out?'out':'in'} ${m.type==='voice'?'voice':''} ${m.source==='web-form'?'form':''}">${body}<div class="meta">${src}<span>${esc(fmtTime(m.timestamp))}</span>${out ? ticks : ""}</div></div>`;
 }
 function renderThread(msgs) {
   if (!msgs.length) return `<div class="day">No messages yet</div>`;
@@ -402,7 +559,10 @@ function renderHead(c) {
   return `<button class="btn sm back" onclick="closeConv()">←</button>${avatar(c)}
     <div class="who"><b>${esc(c.contact_name || "+91 " + c.phone10)}</b><span>+91 ${esc(c.phone10)}${open ? " · window open until " + esc(fmtTime(c.window_open_until)) : " · window closed"}</span></div>
     <span class="sp"></span>
-    <button class="btn sm" onclick="runAgent()" title="Let the AI agent answer the latest message (it sends the reply)">🤖<span class="lbl"> Agent reply</span></button>
+    ${c.mode === "human"
+      ? `<button class="btn sm" onclick="setMode('ai')" title="Hand the thread back to the AI agent — it answers new messages again">🤖<span class="lbl"> Hand back to AI</span></button>`
+      : `<button class="btn sm primary" onclick="setMode('human')" title="Take over — the AI agent stops replying on this thread until you hand it back">🙋<span class="lbl"> Take over</span></button>`}
+    <button class="btn sm" onclick="runAgent()" title="Let the AI agent answer the latest message now (it sends the reply)">✨<span class="lbl"> Agent reply</span></button>
     <button class="btn sm" onclick="dialPhone('${esc(c.phone10)}')" title="Call via AI">📞<span class="lbl"> Call via AI</span></button>`;
 }
 async function loadThread(jump = false) {
@@ -413,6 +573,7 @@ async function loadThread(jump = false) {
   const conv = r.conversation || { phone10: phone }, msgs = r.messages || [];
   $("nochat").hidden = true; $("thead").hidden = false; $("msgs").hidden = false;
   $("thead").innerHTML = renderHead(conv);
+  renderBars(conv);
   const open = isOpen(conv);
   $("compose").hidden = !open; $("closed").hidden = open;
   const el = $("msgs"), atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
@@ -423,13 +584,40 @@ async function loadThread(jump = false) {
   // The list's unread count for this thread is now stale — refresh it quietly.
   const c = convCache.find(x => x.phone10 === phone); if (c && c.unread) { c.unread = 0; drawConvs(); }
 }
+function renderBars(c) {
+  const hb = $("handoffbar");
+  if (c.human_handoff) {
+    hb.hidden = false;
+    hb.innerHTML = `<b>Needs a person</b><span>${esc(c.handoff_reason || "no reason given")}${c.handoff_note ? ` — “${esc(c.handoff_note)}”` : ""}</span>
+      <span class="muted">${esc(fmtTime(c.handoff_at))}${c.source === "web-voice" ? " · from the website voice agent" : ""}</span>
+      ${c.handoff_run_id ? `<a href="/live?run=${esc(c.handoff_run_id)}" target="_blank" title="Watch the voice session that led here">voice session ↗</a>` : ""}
+      <span class="sp"></span><button class="btn sm" onclick="resolveHandoff()">Mark handled</button>`;
+  } else hb.hidden = true;
+  const mb = $("modebar");
+  if (!c.last_message_at) { mb.hidden = true; return; }
+  mb.hidden = false;
+  mb.className = "bar modebar" + (c.mode === "human" ? " human" : "");
+  mb.innerHTML = c.mode === "human"
+    ? `🙋 <b>You have this thread.</b> The AI agent is silent here until you hand it back.<span class="sp"></span><button class="btn sm" onclick="setMode('ai')">Hand back to AI</button>`
+    : `🤖 <b>AI agent is answering</b> new messages on this thread. Sending a reply yourself takes it over.`;
+}
+async function setMode(mode) {
+  if (!currentPhone) return;
+  try { await api("/api/admin/conversations/mode", { method:"POST", body: JSON.stringify({ phone: currentPhone, mode }) }); await loadConvs(); await loadThread(); }
+  catch (e) { alert(e.message); }
+}
+async function resolveHandoff() {
+  if (!currentPhone) return;
+  try { await api("/api/admin/conversations/resolve", { method:"POST", body: JSON.stringify({ phone: currentPhone }) }); await loadConvs(); await loadThread(); }
+  catch (e) { alert(e.message); }
+}
 function growReply() { const t = $("reply"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 140) + "px"; }
 function replyKey(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }
 async function sendReply() {
   const text = $("reply").value.trim();
   if (!text || !currentPhone) return;
   $("sendBtn").disabled = true;
-  try { await api("/api/admin/send", { method:"POST", body: JSON.stringify({ phone: currentPhone, text }) }); $("reply").value = ""; growReply(); await loadThread(true); }
+  try { await api("/api/admin/send", { method:"POST", body: JSON.stringify({ phone: currentPhone, text }) }); $("reply").value = ""; growReply(); await loadThread(true); loadConvs().catch(() => {}); }
   catch (e) { alert(e.message); }
   finally { $("sendBtn").disabled = false; }
 }
@@ -446,6 +634,8 @@ async function dialPhone(p) {
   try { const r = await api("/api/admin/call", { method:"POST", body: JSON.stringify({ phone: p }) }); alert("Dispatched call " + String(r.attempt_id).slice(0,8)); }
   catch (e) { alert(e.message); }
 }
+/** From the overview's needs-a-person list: jump straight into that thread. */
+function goThread(p) { showTab("inbox"); loadConvs().then(() => openConv(p)).catch(() => {}); }
 
 // ---------------- templates ----------------
 let templates = null, pickedTpl = null;
@@ -476,20 +666,31 @@ async function sendTemplate() {
   catch (e) { alert(e.message); }
 }
 
-// ---------------- other tabs ----------------
+// ---------------- other pages ----------------
 async function refresh() {
   const t = activeTab();
   if (t === "inbox") { await loadConvs(); if (currentPhone) await loadThread(); return; }
   if (t === "overview") {
-    const s = await api("/api/admin/overview");
-    $("stats").innerHTML = Object.entries({ Chats:s.conversations, Unread:s.unread, Leads:s.leads, "Calls total":s.calls, Connected:s.connected, "Calls today":s.calls_today, "Agent runs":s.agent_runs, "Agent spend today":"$"+s.agent_spend_today })
-      .map(([k,v]) => `<div class="stat"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join("");
+    const [s, convs] = await Promise.all([api("/api/admin/overview"), api("/api/admin/conversations")]);
+    convCache = convs; drawConvs();
+    const tiles = [
+      ["Unread", s.unread, s.unread ? "hot" : ""], ["Needs human", s.needs_human, s.needs_human ? "alert" : ""], ["Chats", s.conversations, ""],
+      ["Leads", s.leads, ""], ["Calls today", s.calls_today, ""], ["Calls total", s.calls, ""], ["Connected", s.connected, ""],
+      ["Agent runs", s.agent_runs, ""], ["Agent failures", s.agent_failures ?? 0, s.agent_failures ? "alert" : ""], ["Spend today", "$" + s.agent_spend_today, ""],
+    ];
+    $("stats").innerHTML = tiles.map(([k, v, cls]) => `<div class="stat ${cls}"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join("");
+    const humans = convs.filter(c => c.human_handoff).sort((a, b) => new Date(b.handoff_at || 0) - new Date(a.handoff_at || 0));
+    $("humanList").innerHTML = humans.length
+      ? humans.slice(0, 8).map(c => `<div class="conv" onclick="goThread('${esc(c.phone10)}')">${avatar(c)}
+          <div class="name">${esc(c.contact_name || "+91 " + c.phone10)}</div><div class="when">${esc(fmtListTime(c.handoff_at || c.last_message_at))}</div>
+          <div class="prev">${esc(c.handoff_reason || "")}${c.handoff_note ? " — " + esc(c.handoff_note) : ""}</div><div></div></div>`).join("")
+      : '<p class="muted" style="font-size:13px">Nothing waiting. The agent is handling every thread.</p>';
   }
   if (t === "calls") {
     const rows = await api("/api/admin/calls");
     $("callrows").innerHTML = rows.map(c => `<tr class="click" onclick="openCall(${c.id})">
       <td>${esc(fmtTime(c.created_at))}</td><td>${esc(c.phone10)}</td><td>${esc(c.name||"—")}</td>
-      <td><span class="pill ${c.status==='connected'?'ok':c.status==='dispatched'?'warn':'bad'}">${esc(c.status)}</span></td>
+      <td><span class="pill ${c.status==='connected'?'good':c.status==='dispatched'?'warn':'bad'}">${esc(c.status)}</span></td>
       <td>${c.duration ? Math.round(c.duration)+"s" : "—"}</td><td>${c.has_transcript ? "📄" : ""}</td></tr>`).join("") || '<tr><td colspan="6" class="muted">No calls yet.</td></tr>';
   }
   if (t === "webhook") {
@@ -498,20 +699,20 @@ async function refresh() {
     $("whmeta").textContent = (w.token_required ? "Shared secret required (WA_WEBHOOK_TOKEN is set). " : "No shared secret (WA_WEBHOOK_TOKEN unset) — the endpoint is open, like the OMS. ") + "Agent auto-reply is " + (w.autoreply ? "ON" : "off") + ".";
     $("whempty").hidden = w.events.length > 0;
     $("whrows").innerHTML = w.events.map(e => `<tr class="click" onclick='showEvent(${JSON.stringify(e).replace(/'/g,"&#39;")})'>
-      <td>${e.id}</td><td>${esc(fmtTime(e.created_at))}</td><td><span class="pill ${e.kind==='incoming'?'ok':e.kind==='status'?'warn':''}">${esc(e.kind)}</span></td>
+      <td>${e.id}</td><td>${esc(fmtTime(e.created_at))}</td><td><span class="pill ${e.kind==='incoming'?'ok':e.kind==='outgoing'?'good':e.kind==='status'?'':e.kind==='unknown'?'warn':''}">${esc(e.kind)}</span></td>
       <td class="muted">${esc(eventSummary(e.payload))}</td></tr>`).join("");
   }
   if (t === "offers") {
     const offers = await api("/api/admin/offers");
     $("offerrows").innerHTML = offers.map(o => `<tr class="click" onclick='editOffer(${JSON.stringify(o).replace(/'/g,"&#39;")})'>
-      <td>${esc(o.name)}</td><td>${esc(o.goal||"—")}</td><td>${o.active ? '<span class="pill ok">active</span>' : ""}</td></tr>`).join("") || '<tr><td colspan="3" class="muted">No offers yet.</td></tr>';
+      <td>${esc(o.name)}</td><td>${esc(o.goal||"—")}</td><td>${o.active ? '<span class="pill good">active</span>' : ""}</td></tr>`).join("") || '<tr><td colspan="3" class="muted">No offers yet.</td></tr>';
   }
   if (t === "playbook") {
     const rows = await api("/api/admin/playbook");
     $("pbrows").innerHTML = rows.map(p =>
       "<tr><td>" + esc(p.title) + "<br><span class=muted>" + esc(p.rule.slice(0, 90)) + (p.rule.length > 90 ? "…" : "") + "</span></td>" +
       "<td>" + esc(p.category) + "</td>" +
-      "<td>" + (p.embedded ? '<span class="pill ok">yes</span>' : '<span class="pill bad">no</span>') + (p.active ? "" : ' <span class="pill">inactive</span>') + "</td>" +
+      "<td>" + (p.embedded ? '<span class="pill good">yes</span>' : '<span class="pill bad">no</span>') + (p.active ? "" : ' <span class="pill">inactive</span>') + "</td>" +
       "<td><button class='btn sm' onclick='editPolicy(" + esc(JSON.stringify(p)).replace(/'/g, "&#39;") + ")'>Edit</button> " +
       "<button class='btn sm danger' onclick=\"deletePolicy('" + p.id + "'," + JSON.stringify(p.title) + ")\">Delete</button></td></tr>").join("") || '<tr><td colspan="4" class="muted">No rules yet.</td></tr>';
   }
@@ -580,7 +781,7 @@ async function testPolicy() {
 // ---------------- boot ----------------
 const want = { chats:"inbox", inbox:"inbox", overview:"overview", webhook:"webhook", calls:"calls", offers:"offers", playbook:"playbook" }[location.hash.slice(1)];
 showTab(want || "inbox");
-if (TOKEN) { $("app").hidden = false; refresh().catch(showLogin); } else showLogin();
+if (TOKEN) { $("app").hidden = false; loadStatus(); refresh().catch(showLogin); } else showLogin();
 // Live-ish: the open thread polls quickly, the list and other live tabs more slowly.
 setInterval(() => { if (!$("app").hidden && activeTab() === "inbox" && currentPhone) loadThread().catch(() => {}); }, 4000);
 setInterval(() => { if (!$("app").hidden && ["inbox","overview","webhook"].includes(activeTab())) refresh().catch(() => {}); }, 12000);

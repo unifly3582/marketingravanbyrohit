@@ -279,3 +279,94 @@ button:focus-visible {
   from { width: 0; }
   to { width: 100%; }
 }
+
+/* ---------- Ravan, the panel ----------
+   Warm, layered, and lit from the top-right; the tiles carry their channel's
+   colour (WhatsApp green, voice ember, the plan gold) so a glance tells them
+   apart before the words do. */
+.ravan-panel {
+  background:
+    radial-gradient(120% 55% at 100% 0%, rgba(240, 163, 47, 0.12), transparent 62%),
+    linear-gradient(180deg, rgba(36, 26, 18, 0.97) 0%, rgba(22, 16, 12, 0.97) 100%);
+  border-color: rgba(244, 234, 219, 0.14);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(244, 234, 219, 0.06);
+}
+
+.ravan-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: left;
+  padding: 0.8rem 0.85rem 0.75rem;
+  border-radius: 1rem;
+  border: 1px solid var(--color-line);
+  background:
+    linear-gradient(180deg, rgba(244, 234, 219, 0.04), rgba(244, 234, 219, 0) 60%),
+    var(--color-card);
+  box-shadow: inset 0 1px 0 rgba(244, 234, 219, 0.05);
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.ravan-tile:hover {
+  transform: translateY(-1px);
+  border-color: rgba(240, 163, 47, 0.55);
+  box-shadow: inset 0 1px 0 rgba(244, 234, 219, 0.06), 0 10px 26px rgba(0, 0, 0, 0.28);
+}
+.ravan-tile.wide {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+}
+.ravan-tile[data-tone="gold"] {
+  border-color: rgba(240, 163, 47, 0.3);
+  background:
+    linear-gradient(135deg, rgba(240, 163, 47, 0.12), rgba(226, 87, 30, 0.05) 70%),
+    var(--color-card);
+}
+.ravan-tile .glyph {
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 0.6rem;
+  display: grid;
+  place-items: center;
+  margin-bottom: 0.4rem;
+  flex-shrink: 0;
+}
+.ravan-tile.wide .glyph { margin-bottom: 0; width: 2.1rem; height: 2.1rem; border-radius: 0.75rem; }
+.ravan-tile .glyph svg { width: 0.95rem; height: 0.95rem; }
+.ravan-tile.wide .glyph svg { width: 1.15rem; height: 1.15rem; }
+.ravan-tile[data-tone="wa"] .glyph { background: rgba(37, 211, 102, 0.14); color: #4ade80; }
+.ravan-tile[data-tone="voice"] .glyph { background: rgba(226, 87, 30, 0.16); color: var(--color-ember); }
+.ravan-tile[data-tone="gold"] .glyph { background: rgba(240, 163, 47, 0.18); color: var(--color-gold); }
+.ravan-tile[data-tone="plain"] .glyph { background: rgba(244, 234, 219, 0.07); color: var(--color-muted); }
+.ravan-tile .label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.86rem;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  color: var(--color-cream);
+}
+.ravan-tile .sub {
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--color-muted);
+}
+
+.ravan-input {
+  background: var(--color-ground);
+  border: 1px solid rgba(244, 234, 219, 0.12);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.ravan-input:focus {
+  border-color: rgba(240, 163, 47, 0.7);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 3px rgba(240, 163, 47, 0.12);
+}
+
+.ravan-agent {
+  border-radius: 1rem 1rem 1rem 0.3rem;
+  background: linear-gradient(180deg, rgba(244, 234, 219, 0.05), rgba(244, 234, 219, 0.02)), var(--color-card);
+  border: 1px solid var(--color-line);
+  padding: 0.6rem 0.8rem;
+}

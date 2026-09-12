@@ -35,19 +35,60 @@ const MAX_FRAME_BYTES = 64 * 1024;
 
 export const WEB_STREAM_PATH = "/api/voice/web";
 
+/**
+ * Live sessions by run id. The WhatsApp handoff form posts the run id it was
+ * shown with, and the server needs to find the session it belongs to: to give
+ * it the visitor's number (so the transcript lands on the right thread) and
+ * to tell the model the form was filled in. Sessions remove themselves on end.
+ */
+export const sessionsByRun = new Map();
+
+/**
+ * What the opening screen lets a visitor tap, and what the model is told when
+ * they do. The panel sends the key; the text here is the whole briefing, so
+ * a new track is one line in this table plus one chip in the panel.
+ */
+export const INTENTS = {
+  audit:
+    "They tapped 'What could you automate for me?'. Run the quick audit: ask what kind of " +
+    "business it is, then how leads reach them, then what eats the most time - one question " +
+    "per turn, each with offer_choices. Then give the three things you would automate first, " +
+    "open the matching page with navigate_site, and offer to send the plan to their WhatsApp.",
+  pricing:
+    "They tapped 'Pricing'. Ask which service they are looking at, with offer_choices. Quote " +
+    "only what the playbook says; if it depends on volume, ask the volume with offer_choices. " +
+    "Offer to send the exact figure to their WhatsApp in writing.",
+  voice:
+    "They tapped 'Voice agent' and chose to talk in the browser rather than be called. This " +
+    "conversation is the demo. Be excellent, keep it moving, and when they have heard enough " +
+    "offer to call their phone with request_callback.",
+  whatsapp:
+    "They have just finished playing with the WhatsApp agent demo in the panel (a scripted " +
+    "sample business - a clinic, a furniture store or a coaching institute) and tapped " +
+    "'Talk to Ravan about it'. Do not explain what they just saw. Ask what business they run, " +
+    "with offer_choices, and take it from there.",
+  question:
+    "They tapped 'Just a question' and are about to type it. Greet in one short sentence and " +
+    "wait for the question.",
+};
+
 export class WebVoiceSession {
   /**
    * @param {import('ws').WebSocket} ws  the browser's socket
    * @param {object} opts
    * @param {(p10: string, o: object) => Promise<string>} opts.dialOut
    * @param {string} [opts.page]   the route the visitor is on
+   * @param {"voice"|"text"} [opts.mode]  how the visitor started: microphone open, or typing
+   * @param {string} [opts.intent] what they tapped on the opening screen (see INTENTS)
    * @param {() => void} [opts.onClose]
    */
-  constructor(ws, { dialOut, page = "/", codec = "pcm16", onClose = null } = {}) {
+  constructor(ws, { dialOut, page = "/", codec = "pcm16", mode = "voice", intent = null, onClose = null } = {}) {
     this.ws = ws;
     this.id = randomUUID();
     this.dialOut = dialOut;
     this.page = page;
+    this.mode = mode === "text" ? "text" : "voice";
+    this.intent = INTENTS[intent] ? intent : null;
     // The browser sends µ-law to halve its upload; anything speaking this
     // socket directly (the test client, a curl session) sends plain PCM16.
     this.codec = codec === "mulaw" ? "mulaw" : "pcm16";
@@ -97,16 +138,18 @@ export class WebVoiceSession {
       trigger: "web_voice_session",
       model,
       engine: "gemini-live",
-      input: { page: this.page, playbook: inlinePlaybook ? "inline" : "retrieval" },
+      input: { page: this.page, mode: this.mode, intent: this.intent, playbook: inlinePlaybook ? "inline" : "retrieval" },
       // A live conversation cannot wait ~200 ms on Supabase either side of
       // every tool call just to be observable.
       defer: true,
     });
 
+    sessionsByRun.set(this.tracer.id, this);
+
     const opened = await this.tracer.step("session", {
       kind: "trigger",
       label: "Session opened",
-      input: { page: this.page, model },
+      input: { page: this.page, model, mode: this.mode, intent: this.intent },
     });
     await opened.ok({ started: true });
 
@@ -116,12 +159,14 @@ export class WebVoiceSession {
     // search_playbook is dropped when the playbook is inlined above: leaving it
     // there would let the model spend 1.3 s retrieving text it is already
     // holding, which is exactly the pause visitors noticed.
+    // escalate_to_human is dropped too: the web version in web-tools.mjs
+    // knows how to open the handoff form for a visitor who has no number yet.
     const shared = buildToolSpecs({
       tracer: this.tracer,
       phone10: () => this.identity.phone10,
       outcome: this.outcome,
       channel: "web",
-    }).filter((s) => !(inlinePlaybook && s.name === "search_playbook"));
+    }).filter((s) => s.name !== "escalate_to_human" && !(inlinePlaybook && s.name === "search_playbook"));
     const webOnly = buildWebToolSpecs({
       tracer: this.tracer,
       identity: this.identity,
@@ -135,7 +180,10 @@ export class WebVoiceSession {
       model,
       systemInstruction:
         `${systemString(offer, "web", inlinePlaybook ? playbook : null)}` +
-        `\n\nThe visitor is currently on the page ${this.page}.`,
+        `\n\nThe visitor is currently on the page ${this.page}.` +
+        (this.mode === "text"
+          ? `\n\nThey started by typing, not speaking. They still hear you, so keep talking the way you do; just expect replies as text, and lean on offer_choices so they can tap instead of type.`
+          : ""),
       tools: [...this.specs.values()],
       voice: env("WEB_VOICE_VOICE", "Kore"),
 
@@ -143,11 +191,7 @@ export class WebVoiceSession {
         this._emit({ type: "ready", runId: this.tracer.id, sampleRate: OUTPUT_SAMPLE_RATE });
         // Nudge rather than script: the model opens in its own words, which
         // keeps the greeting in the visitor's language once they reply.
-        this.live.sendText(
-          "[The visitor just opened the microphone. Greet them in English, say in one sentence " +
-            "what you are, and ask what brought them to the site. If they reply in another " +
-            "language, switch to it immediately for the rest of the conversation.]"
-        );
+        this.live.sendText(this._greetingNudge());
       },
       onAudio: (pcm) => this._sendBinary(pcm),
       onInputTranscript: (text) => this._transcript("user", text),
@@ -175,6 +219,22 @@ export class WebVoiceSession {
       },
       onClose: () => this._end("model_closed"),
     });
+  }
+
+  /**
+   * The first thing the model hears. A nudge rather than a script: the model
+   * opens in its own words, which keeps the greeting in the visitor's
+   * language once they reply. With an intent it skips "what brought you
+   * here" and goes straight into the track they tapped.
+   */
+  _greetingNudge() {
+    const how = this.mode === "text" ? "just opened the panel and is typing" : "just opened the microphone";
+    const base =
+      `[The visitor ${how}. Greet them in English in one short sentence, once. If a tool result ` +
+      `comes back mid-turn, carry on from where you were; never greet a second time. If they reply in ` +
+      `another language, switch to it immediately for the rest of the conversation.`;
+    if (this.intent) return `${base} ${INTENTS[this.intent]}]`;
+    return `${base} Say in one sentence what you are, and ask what brought them to the site.]`;
   }
 
   // ---------------- browser -> us ----------------
@@ -206,6 +266,18 @@ export class WebVoiceSession {
           this.live?.sendText(msg.text.trim().slice(0, 800));
         }
         break;
+      case "mode":
+        // They switched between typing and the microphone mid-conversation.
+        if (msg.mode === "voice" || msg.mode === "text") {
+          this.mode = msg.mode;
+          this.live?.sendText(
+            msg.mode === "voice"
+              ? "[The visitor switched their microphone on and will speak from here.]"
+              : "[The visitor switched to typing. They still hear you.]",
+            { turnComplete: false }
+          );
+        }
+        break;
       case "page":
         // The visitor navigated on their own; keep the model oriented.
         if (typeof msg.path === "string") {
@@ -221,6 +293,23 @@ export class WebVoiceSession {
       default:
         break;
     }
+  }
+
+  /**
+   * The visitor filled in the WhatsApp handoff form while this session was
+   * still open. Adopt the identity so the transcript is written to their
+   * thread at the end, and let the model know so it can acknowledge it.
+   */
+  adoptHandoff({ phone10, name, note }) {
+    if (phone10) this.identity.phone10 = phone10;
+    if (name && !this.identity.name) this.identity.name = name;
+    this.outcome.escalated = true;
+    this._emit({ type: "identity", name: this.identity.name, phone10: this.identity.phone10 });
+    this.live?.sendText(
+      `[The visitor just submitted the WhatsApp form${name ? ` as ${name}` : ""}. ` +
+        `A message has been sent to their WhatsApp and a person from the team will continue there` +
+        `${note ? `. They wrote: "${note}"` : ""}. Acknowledge it in one sentence and ask if there is anything else before they go.]`
+    );
   }
 
   // ---------------- tools ----------------
@@ -303,6 +392,7 @@ export class WebVoiceSession {
     clearTimeout(this.maxTimer);
     clearTimeout(this.idleTimer);
     this._flush();
+    if (this.tracer) sessionsByRun.delete(this.tracer.id);
 
     this._emit({ type: "end", reason });
     this.live?.close();
@@ -341,14 +431,18 @@ export class WebVoiceSession {
         turns: this.transcript.length,
         identified: !!this.identity.phone10,
         escalated: this.outcome.escalated,
+        handoff_reason: this.outcome.handoffReason ?? null,
         cost_usd: Number(this.tracer.totals.cost.toFixed(6)),
       });
       await this.tracer.finish(reason === "boot_failed" || reason === "model_error" ? "failed" : "succeeded", {
         reason,
         duration_seconds: durationSec,
+        page: this.page,
         transcript: this.transcript,
         lead: this.identity.phone10 ? { phone10: this.identity.phone10, name: this.identity.name } : null,
         escalated: this.outcome.escalated,
+        handoff_reason: this.outcome.handoffReason ?? null,
+        handoff_summary: this.outcome.handoffSummary ?? null,
       });
     }
 

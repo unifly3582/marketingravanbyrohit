@@ -1,6 +1,6 @@
 // WhatsApp send/receive via the crm.marketingravan.com BSP panel (Meta-proxy).
 // Patterns ported from the battle-tested Buggly Farms OMS integration.
-import { insertMessage, touchConversation, updateMessageStatus, logRawEvent } from "./db.mjs";
+import { insertMessage, touchConversation, updateMessageStatus, logRawEvent, windowOpen } from "./db.mjs";
 
 const env = (k) => process.env[k];
 const base = () => `${env("WA_API_URL")}/${env("WA_API_VERSION")}`;
@@ -39,6 +39,51 @@ async function logOutbound(p10, fields, preview, openWindow = false) {
 
 // ---------- templates ----------
 
+/**
+ * The one template the website hands a conversation over with. Utility
+ * category, two body parameters: the visitor's name and one sentence on what
+ * this is about. It ends by asking them to reply, because a reply is what
+ * opens the 24-hour window and lets the WhatsApp agent (or a person) answer
+ * in free text. Created with `node wa-templates.mjs create`.
+ */
+export const HANDOFF_TEMPLATE = {
+  name: process.env.WA_HANDOFF_TEMPLATE ?? "web_handoff",
+  language: "en",
+  category: "UTILITY",
+  body:
+    "Hi {{1}}, Ravan here from Marketing Ravan. {{2}} " +
+    "Reply to this message and we'll continue right here on WhatsApp.",
+  example: ["Priya", "You asked on our website to continue on WhatsApp about pricing for a voice agent."],
+};
+
+/**
+ * The template that opens a live demo of the WhatsApp agent, requested from
+ * the website. One parameter, the visitor's name. It says plainly that the
+ * thread itself is the demo and asks them to reply — the reply opens the
+ * 24-hour window, and from then on the agent answers in free text. Submit it
+ * with `node wa-templates.mjs create web_demo`; until Meta approves it the
+ * demo goes out inside the handoff template with the same wording.
+ */
+export const DEMO_TEMPLATE = {
+  name: process.env.WA_DEMO_TEMPLATE ?? "web_demo",
+  language: "en",
+  category: "UTILITY",
+  body:
+    "Hi {{1}}, Ravan here from Marketing Ravan. You asked on our website for a live demo of " +
+    "our WhatsApp agent, and this chat is it. Reply with anything a customer of yours would " +
+    "ask, and watch how it answers.",
+  example: ["Priya"],
+};
+
+/** Templates this code knows the text of, whether or not Meta has approved them yet. */
+export const LOCAL_TEMPLATES = [HANDOFF_TEMPLATE, DEMO_TEMPLATE];
+
+/** Is this template approved on the WABA right now? False on any API trouble. */
+export async function templateApproved(name, language = "en") {
+  const list = await listTemplates().catch(() => []);
+  return list.some((t) => t.name === name && t.language === language);
+}
+
 let tplCache = { at: 0, data: [] };
 
 /** Approved templates on the WABA, with body text and parameter count. Cached 5 min. */
@@ -70,8 +115,11 @@ export async function listTemplates() {
 async function renderTemplate(name, language, params) {
   const list = await listTemplates().catch(() => []);
   const tpl = list.find((t) => t.name === name && t.language === language) ?? list.find((t) => t.name === name);
-  if (!tpl) return `[template] ${name}`;
-  return tpl.body.replace(/\{\{(\d+)\}\}/g, (_, i) => String(params[Number(i) - 1] ?? ""));
+  // Our own templates are known locally, so their text renders correctly even
+  // while Meta still lists them as pending (the list above is approved-only).
+  const body = tpl?.body ?? LOCAL_TEMPLATES.find((t) => t.name === name)?.body ?? null;
+  if (!body) return `[template] ${name}`;
+  return body.replace(/\{\{(\d+)\}\}/g, (_, i) => String(params[Number(i) - 1] ?? ""));
 }
 
 /** Send an approved template (allowed any time; the only way to open a closed conversation). */
@@ -89,7 +137,7 @@ export async function sendTemplate(p10, name, language = "en", bodyParams = [], 
   const id = data.message?.queue_id || data.messages?.[0]?.id || null;
   const text = await renderTemplate(name, language, bodyParams);
   await logOutbound(p10, { type: "template", text, caption: name, messageId: id, source }, text);
-  return { messageId: id };
+  return { messageId: id, text };
 }
 
 /** Send free-form text — only inside the 24h customer-service window. */
@@ -103,7 +151,53 @@ export async function sendText(p10, text, source = "reply") {
   });
   const id = data.message?.queue_id || data.messages?.[0]?.id || null;
   await logOutbound(p10, { type: "text", text, messageId: id, source }, text);
-  return { messageId: id };
+  return { messageId: id, text };
+}
+
+/**
+ * Send the handoff template, with the name and context filled in.
+ * `summary` is one plain sentence; the template supplies the greeting and the
+ * "reply to continue" close, so it should not repeat either.
+ */
+export async function sendHandoff(p10, { name, summary, source = "web-voice" }) {
+  const who = (name ?? "").trim().split(/\s+/)[0] || "there";
+  const about = String(summary ?? "").trim().replace(/\s+/g, " ") || "You asked on our website to continue on WhatsApp.";
+  return sendTemplate(p10, HANDOFF_TEMPLATE.name, HANDOFF_TEMPLATE.language, [who, about], source);
+}
+
+/**
+ * Open a live demo thread: the demo template if Meta has approved it, else
+ * the handoff template carrying the same words. Either way the customer is
+ * asked to reply, because nothing else can be sent until they do.
+ */
+export async function sendDemoIntro(p10, { name, source = "web-demo" }) {
+  const who = (name ?? "").trim().split(/\s+/)[0] || "there";
+  if (await templateApproved(DEMO_TEMPLATE.name, DEMO_TEMPLATE.language)) {
+    const r = await sendTemplate(p10, DEMO_TEMPLATE.name, DEMO_TEMPLATE.language, [who], source);
+    return { ...r, template: DEMO_TEMPLATE.name };
+  }
+  const r = await sendHandoff(p10, {
+    name,
+    summary:
+      "You asked on our website for a live demo of our WhatsApp agent, and this chat is it. " +
+      "Reply with anything a customer of yours would ask, and watch how it answers.",
+    source,
+  });
+  return { ...r, template: HANDOFF_TEMPLATE.name };
+}
+
+/**
+ * Send whatever the rules allow right now: free text inside the 24-hour
+ * window, the handoff template carrying the text otherwise. Returns which.
+ * This is the one entry point an agent should use to "send a WhatsApp".
+ */
+export async function sendMessage(p10, text, { name = null, source = "agent" } = {}) {
+  if (await windowOpen(p10)) {
+    const r = await sendText(p10, text, source);
+    return { ...r, mode: "text" };
+  }
+  const r = await sendHandoff(p10, { name, summary: text, source });
+  return { ...r, mode: "template" };
 }
 
 // ---------- inbound webhook parsing (ported from the OMS) ----------

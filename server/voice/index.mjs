@@ -167,6 +167,8 @@ export function attach(httpServer, app) {
           dialOut,
           page: searchParams.get("page") ?? "/",
           codec: searchParams.get("codec") ?? "pcm16",
+          mode: searchParams.get("mode") ?? "voice",
+          intent: searchParams.get("intent") ?? null,
           onClose: () => { liveSessions = Math.max(0, liveSessions - 1); },
         });
       });

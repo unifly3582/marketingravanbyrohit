@@ -28,7 +28,12 @@ export const STATES = {
 /**
  * One conversation. Construct, `await start()`, and listen.
  *
- * Events: state, transcript, tool, navigate, identity, level, error, end.
+ * Events: state, transcript, tool, navigate, choices, identity, whatsapp, handoff, level, error, end.
+ *
+ * A session starts in one of two modes. `voice` asks for the microphone first;
+ * `text` opens the socket straight away and the visitor types — they still
+ * hear the agent, they just are not heard. Either can become the other
+ * mid-conversation with enableMic() / disableMic().
  */
 export class VoiceAgentClient extends EventTarget {
   /**
@@ -43,6 +48,9 @@ export class VoiceAgentClient extends EventTarget {
     super()
     this.page = page
     this.wsOrigin = wsOrigin
+    this.mode = 'voice'
+    this.intent = null
+    this.muted = false
     this.state = STATES.idle
     this.ws = null
     this.stream = null
@@ -64,15 +72,39 @@ export class VoiceAgentClient extends EventTarget {
   }
 
   /**
-   * Ask for the microphone, then open the session.
+   * Open the session.
    *
-   * The permission prompt comes first and on its own: if the visitor says no,
-   * nothing has been spent and no socket was opened.
+   * In voice mode the permission prompt comes first and on its own: if the
+   * visitor says no, nothing has been spent and no socket was opened. In text
+   * mode there is no prompt at all — the socket opens and they type.
+   *
+   * @param {object} [opts]
+   * @param {'voice'|'text'} [opts.mode]
+   * @param {string|null} [opts.intent]  what they tapped on the opening screen
    */
-  async start() {
+  async start({ mode = 'voice', intent = null } = {}) {
     if (this.state !== STATES.idle && this.state !== STATES.ended && this.state !== STATES.error) return
-    this._setState(STATES.requesting)
+    this.mode = mode === 'text' ? 'text' : 'voice'
+    this.intent = intent
 
+    if (this.mode === 'voice') {
+      this._setState(STATES.requesting)
+      const ok = await this._requestMic()
+      if (!ok) return
+    }
+
+    this._setState(STATES.connecting)
+    try {
+      this._openPlayback()
+      if (this.mode === 'voice') await this._openCapture()
+      await this._openSocket()
+    } catch (err) {
+      this._fail(err.message ?? 'Could not start the agent.')
+    }
+  }
+
+  /** The permission prompt. False (after a `error` event) if they said no. */
+  async _requestMic() {
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -85,26 +117,61 @@ export class VoiceAgentClient extends EventTarget {
           channelCount: 1,
         },
       })
+      return true
     } catch (err) {
       const denied = err?.name === 'NotAllowedError' || err?.name === 'SecurityError'
-      this._fail(
-        denied
-          ? 'Microphone access was blocked. Allow it in your browser’s address bar, then try again.'
-          : 'No microphone found. Plug one in, or type to us instead.',
-      )
-      return
-    }
-
-    this._setState(STATES.connecting)
-    try {
-      await this._openAudio()
-      await this._openSocket()
-    } catch (err) {
-      this._fail(err.message ?? 'Could not start the agent.')
+      const message = denied
+        ? 'Microphone access was blocked. Allow it in your browser’s address bar, or keep typing.'
+        : 'No microphone found. Plug one in, or type to us instead.'
+      // Mid-conversation this is a hiccup, not the end: the socket stays up.
+      if (this.ws) this._emit('error', { message, recoverable: true })
+      else this._fail(message)
+      return false
     }
   }
 
-  async _openAudio() {
+  /**
+   * Switch a typed conversation to a spoken one. Safe to call when already
+   * on; resolves false if the microphone was refused.
+   */
+  async enableMic() {
+    if (this.mode === 'voice' && this.captureCtx) return true
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false
+    if (!(await this._requestMic())) return false
+    try {
+      await this._openCapture()
+    } catch (err) {
+      this._emit('error', { message: err.message ?? 'Could not open the microphone.', recoverable: true })
+      return false
+    }
+    this.mode = 'voice'
+    this._send({ type: 'mode', mode: 'voice' })
+    this._emit('mode', 'voice')
+    return true
+  }
+
+  /** Back to typing. Releases the microphone; the conversation continues. */
+  disableMic() {
+    if (this.mode === 'text') return
+    this._closeCapture()
+    this.mode = 'text'
+    this._send({ type: 'mode', mode: 'text' })
+    this._emit('mode', 'text')
+  }
+
+  /** Silence the agent's voice without stopping the transcript. */
+  setMuted(muted) {
+    this.muted = !!muted
+    if (this.muted) this._stopPlayback()
+    this._emit('muted', this.muted)
+  }
+
+  _openPlayback() {
+    this.playCtx = new AudioContext({ sampleRate: OUTPUT_RATE })
+    this.playHead = this.playCtx.currentTime
+  }
+
+  async _openCapture() {
     // Asking for the rate we want avoids resampling entirely on most devices;
     // the worklet handles the rest when a device refuses.
     this.captureCtx = new AudioContext({ sampleRate: INPUT_RATE })
@@ -126,10 +193,25 @@ export class VoiceAgentClient extends EventTarget {
     // node that reaches no destination.
     this.worklet.connect(this.captureCtx.destination)
 
-    this.playCtx = new AudioContext({ sampleRate: OUTPUT_RATE })
-    this.playHead = this.playCtx.currentTime
-
     this._startLevelLoop()
+  }
+
+  _closeCapture() {
+    cancelAnimationFrame(this.levelRaf)
+    this.levelRaf = null
+    this.worklet?.port.postMessage('stop')
+    this.worklet?.disconnect()
+    this.analyser?.disconnect()
+    this.analyser = null
+    this.worklet = null
+    // Stopping the tracks is what actually turns the browser's recording
+    // indicator off. Leaving it lit after a conversation ends is alarming, and
+    // reasonably so.
+    for (const track of this.stream?.getTracks() ?? []) track.stop()
+    this.stream = null
+    this.captureCtx?.close().catch(() => {})
+    this.captureCtx = null
+    this._emit('level', 0)
   }
 
   _startLevelLoop() {
@@ -184,7 +266,9 @@ export class VoiceAgentClient extends EventTarget {
     return new Promise((resolve, reject) => {
       // The worklet emits 8-bit µ-law; say so, or the server will read it as
       // PCM16 and hear noise.
-      const url = `${base}/api/voice/web?codec=mulaw&page=${encodeURIComponent(this.page)}`
+      const params = new URLSearchParams({ codec: 'mulaw', page: this.page, mode: this.mode })
+      if (this.intent) params.set('intent', this.intent)
+      const url = `${base}/api/voice/web?${params}`
       const ws = new WebSocket(url)
       ws.binaryType = 'arraybuffer'
       this.ws = ws
@@ -247,11 +331,13 @@ export class VoiceAgentClient extends EventTarget {
         this._emit('tool', msg)
         break
       case 'navigate':
-        this._emit('navigate', msg)
+      case 'choices':
+        this._emit(msg.type, msg)
         break
       case 'identity':
       case 'callback':
       case 'whatsapp':
+      case 'handoff':
         this._emit(msg.type, msg)
         break
       case 'interrupted':
@@ -280,7 +366,7 @@ export class VoiceAgentClient extends EventTarget {
 
   /** Queue one 24 kHz PCM16 chunk end-to-end with whatever is already playing. */
   _play(arrayBuffer) {
-    if (!this.playCtx) return
+    if (!this.playCtx || this.muted) return
     const pcm = new Int16Array(arrayBuffer)
     if (!pcm.length) return
 
@@ -319,19 +405,23 @@ export class VoiceAgentClient extends EventTarget {
     this.playHead = this.playCtx?.currentTime ?? 0
   }
 
+  _send(obj) {
+    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(obj))
+  }
+
   /** Typed input — same loop, for a noisy room or someone who'd rather not talk. */
   sendText(text) {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: 'text', text }))
+    this._send({ type: 'text', text })
   }
 
   /** Tell the agent the visitor navigated on their own, so it stays oriented. */
   setPage(path) {
     this.page = path
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: 'page', path }))
+    this._send({ type: 'page', path })
   }
 
   stop() {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: 'bye' }))
+    this._send({ type: 'bye' })
     this._teardown(STATES.ended)
   }
 
@@ -342,25 +432,9 @@ export class VoiceAgentClient extends EventTarget {
 
   /** Release the microphone and both audio contexts. Safe to call twice. */
   _teardown(state) {
-    cancelAnimationFrame(this.levelRaf)
-    this.levelRaf = null
     this._stopPlayback()
-
-    this.worklet?.port.postMessage('stop')
-    this.worklet?.disconnect()
-    this.analyser?.disconnect()
-    this.analyser = null
-    this.worklet = null
-
-    // Stopping the tracks is what actually turns the browser's recording
-    // indicator off. Leaving it lit after a conversation ends is alarming, and
-    // reasonably so.
-    for (const track of this.stream?.getTracks() ?? []) track.stop()
-    this.stream = null
-
-    this.captureCtx?.close().catch(() => {})
+    this._closeCapture()
     this.playCtx?.close().catch(() => {})
-    this.captureCtx = null
     this.playCtx = null
 
     if (this.ws) {
