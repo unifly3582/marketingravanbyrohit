@@ -7,6 +7,17 @@
   background: var(--color-ground);
 }
 
+/* snap markers laid along the wrapper; the page lands on them on touch devices */
+.hs-snap {
+  position: absolute;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  scroll-snap-align: start;
+  pointer-events: none;
+}
+html.hs-snapping { scroll-snap-type: y proximity; }
+
 /* the pinned, viewport-high stage */
 .hs-section {
   position: sticky;

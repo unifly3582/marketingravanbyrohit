@@ -37,6 +37,10 @@ export default function HeadStack() {
 
   return (
     <section id="heads" ref={wrapRef} className="hs-wrap" style={{ height }}>
+      {/* scroll-snap targets: pin start, then one per card. Positioned by CardStack. */}
+      {Array.from({ length: HEADS.length + 1 }, (_, i) => (
+        <i key={i} className="hs-snap" aria-hidden="true" />
+      ))}
       <div className="hs-section">
         <div ref={stmtRef} className="hs-statement">
           <Statement trigger={wrapRef} />

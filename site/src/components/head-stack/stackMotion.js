@@ -1,6 +1,6 @@
 /*
- * Motion engine for the head stack. Framework-free: it owns the timing and
- * hands a frame state to whoever renders it.
+ * Scroll physics for the head stack. Framework-free: the owner feeds it the
+ * scroll position every frame and it hands back where everything sits.
  *
  * Slots, not cards, own the look. Slot r is relative to the middle:
  *   -1 top    tilted left, tucked behind
@@ -8,20 +8,12 @@
  *   +1 bottom tilted left, its right corner tucked behind
  * Cards rotate from one slot's tilt to the next as they travel.
  *
- * Keyframes were traced from the reference recording at 30fps (whole-stack
- * position in px over a 192px step) and are stored as fractions of a step, so
- * the motion scales with the card size:
- *   SINK  0.30s  stack settles DOWN 13% of a step
- *   SLIDE 0.63s  bell-shaped velocity, lands 5% PAST the target
- *   DRIFT 0.40s  creeps back to rest
- *   REST         still until the next tick; one tick every 1.53s
- * The backdrop text counter-moves 1.4x during the sink, then travels one row
- * the other way with a ~19px overshoot that decays with the drift.
- * The arriving card takes the middle slot (top z) the instant the slide starts.
- *
- * Nothing moves on its own. The owner sets a target index (from the page
- * scroll) and the engine walks toward it one traced step at a time, a little
- * faster when it is more than one step behind.
+ * The pile position `p` (in cards) chases the scroll's position `s` through
+ * a spring, so it rides with the thumb but carries weight: it lags a touch
+ * behind a fast drag, leans into the motion, and settles with a small
+ * overshoot when the scroll stops, the same settle traced from the
+ * reference recording. The card nearest the middle holds the top z-index.
+ * The backdrop wordmark counter-scrolls one row per card.
  */
 
 const SLOT = {
@@ -44,143 +36,76 @@ export function lookAt(s) {
   return { tilt: A.tilt + (B.tilt - A.tilt) * t, x: A.x + (B.x - A.x) * t }
 }
 
-const STEP_PX = 192
-const SINK_K = [0, 1, 3, 7, 11, 16, 20, 23, 25, 25].map((v) => v / STEP_PX)
-const SLIDE_K = [0, -2, -7, -16, -29, -47, -71, -97, -123, -146, -166, -182, -195, -205, -213, -219, -223, -226, -227, -227].map(
-  (v) => v / STEP_PX,
-)
-const DRIFT_K = [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10].map((v) => v / STEP_PX)
-const SINK_MAX = SINK_K[SINK_K.length - 1]
-const FPS = 30
-const OVER = 19
-const CATCH_UP = 1.8 // playback rate when two steps behind
-const JUMP_AT = 3 // further behind than this: cut to the last step and play only that one
-
-function sample(K, t) {
-  const f = Math.max(0, Math.min(K.length - 1, t * FPS))
-  const i = Math.floor(f)
-  if (i >= K.length - 1) return K[K.length - 1]
-  return K[i] + (K[i + 1] - K[i]) * (f - i)
-}
-const dur = (K) => (K.length - 1) / FPS
-const easeOutCubic = (u) => 1 - (1 - u) ** 3
+/* spring: natural frequency ~12 rad/s (a quarter-second response), damping
+   ratio 0.7 so it lands about 5% past and comes back, as in the reference */
+const STIFFNESS = 150
+const DAMPING = 2 * Math.sqrt(STIFFNESS) * 0.7
+const LEAN_PER_CARD_PER_S = 2.2 // degrees of lean per card/s of pile velocity
+const LEAN_MAX = 7
+const IDLE_MS = 160 // scroll quiet for this long counts as "finger lifted"
 
 /**
  * @param {object} o
- * @param {number} o.count      number of cards
- * @param {(s: FrameState) => void} o.onFrame   called every animation frame
- * @param {(front: number) => void} [o.onFront] called when the middle card changes
- * @param {boolean} [o.reduced] prefers-reduced-motion: step without animating
+ * @param {number} o.count                number of cards
+ * @param {() => number} o.readScroll     scroll position in cards (0 .. count-1), called every frame
+ * @param {(s: FrameState) => void} o.onFrame
+ * @param {(front: number) => void} [o.onFront]  when the card nearest the middle changes
+ * @param {boolean} [o.snapWhenIdle]      pull the pile to the nearest card once the scroll is quiet
+ *                                        (for pointers without native scroll-snap)
+ * @param {boolean} [o.reduced]           prefers-reduced-motion: no spring, no lean
  */
-export function createStackMotion({ count, onFrame, onFront, reduced = false }) {
+export function createStackMotion({ count, readScroll, onFrame, onFront, snapWhenIdle = false, reduced = false }) {
   const N = count
-  let pitch = 200 // px per step, set by setGeometry
   let row = 80 // backdrop row height, px
 
-  let active = 0 // card the layout is centred on
-  let front = 0 // card holding the middle slot (top z)
-  let dir = 1
-  let phase = 'rest' // rest | sink | slide | drift
-  let progress = 0 // in steps; +1 = one card up
-  let colRot = 0
-  let bgY = 0
-  let bgBase = 0
-  let sinkEnd = 0
-  let landed = 0
-  let t0 = 0
-  let target = 0
-  let rate = 1
+  let p = 0 // pile position, cards
+  let v = 0 // cards per second
+  let front = 0
+  let lastS = 0
+  let lastMove = 0
+  let last = 0
   let raf = 0
   let running = false
 
-  const wrap = (i) => ((i % N) + N) % N
-
-  function emit() {
-    onFrame({ active, front, progress, colRot, bgY: bgBase + bgY, phase })
-  }
+  const clampIdx = (x) => Math.max(0, Math.min(N - 1, x))
 
   function setFront(i) {
+    if (i === front) return
     front = i
     onFront?.(front)
   }
 
-  function begin(d) {
-    if (phase !== 'rest') return
-    dir = d
-    if (reduced) {
-      active = wrap(active + d)
-      setFront(active)
-      emit()
-      return
-    }
-    phase = 'sink'
-    t0 = performance.now()
-  }
-
   function frame(now) {
     if (!running) return
-    const el = ((now - t0) / 1000) * rate
-    if (phase === 'rest') {
-      progress = 0
-      colRot = 0
-      bgY = 0
-      if (target !== active) {
-        const d = target > active ? 1 : -1
-        const gap = Math.abs(target - active)
-        if (gap >= JUMP_AT) {
-          active = target - d
-          setFront(active)
-        }
-        rate = gap >= 2 ? CATCH_UP : 1
-        begin(d)
-      }
-    } else if (phase === 'sink') {
-      const k = sample(SINK_K, el)
-      progress = -dir * k
-      colRot = dir * 3 * (k / SINK_MAX)
-      bgY = -dir * 1.4 * k * pitch
-      if (el >= dur(SINK_K)) {
-        phase = 'slide'
-        t0 = now
-        sinkEnd = progress
-        setFront(wrap(active + dir))
-      }
-    } else if (phase === 'slide') {
-      const k = sample(SLIDE_K, el)
-      const u = Math.min(1, el / dur(SLIDE_K))
-      progress = sinkEnd - dir * k
-      colRot = dir * 3 * (1 - u)
-      const bFrom = -dir * 1.4 * SINK_MAX * pitch
-      const bTo = dir * (row + OVER)
-      bgY = bFrom + (bTo - bFrom) * Math.min(1, -k / 1.05)
-      if (el >= dur(SLIDE_K)) {
-        active = wrap(active + dir)
-        progress -= dir
-        bgBase += dir * row
-        if (Math.abs(bgBase) >= row * 2) bgBase -= Math.sign(bgBase) * row * 2
-        landed = progress
-        bgY = dir * OVER
-        // the scroll has moved on: skip the settle and take the next step now
-        phase = target !== active ? 'rest' : 'drift'
-        if (phase === 'rest') {
-          progress = 0
-          bgY = 0
-        }
-        t0 = now
-      }
-    } else if (phase === 'drift') {
-      const k = sample(DRIFT_K, el)
-      progress = landed - dir * k
-      colRot = 0
-      bgY = dir * OVER * (1 - easeOutCubic(Math.min(1, el / dur(DRIFT_K))))
-      if (el >= dur(DRIFT_K) || target !== active) {
-        phase = 'rest'
-        progress = 0
-        bgY = 0
-        t0 = now
+    const dt = Math.min(0.05, last ? (now - last) / 1000 : 1 / 60)
+    last = now
+
+    const s = clampIdx(readScroll())
+    if (Math.abs(s - lastS) > 1e-3) lastMove = now
+    lastS = s
+
+    // once the finger is up, land on a whole card
+    const quiet = now - lastMove > IDLE_MS
+    const target = snapWhenIdle && quiet ? Math.round(s) : s
+
+    if (reduced) {
+      p = target
+      v = 0
+    } else {
+      const a = STIFFNESS * (target - p) - DAMPING * v
+      v += a * dt
+      p += v * dt
+      if (Math.abs(target - p) < 0.0005 && Math.abs(v) < 0.002) {
+        p = target
+        v = 0
       }
     }
-    emit()
+
+    setFront(clampIdx(Math.round(p)))
+    const lean = reduced ? 0 : Math.max(-LEAN_MAX, Math.min(LEAN_MAX, v * LEAN_PER_CARD_PER_S))
+    const bgY = (((p % 2) + 2) % 2) * row // wordmark repeats every two rows
+
+    onFrame({ p, v, front, lean, bgY })
     raf = requestAnimationFrame(frame)
   }
 
@@ -188,30 +113,21 @@ export function createStackMotion({ count, onFrame, onFront, reduced = false }) 
     start() {
       if (running) return
       running = true
-      t0 = performance.now()
+      last = 0
       raf = requestAnimationFrame(frame)
     },
     stop() {
       running = false
       cancelAnimationFrame(raf)
     },
-    begin,
-    /** where the page scroll says the pile should be; the engine walks there */
-    setTarget(i) {
-      target = Math.max(0, Math.min(N - 1, i))
-    },
-    setGeometry({ pitch: p, row: r }) {
-      if (p) pitch = p
+    setGeometry({ row: r }) {
       if (r) row = r
     },
-    get active() {
-      return active
+    get position() {
+      return p
     },
-    get target() {
-      return target
-    },
-    get phase() {
-      return phase
+    get velocity() {
+      return v
     },
     get front() {
       return front
@@ -221,10 +137,9 @@ export function createStackMotion({ count, onFrame, onFront, reduced = false }) 
 
 /**
  * @typedef {object} FrameState
- * @property {number} active   card the layout is centred on
- * @property {number} front    card in the middle slot (top z)
- * @property {number} progress travel in steps from `active`
- * @property {number} colRot   extra lean applied to every card, degrees
- * @property {number} bgY      backdrop translateY, px
- * @property {string} phase
+ * @property {number} p      pile position in cards; card i sits at slot i - p
+ * @property {number} v      pile velocity, cards per second
+ * @property {number} front  card nearest the middle (top z)
+ * @property {number} lean   extra tilt from velocity, degrees
+ * @property {number} bgY    backdrop translateY, px
  */
