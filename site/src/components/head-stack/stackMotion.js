@@ -42,7 +42,6 @@ const STIFFNESS = 150
 const DAMPING = 2 * Math.sqrt(STIFFNESS) * 0.7
 const LEAN_PER_CARD_PER_S = 2.2 // degrees of lean per card/s of pile velocity
 const LEAN_MAX = 7
-const IDLE_MS = 160 // scroll quiet for this long counts as "finger lifted"
 
 /**
  * @param {object} o
@@ -50,19 +49,15 @@ const IDLE_MS = 160 // scroll quiet for this long counts as "finger lifted"
  * @param {() => number} o.readScroll     scroll position in cards (0 .. count-1), called every frame
  * @param {(s: FrameState) => void} o.onFrame
  * @param {(front: number) => void} [o.onFront]  when the card nearest the middle changes
- * @param {boolean} [o.snapWhenIdle]      pull the pile to the nearest card once the scroll is quiet
- *                                        (for pointers without native scroll-snap)
  * @param {boolean} [o.reduced]           prefers-reduced-motion: no spring, no lean
  */
-export function createStackMotion({ count, readScroll, onFrame, onFront, snapWhenIdle = false, reduced = false }) {
+export function createStackMotion({ count, readScroll, onFrame, onFront, reduced = false }) {
   const N = count
   let row = 80 // backdrop row height, px
 
   let p = 0 // pile position, cards
   let v = 0 // cards per second
   let front = 0
-  let lastS = 0
-  let lastMove = 0
   let last = 0
   let raf = 0
   let running = false
@@ -80,13 +75,7 @@ export function createStackMotion({ count, readScroll, onFrame, onFront, snapWhe
     const dt = Math.min(0.05, last ? (now - last) / 1000 : 1 / 60)
     last = now
 
-    const s = clampIdx(readScroll())
-    if (Math.abs(s - lastS) > 1e-3) lastMove = now
-    lastS = s
-
-    // once the finger is up, land on a whole card
-    const quiet = now - lastMove > IDLE_MS
-    const target = snapWhenIdle && quiet ? Math.round(s) : s
+    const target = clampIdx(readScroll())
 
     if (reduced) {
       p = target
