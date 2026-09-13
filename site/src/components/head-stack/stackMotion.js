@@ -18,6 +18,10 @@
  * The backdrop text counter-moves 1.4x during the sink, then travels one row
  * the other way with a ~19px overshoot that decays with the drift.
  * The arriving card takes the middle slot (top z) the instant the slide starts.
+ *
+ * Nothing moves on its own. The owner sets a target index (from the page
+ * scroll) and the engine walks toward it one traced step at a time, a little
+ * faster when it is more than one step behind.
  */
 
 const SLOT = {
@@ -48,8 +52,9 @@ const SLIDE_K = [0, -2, -7, -16, -29, -47, -71, -97, -123, -146, -166, -182, -19
 const DRIFT_K = [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10].map((v) => v / STEP_PX)
 const SINK_MAX = SINK_K[SINK_K.length - 1]
 const FPS = 30
-export const PERIOD = 1.53
 const OVER = 19
+const CATCH_UP = 1.8 // playback rate when two steps behind
+const JUMP_AT = 3 // further behind than this: cut to the last step and play only that one
 
 function sample(K, t) {
   const f = Math.max(0, Math.min(K.length - 1, t * FPS))
@@ -83,9 +88,8 @@ export function createStackMotion({ count, onFrame, onFront, reduced = false }) 
   let sinkEnd = 0
   let landed = 0
   let t0 = 0
-  let tick0 = 0
-  let paused = false
-  let auto = true
+  let target = 0
+  let rate = 1
   let raf = 0
   let running = false
 
@@ -103,7 +107,6 @@ export function createStackMotion({ count, onFrame, onFront, reduced = false }) 
   function begin(d) {
     if (phase !== 'rest') return
     dir = d
-    tick0 = performance.now()
     if (reduced) {
       active = wrap(active + d)
       setFront(active)
@@ -116,12 +119,21 @@ export function createStackMotion({ count, onFrame, onFront, reduced = false }) 
 
   function frame(now) {
     if (!running) return
-    const el = (now - t0) / 1000
+    const el = ((now - t0) / 1000) * rate
     if (phase === 'rest') {
       progress = 0
       colRot = 0
       bgY = 0
-      if (auto && !paused && (now - tick0) / 1000 >= PERIOD) begin(1)
+      if (target !== active) {
+        const d = target > active ? 1 : -1
+        const gap = Math.abs(target - active)
+        if (gap >= JUMP_AT) {
+          active = target - d
+          setFront(active)
+        }
+        rate = gap >= 2 ? CATCH_UP : 1
+        begin(d)
+      }
     } else if (phase === 'sink') {
       const k = sample(SINK_K, el)
       progress = -dir * k
@@ -148,7 +160,12 @@ export function createStackMotion({ count, onFrame, onFront, reduced = false }) 
         if (Math.abs(bgBase) >= row * 2) bgBase -= Math.sign(bgBase) * row * 2
         landed = progress
         bgY = dir * OVER
-        phase = 'drift'
+        // the scroll has moved on: skip the settle and take the next step now
+        phase = target !== active ? 'rest' : 'drift'
+        if (phase === 'rest') {
+          progress = 0
+          bgY = 0
+        }
         t0 = now
       }
     } else if (phase === 'drift') {
@@ -156,7 +173,7 @@ export function createStackMotion({ count, onFrame, onFront, reduced = false }) 
       progress = landed - dir * k
       colRot = 0
       bgY = dir * OVER * (1 - easeOutCubic(Math.min(1, el / dur(DRIFT_K))))
-      if (el >= dur(DRIFT_K)) {
+      if (el >= dur(DRIFT_K) || target !== active) {
         phase = 'rest'
         progress = 0
         bgY = 0
@@ -171,7 +188,7 @@ export function createStackMotion({ count, onFrame, onFront, reduced = false }) 
     start() {
       if (running) return
       running = true
-      t0 = tick0 = performance.now()
+      t0 = performance.now()
       raf = requestAnimationFrame(frame)
     },
     stop() {
@@ -179,22 +196,22 @@ export function createStackMotion({ count, onFrame, onFront, reduced = false }) 
       cancelAnimationFrame(raf)
     },
     begin,
-    /** hold the auto timer (finger down, section off screen) */
-    setPaused(v) {
-      paused = v
-      if (!v) tick0 = performance.now()
-    },
-    setAuto(v) {
-      auto = v
-      tick0 = performance.now()
+    /** where the page scroll says the pile should be; the engine walks there */
+    setTarget(i) {
+      target = Math.max(0, Math.min(N - 1, i))
     },
     setGeometry({ pitch: p, row: r }) {
       if (p) pitch = p
       if (r) row = r
     },
-    /** call after the tab was hidden so the timer does not fire a burst */
-    resetClock() {
-      t0 = tick0 = performance.now()
+    get active() {
+      return active
+    },
+    get target() {
+      return target
+    },
+    get phase() {
+      return phase
     },
     get front() {
       return front

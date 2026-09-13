@@ -1,31 +1,52 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { HEADS } from '../../data/heads.js'
 import { openRavan } from '../../lib/ravan.js'
-import CardStack from './CardStack.jsx'
+import Statement from '../Statement.jsx'
+import CardStack, { INTRO_VH, STEP_VH, TAIL_VH } from './CardStack.jsx'
 import './head-stack.css'
 
 /*
- * Homepage section 3: the ten heads as a tilted pile of cards that steps
- * through itself. Built from a reference recording (2026-09-13): sink, snap,
- * settle timing traced frame by frame; slots own tilt and z-order; the
- * middle card is always on top.
+ * Sections 2 + 3 fused into one pinned block. A tall wrapper scrolls; inside
+ * it a sticky, viewport-high stage holds the statement line on top and the
+ * pile of ten head cards peeking below. Scrolling first lifts the statement
+ * away while the pile rises into place, then steps the pile one card per
+ * STEP_VH of scroll with the traced sink/snap/settle. Nothing moves on its
+ * own: the visitor's thumb drives every step.
  */
 export default function HeadStack() {
+  const wrapRef = useRef(null)
+  const stmtRef = useRef(null)
+  const hudRef = useRef(null)
   const [front, setFront] = useState(0)
   const onFront = useCallback((f) => setFront(f), [])
+  const onIntro = useCallback((e) => {
+    // statement lifts, blurs and fades; the pill only exists once the pile is in place
+    if (stmtRef.current) {
+      stmtRef.current.style.transform = `translateY(${-e * 28}vh)`
+      stmtRef.current.style.opacity = (1 - e).toFixed(3)
+      stmtRef.current.style.filter = e > 0 ? `blur(${(e * 6).toFixed(1)}px)` : 'none'
+      stmtRef.current.style.pointerEvents = e > 0.5 ? 'none' : ''
+    }
+    if (hudRef.current) {
+      hudRef.current.style.opacity = e.toFixed(3)
+      hudRef.current.style.pointerEvents = e > 0.6 ? '' : 'none'
+    }
+  }, [])
   const head = HEADS[front]
+  const height = `calc(100svh + ${INTRO_VH + STEP_VH * (HEADS.length - 1) + TAIL_VH}vh)`
 
   return (
-    <section id="heads" className="hs-section">
-      <div className="hs-head">
-        <p className="hs-label">Ten heads. One retainer.</p>
-        <p className="hs-hint">Tap a card to see the next head</p>
-      </div>
-      <CardStack heads={HEADS} onFront={onFront} />
-      <div className="hs-hud">
-        <button type="button" className="hs-pill" onClick={openRavan}>
-          <span aria-hidden="true">↗</span> Ask about {head.short.toLowerCase()}
-        </button>
+    <section id="heads" ref={wrapRef} className="hs-wrap" style={{ height }}>
+      <div className="hs-section">
+        <div ref={stmtRef} className="hs-statement">
+          <Statement trigger={wrapRef} />
+        </div>
+        <CardStack heads={HEADS} wrapRef={wrapRef} onFront={onFront} onIntro={onIntro} />
+        <div ref={hudRef} className="hs-hud" style={{ opacity: 0, pointerEvents: 'none' }}>
+          <button type="button" className="hs-pill" onClick={openRavan}>
+            <span aria-hidden="true">↗</span> Ask about {head.short.toLowerCase()}
+          </button>
+        </div>
       </div>
     </section>
   )

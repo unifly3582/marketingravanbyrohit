@@ -25,7 +25,7 @@ const FRONT = 5   // wave-front width, in letters
 const HOLD = 1    // letters that sit solid-accent
 const TRAIL = 10  // accent→final fade width, in letters
 
-export default function Statement() {
+export default function Statement({ trigger } = {}) {
   const ref = useRef(null)
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export default function Statement() {
 
     const tl = gsap.timeline({
       scrollTrigger: {
-        trigger: ref.current,
+        trigger: trigger?.current ?? ref.current,
         // finish while the whole block is still on screen: the reveal ends
         // once the section top reaches a fifth of the way down the viewport
         start: 'top 85%',
@@ -77,7 +77,7 @@ export default function Statement() {
       tl.scrollTrigger?.kill()
       tl.kill()
     }
-  }, [])
+  }, [trigger])
 
   // `group` is 'h' (heading) or 'p' (paragraph): each runs its own wave
   const renderLine = (line, final, group = 'h') =>

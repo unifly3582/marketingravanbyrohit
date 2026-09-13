@@ -1,50 +1,38 @@
 /* Head stack section. Tokens come from index.css (--color-*, --font-*). */
 
-.hs-section {
+/* tall wrapper the page scrolls through; its height is set inline from the
+   scroll budget (intro + one step per card) */
+.hs-wrap {
   position: relative;
+  background: var(--color-ground);
+}
+
+/* the pinned, viewport-high stage */
+.hs-section {
+  position: sticky;
+  top: 0;
   height: 100svh;
-  min-height: 620px;
-  max-height: 900px;
   overflow: hidden;
   background: var(--color-ground);
   color: var(--color-cream);
   isolation: isolate;
 }
 
-.hs-head {
+/* the statement line rides on top of the stage during the intro */
+.hs-statement {
   position: absolute;
   inset: 0 0 auto 0;
-  z-index: 40;
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-  padding: 1.1rem 1.25rem 0;
-  pointer-events: none;
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-muted);
+  z-index: 45;
+  padding-top: 4.5rem;
+  will-change: transform, opacity, filter;
 }
-.hs-label { margin: 0; color: var(--color-cream); font-weight: 600; }
-.hs-hint { margin: 0; }
-@media (max-width: 400px) { .hs-hint { display: none; } }
 
 /* ---------- stage ---------- */
 .hs-stage {
   position: absolute;
   inset: 0;
-  touch-action: pan-y;
-  outline: none;
   user-select: none;
   -webkit-user-select: none;
-}
-.hs-stage:focus-visible::after {
-  content: '';
-  position: absolute; inset: 6px;
-  border: 2px solid var(--color-gold);
-  border-radius: 12px;
-  pointer-events: none;
 }
 
 /* ---------- backdrop wordmark ---------- */
@@ -55,6 +43,7 @@
   pointer-events: none;
 }
 .hs-backdrop-col {
+  opacity: 0;
   font-family: var(--font-display);
   font-weight: 800;
   font-size: min(19vw, 128px);
@@ -70,7 +59,7 @@
 .hs-backdrop-col span:nth-child(even) { color: var(--color-gold); }
 
 /* ---------- cards ---------- */
-.hs-pile { position: absolute; inset: 0; }
+.hs-pile { position: absolute; inset: 0; will-change: transform; }
 .hs-card {
   position: absolute;
   left: 50%; top: 50%;
@@ -172,9 +161,9 @@
   .hs-dots i { transition: none; }
 }
 
-/* wide screens: keep the pile phone-sized in the middle of the section */
+/* wide screens: keep the pile phone-sized in the middle of the stage */
 @media (min-width: 768px) {
-  .hs-section { height: 760px; }
+  .hs-statement { padding-top: 6rem; }
   .hs-stage { left: 50%; width: 480px; transform: translateX(-50%); }
   .hs-backdrop-col { font-size: 96px; }
   .hs-hud { left: 50%; transform: translateX(-240px); }

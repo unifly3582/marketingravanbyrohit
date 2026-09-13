@@ -6,18 +6,29 @@ import { createStackMotion, lookAt } from './stackMotion.js'
 
 const LIGHT = [1, 0, 1, 0, 0, 1, 0, 1, 0, 1]
 
+/* scroll budget, in viewport heights. The owner sizes its wrapper with these. */
+export const INTRO_VH = 60 // statement lifts away, pile rises into place
+export const STEP_VH = 48 // scroll distance per card
+export const TAIL_VH = 40 // rest on the last card before the block scrolls away
+const PEEK_VH = 44 // where the pile waits during the intro (below centre)
+
+const easeInOut = (u) => -(Math.cos(Math.PI * u) - 1) / 2
+
 /*
- * Lays the cards in a column and drives them from the motion engine.
- * Geometry: card width is a share of the stage width (85% on phones), cards
- * are spaced 1.09 card-heights apart, so three show at once. Transforms are
- * written directly to the DOM every frame; React only re-renders on a step.
+ * Lays the cards in a column and drives them from the page scroll.
+ * `wrapRef` is the tall wrapper the sticky stage lives in; how far it has
+ * scrolled past the top of the viewport decides everything: the first
+ * INTRO_VH move the pile up from its peek position, then every STEP_VH is
+ * one card. The engine plays the traced sink/snap/settle for each step.
+ * Transforms are written straight to the DOM; React re-renders only on a step.
  */
-export default function CardStack({ heads, cardShare = 0.85, maxCardWidth = 420, onFront }) {
+export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWidth = 420, onFront, onIntro }) {
   const stageRef = useRef(null)
+  const pileRef = useRef(null)
   const bdRef = useRef(null)
   const cardRefs = useRef([])
   const engineRef = useRef(null)
-  const geom = useRef({ cw: 0, pitch: 0 })
+  const geom = useRef({ cw: 0, pitch: 0, vh: 800 })
   const [front, setFront] = useState(0)
   const N = heads.length
 
@@ -29,7 +40,7 @@ export default function CardStack({ heads, cardShare = 0.85, maxCardWidth = 420,
     const pitch = Math.round(ch * 1.09)
     stage.style.setProperty('--hs-cw', `${cw}px`)
     stage.style.setProperty('--hs-ch', `${ch}px`)
-    geom.current = { cw, pitch }
+    geom.current = { cw, pitch, vh: window.innerHeight }
     const rowEl = bdRef.current?.firstElementChild
     const row = rowEl ? rowEl.getBoundingClientRect().height : 80
     if (bdRef.current) {
@@ -49,13 +60,8 @@ export default function CardStack({ heads, cardShare = 0.85, maxCardWidth = 420,
 
   useEffect(() => {
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
-    const rel = (i, active) => {
-      let r = i - active
-      if (r > N / 2) r -= N
-      if (r < -N / 2) r += N
-      return r
-    }
-    const dist = (i, j) => Math.min(Math.abs(i - j), N - Math.abs(i - j))
+    const dist = (i, j) => Math.abs(i - j)
+    let lastIntro = -1
 
     const engine = createStackMotion({
       count: N,
@@ -65,10 +71,31 @@ export default function CardStack({ heads, cardShare = 0.85, maxCardWidth = 420,
         onFront?.(f)
       },
       onFrame: (s) => {
-        const { cw, pitch } = geom.current
+        const { cw, pitch, vh } = geom.current
+
+        // ---- read the scroll: how far the wrapper has gone past the top
+        const wrap = wrapRef?.current
+        const y = wrap ? Math.max(0, -wrap.getBoundingClientRect().top) : 0
+        const introPx = (INTRO_VH / 100) * vh
+        const stepPx = (STEP_VH / 100) * vh
+        const intro = easeInOut(Math.min(1, y / introPx))
+        engine.setTarget(Math.round(Math.max(0, y - introPx) / stepPx))
+
+        // ---- intro: pile rises from its peek, wordmark fades in
+        if (pileRef.current) pileRef.current.style.transform = `translateY(${(PEEK_VH / 100) * vh * (1 - intro)}px)`
+        if (bdRef.current) {
+          bdRef.current.style.transform = `translateY(${s.bgY}px)`
+          bdRef.current.style.opacity = intro.toFixed(3)
+        }
+        if (intro !== lastIntro) {
+          lastIntro = intro
+          onIntro?.(intro)
+        }
+
+        // ---- cards
         cardRefs.current.forEach((el, i) => {
           if (!el) return
-          const r = rel(i, s.active)
+          const r = i - s.active
           if (Math.abs(r) > 3) {
             el.style.visibility = 'hidden'
             return
@@ -79,66 +106,19 @@ export default function CardStack({ heads, cardShare = 0.85, maxCardWidth = 420,
           el.style.transform = `translate(${(look.x / 100) * cw}px, ${slot * pitch}px) rotate(${look.tilt + s.colRot}deg)`
           el.style.zIndex = N - dist(i, s.front)
         })
-        if (bdRef.current) bdRef.current.style.transform = `translateY(${s.bgY}px)`
       },
     })
     engineRef.current = engine
+    if (import.meta.env.DEV) window.__hsEngine = engine
     engine.setGeometry(geom.current)
     engine.start()
-
-    // only run while on screen; a hidden pile burns battery for nothing
-    const io = new IntersectionObserver(([e]) => engine.setAuto(e.isIntersecting), { threshold: 0.35 })
-    if (stageRef.current) io.observe(stageRef.current)
-    const onVis = () => engine.resetClock()
-    document.addEventListener('visibilitychange', onVis)
-
-    return () => {
-      engine.stop()
-      io.disconnect()
-      document.removeEventListener('visibilitychange', onVis)
-    }
-  }, [N, onFront])
-
-  // touch: hold pauses the timer, a tap or a short vertical flick steps it.
-  // Page scrolling stays native (touch-action: pan-y), so a long swipe scrolls.
-  const press = useRef(null)
-  const onPointerDown = (e) => {
-    press.current = { y: e.clientY, t: performance.now() }
-    engineRef.current?.setPaused(true)
-  }
-  const onPointerUp = (e) => {
-    const p = press.current
-    press.current = null
-    engineRef.current?.setPaused(false)
-    if (!p) return
-    const dy = e.clientY - p.y
-    const dt = performance.now() - p.t
-    if (Math.abs(dy) < 12 && dt < 400) engineRef.current?.begin(1)
-    else if (dt < 350 && dy < -40) engineRef.current?.begin(1)
-    else if (dt < 350 && dy > 40) engineRef.current?.begin(-1)
-  }
-  const onPointerCancel = () => {
-    press.current = null
-    engineRef.current?.setPaused(false)
-  }
+    return () => engine.stop()
+  }, [N, onFront, onIntro, wrapRef])
 
   return (
-    <div
-      ref={stageRef}
-      className="hs-stage"
-      onPointerDown={onPointerDown}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerCancel}
-      onKeyDown={(e) => {
-        if (e.key === 'ArrowUp') engineRef.current?.begin(1)
-        if (e.key === 'ArrowDown') engineRef.current?.begin(-1)
-      }}
-      tabIndex={0}
-      aria-roledescription="carousel"
-      aria-label="The ten heads"
-    >
+    <div ref={stageRef} className="hs-stage" aria-roledescription="carousel" aria-label="The ten heads">
       <StackBackdrop ref={bdRef} />
-      <div className="hs-pile">
+      <div ref={pileRef} className="hs-pile">
         {heads.map((h, i) => (
           <StackCard
             key={h.n}
