@@ -256,13 +256,17 @@ export default function MetaOrbit({ active }) {
     })
     // ---- "paisa hi paisa hoga": the cut-out Showman, the catchphrase, a rain of coins
     let paisa = null
+    let paisaAspect = 720 / 1070 // width / height of the cut-out; read from the image once loaded
     if (PAISA) {
-      const tex = loader.load(PAISA.src)
+      const tex = loader.load(PAISA.src, (loaded) => {
+        paisaAspect = loaded.image.width / loaded.image.height
+        paisa.geometry.dispose()
+        paisa.geometry = new THREE.PlaneGeometry(paisaAspect, 1)
+      })
       tex.colorSpace = THREE.SRGBColorSpace
       tex.anisotropy = 4
-      const w = 0.98
       paisa = new THREE.Mesh(
-        new THREE.PlaneGeometry(w, w * (1070 / 720)),
+        new THREE.PlaneGeometry(paisaAspect, 1), // unit height; scaled to the view each frame
         new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false, alphaTest: 0.02 }),
       )
       paisa.renderOrder = 7
@@ -397,16 +401,23 @@ export default function MetaOrbit({ active }) {
       // ---- "paisa hi paisa hoga": leans in from the right over the wide shot
       const inn = seg(t, 14.2, 15.0) - seg(t, 18.4, 19.2) // 0 out, 1 in
       if (paisa) {
-        // waist-up at the bottom-right edge; hands "rub" as a quick, small rock
-        const rub = Math.sin(T * 14) * 0.02
-        paisa.position.set(0.58 + 1.7 * (1 - inn) + rub, -0.5 + Math.sin(T * 1.7) * 0.03, 2.2)
-        paisa.rotation.z = -0.06 + Math.sin(T * 14) * 0.015
-        paisa.lookAt(camera.position)
-        paisa.rotation.z -= 0.06
+        // the whole cut-out in frame: fitted to the view height, tucked to the right edge,
+        // sliding in from off-frame; hands "rub" as a quick, small rock
+        const pz = 2.2
+        const dP = Math.abs(camera.position.z - pz)
+        const viewH = 2 * dP * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
+        const viewW = viewH * camera.aspect
+        const h = viewH * 0.94
+        const w = h * paisaAspect
+        const xIn = viewW / 2 - w / 2 - 0.04
+        const rub = Math.sin(T * 14) * 0.015
+        paisa.scale.set(h, h, 1)
+        paisa.position.set(xIn + (viewW / 2 + w) * (1 - inn) + rub, Math.sin(T * 1.7) * 0.02, pz)
+        paisa.rotation.set(0, 0, -0.03 + Math.sin(T * 14) * 0.012)
         setAlpha(paisa, inn)
       }
       const said = seg(t, 15.0, 15.4) - seg(t, 18.2, 18.7)
-      catchphrase.position.set(-0.5, 0.62, 2.35)
+      catchphrase.position.set(-0.42, 0.55, 2.35)
       catchphrase.lookAt(camera.position)
       catchphrase.rotation.z += -0.09
       catchphrase.scale.setScalar(pop(said) * (0.9 + 0.1 * said))
