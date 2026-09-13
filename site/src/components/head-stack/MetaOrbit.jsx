@@ -13,15 +13,14 @@ import { pagesFrom } from './pages.js'
  *   4-8s   push in: one ad panel comes to the front and fills the frame,
  *          a Sponsored chip and a burst of likes
  *   8-13s  the catch: the Meta Ads head leans out of an ad frame with a net
- *          (a nano banana frame), customers are pulled into it and order
- *          badges pop, one after the other
+ *          full of customers and money (a nano banana frame), fitted to the
+ *          card's height
  *   13-16s pull back out to the symbol and loop
  *
  * Built from Meta's official symbol outline (extruded, brand gradient). One
  * WebGL canvas that animates only while the card is in the middle of the pile.
  */
 const ADS = pagesFrom(import.meta.glob('../../assets/ads-mockups/*.webp', { eager: true, import: 'default' }))
-const FACES = pagesFrom(import.meta.glob('../../assets/faces-mockups/*.webp', { eager: true, import: 'default' }))
 const CATCH = pagesFrom(import.meta.glob('../../assets/catch-mockups/*.webp', { eager: true, import: 'default' }))[0]
 const SKY = 0xeef3fb
 const LOOP = 16
@@ -111,26 +110,6 @@ function chip(text, height, opts) {
   return m
 }
 
-/* a round avatar: photo in a circle with a white ring */
-function avatar(src, size) {
-  const g = new THREE.Group()
-  const tex = new THREE.TextureLoader().load(src)
-  tex.colorSpace = THREE.SRGBColorSpace
-  const ring = new THREE.Mesh(
-    new THREE.CircleGeometry(size * 0.56, 48),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, toneMapped: false }),
-  )
-  const face = new THREE.Mesh(
-    new THREE.CircleGeometry(size * 0.5, 48),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false }),
-  )
-  face.position.z = 0.005
-  g.add(ring, face)
-  g.userData.mats = [ring.material, face.material]
-  g.renderOrder = 6
-  return g
-}
-
 const clamp01 = (u) => Math.max(0, Math.min(1, u))
 const smooth = (u) => {
   const x = clamp01(u)
@@ -138,12 +117,6 @@ const smooth = (u) => {
 }
 /** 0 -> 1 over [a, b], smoothstepped */
 const seg = (t, a, b) => smooth((t - a) / (b - a))
-/** a badge popping in: scales past 1 and settles */
-const pop = (u) => {
-  const x = clamp01(u)
-  return x <= 0 ? 0.001 : 1 + 0.35 * Math.sin(x * Math.PI) * (1 - x)
-}
-
 export default function MetaOrbit({ active }) {
   const hostRef = useRef(null)
   const activeRef = useRef(active)
@@ -238,25 +211,13 @@ export default function MetaOrbit({ active }) {
       return m
     })
 
-    // ---- the catch: sponsored chip, likes, hook line, two customers, order badges
+    // ---- the ad's dressing for the push-in: Sponsored chip and likes
     const sponsored = chip('Sponsored', 0.16, { accent: '#0a6cff' })
     const likes = ['❤ 2,318', '❤ 3,102', '❤ 4,860'].map((t) => chip(t, 0.16, { fg: '#e0245e' }))
-    const orders = ['Order ₹3,499 ✓', 'Order ₹1,899 ✓'].map((t) => chip(t, 0.18, { bg: '#0a6cff', fg: '#ffffff' }))
-    const customers = FACES.slice(0, 2).map((f) => avatar(f.src, 0.5))
-    const hook = new THREE.Mesh(
-      new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(), new THREE.Vector3(0, 0, 0.001)), 4, 0.012, 6, false),
-      new THREE.MeshBasicMaterial({ color: 0x0a6cff, transparent: true, toneMapped: false }),
-    )
-    ;[sponsored, ...likes, ...orders, ...customers, hook].forEach((o) => {
+    ;[sponsored, ...likes].forEach((o) => {
       o.visible = false
       scene.add(o)
     })
-    const rebuildHook = (from, to, bulge) => {
-      const mid = from.clone().lerp(to, 0.5)
-      mid.y += bulge
-      hook.geometry.dispose()
-      hook.geometry = new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(from, mid, to), 48, 0.012, 6, false)
-    }
     const setAlpha = (obj, a) => {
       const mats = obj.userData?.mats ?? (obj.material ? [obj.material] : [])
       mats.forEach((m) => {
@@ -285,12 +246,9 @@ export default function MetaOrbit({ active }) {
     const heroHome = new THREE.Vector3()
     const heroFront = new THREE.Vector3(-0.7, 0.05, 2.9)
     const heroSide = new THREE.Vector3(-1.35, 0.5, 2.0) // where the ad waits during the catch
-    const catchFront = new THREE.Vector3(-0.45, -0.02, 3.0)
+    const catchFront = new THREE.Vector3(0, 0, 3.0)
     const catchHome = new THREE.Vector3()
     const tmp = new THREE.Vector3()
-    const far = new THREE.Vector3()
-    const near = new THREE.Vector3()
-    const anchor = new THREE.Vector3()
     let raf = 0
     const t0 = performance.now()
 
@@ -329,7 +287,10 @@ export default function MetaOrbit({ active }) {
           catchHome.copy(tmp)
           catchHome.z -= 1.2 * zoomIn * (1 - catching)
           m.position.lerpVectors(catchHome, catchFront, catching)
-          m.scale.setScalar((1 - 0.25 * zoomIn) * (1 - catching) + (1 + 1.75) * catching)
+          const dCam = camera.position.distanceTo(catchFront)
+          const viewH = 2 * dCam * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
+          const fit = (viewH * 0.98) / (m.userData.s * 1.25) // full card height, no crop
+          m.scale.setScalar((1 - 0.25 * zoomIn) * (1 - catching) + fit * catching)
           m.lookAt(camera.position)
           m.rotation.z += (1 - catching) * Math.sin(T * 0.5 + i * 1.3) * 0.06
         } else {
@@ -364,40 +325,6 @@ export default function MetaOrbit({ active }) {
         m.scale.setScalar(0.8 + 0.4 * u)
         setAlpha(m, (u > 0 && u < 1 ? Math.sin(u * Math.PI) : 0) * (1 - catching))
       })
-
-      // ---- the catch: two customers, one after the other
-      if (catcher) {
-        const cw = catcher.userData.s * catcher.scale.x
-        anchor.copy(catcher.position).add(tmp.set(cw * 0.32, -cw * 1.25 * 0.22, 0.05)) // the mouth of the net
-      } else {
-        anchor.copy(hero.position).add(tmp.set(heroW * 0.45, -heroH * 0.1, 0.04)) // the ad's "Shop now" edge
-      }
-      let hookShown = false
-      customers.forEach((cust, i) => {
-        const s0 = 8.2 + i * 2.3 // when this customer's beat starts
-        const enter = seg(t, s0, s0 + 0.7) // slides in from the right
-        const line = seg(t, s0 + 0.5, s0 + 1.1) // the line reaches out
-        const pull = seg(t, s0 + 1.1, s0 + 1.7) // pulled to the ad
-        const badge = seg(t, s0 + 1.6, s0 + 2.0) // order badge pops
-        const out = seg(t, s0 + 2.6, s0 + 3.0) // leaves
-        far.set(1.0 + 1.6 * (1 - enter), -0.45 + i * 0.75, 1.2) // enters from off-frame right
-        near.set(anchor.x + 0.35, anchor.y + 0.05 + i * 0.4, anchor.z + 0.1)
-        cust.position.lerpVectors(far, near, pull)
-        cust.lookAt(camera.position)
-        cust.scale.setScalar(0.85 + 0.15 * pull)
-        setAlpha(cust, catching * enter * (1 - out))
-        if (!hookShown && t >= s0 + 0.5 && t < s0 + 3.0 && line > 0) {
-          hookShown = true
-          rebuildHook(anchor, tmp.copy(anchor).lerp(cust.position, line), 0.25 * line)
-          setAlpha(hook, catching * (1 - out))
-        }
-        const b = orders[i]
-        b.position.copy(cust.position).add(tmp.set(-0.22, 0.42, 0.08))
-        b.lookAt(camera.position)
-        b.scale.setScalar(pop(badge))
-        setAlpha(b, catching * badge * (1 - out))
-      })
-      if (!hookShown) setAlpha(hook, 0)
 
       renderer.render(scene, camera)
     }
