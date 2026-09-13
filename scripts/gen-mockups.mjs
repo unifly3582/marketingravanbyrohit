@@ -79,6 +79,21 @@ the blue of the net matches Meta blue.`,
   },
 }
 
+/* the "paisa hi paisa hoga" beat: the Meta Ads head in the famous gleeful hand-rubbing pose,
+   leaning in from the side. Generated on a flat green so it can be cut out (scripts/cutout.py). */
+SETS.paisa = {
+  aspect: '3:4',
+  ref: join(__dirname, '..', 'assets-src', 'agents-cut', 'ads-3.png'),
+  frame: `Polished 3D-animation-style character render (Pixar look, soft studio light), on a completely flat, even,
+solid bright green background (#00FF00) with no floor, no shadow on the background, no text, no props, no watermark.`,
+  items: {
+    paisa: `The character from the reference image (keep his face, crown, horns, moustache, sunglasses and embroidered jacket exactly),
+waist-up, leaning in from the right side of the frame toward the viewer, hunched forward with both palms pressed together
+and rubbing gleefully, huge mischievous grin, eyebrows up, eyes lit up with delight, the classic "money is coming" pose.
+Whole head and both hands fully inside the frame.`,
+  },
+}
+
 const [setName, ...want] = process.argv.slice(2)
 const set = SETS[setName]
 if (!set) {

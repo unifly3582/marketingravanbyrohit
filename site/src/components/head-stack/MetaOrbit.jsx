@@ -15,15 +15,19 @@ import { pagesFrom } from './pages.js'
  *   8-13s  the catch: the Meta Ads head leans out of an ad frame with a net
  *          full of customers and money (a nano banana frame), fitted to the
  *          card's height
- *   13-16s pull back out to the symbol and loop
+ *   13-15s pull back out to the symbol
+ *   14-19s "paisa hi paisa hoga": the Meta Ads head leans in from the side
+ *          rubbing his hands (a cut-out nano banana frame), the catchphrase
+ *          pops and rupee coins rain; then he slides out and it loops
  *
  * Built from Meta's official symbol outline (extruded, brand gradient). One
  * WebGL canvas that animates only while the card is in the middle of the pile.
  */
 const ADS = pagesFrom(import.meta.glob('../../assets/ads-mockups/*.webp', { eager: true, import: 'default' }))
 const CATCH = pagesFrom(import.meta.glob('../../assets/catch-mockups/*.webp', { eager: true, import: 'default' }))[0]
+const PAISA = pagesFrom(import.meta.glob('../../assets/paisa-mockups/*.webp', { eager: true, import: 'default' }))[0]
 const SKY = 0xeef3fb
-const LOOP = 16
+const LOOP = 20
 
 /* Meta's symbol, exactly: the official outline (24x24 vector), extruded with
    deep rounded bevels sized to the stroke so the cross-section is close to a
@@ -68,11 +72,11 @@ function buildLogo() {
 }
 
 /* a pill chip drawn on a canvas: white pill, dark text, hairline border */
-function chipTexture(text, { bg = '#ffffff', fg = '#1c2b4a', accent = null } = {}) {
+function chipTexture(text, { bg = '#ffffff', fg = '#1c2b4a', accent = null, weight = 600, border = 'rgba(28,43,74,0.18)' } = {}) {
   const dpr = 2
   const cv = document.createElement('canvas')
   const ctx = cv.getContext('2d')
-  const font = `600 ${22 * dpr}px "Instrument Sans", "Segoe UI", system-ui, sans-serif`
+  const font = `${weight} ${22 * dpr}px "Instrument Sans", "Segoe UI", system-ui, sans-serif`
   ctx.font = font
   const w = Math.ceil(ctx.measureText(text).width + (accent ? 54 : 40) * dpr)
   const h = 44 * dpr
@@ -80,8 +84,8 @@ function chipTexture(text, { bg = '#ffffff', fg = '#1c2b4a', accent = null } = {
   cv.height = h
   ctx.font = font
   ctx.fillStyle = bg
-  ctx.strokeStyle = 'rgba(28,43,74,0.18)'
-  ctx.lineWidth = 2
+  ctx.strokeStyle = border
+  ctx.lineWidth = border === 'none' ? 0 : 2
   ctx.beginPath()
   ctx.roundRect(1, 1, w - 2, h - 2, h / 2)
   ctx.fill()
@@ -100,6 +104,34 @@ function chipTexture(text, { bg = '#ffffff', fg = '#1c2b4a', accent = null } = {
   tex.anisotropy = 4
   return { tex, aspect: w / h }
 }
+/* a gold rupee coin */
+function coinTexture() {
+  const cv = document.createElement('canvas')
+  cv.width = cv.height = 96
+  const ctx = cv.getContext('2d')
+  const g = ctx.createRadialGradient(36, 34, 6, 48, 48, 48)
+  g.addColorStop(0, '#ffe98a')
+  g.addColorStop(0.6, '#f0b62f')
+  g.addColorStop(1, '#b8791a')
+  ctx.fillStyle = g
+  ctx.beginPath()
+  ctx.arc(48, 48, 46, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(120,80,10,0.55)'
+  ctx.lineWidth = 4
+  ctx.beginPath()
+  ctx.arc(48, 48, 38, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.fillStyle = '#7a4d0c'
+  ctx.font = '700 46px "Instrument Sans", "Segoe UI", system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('₹', 48, 50)
+  const tex = new THREE.CanvasTexture(cv)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
 function chip(text, height, opts) {
   const { tex, aspect } = chipTexture(text, opts)
   const m = new THREE.Mesh(
@@ -117,6 +149,11 @@ const smooth = (u) => {
 }
 /** 0 -> 1 over [a, b], smoothstepped */
 const seg = (t, a, b) => smooth((t - a) / (b - a))
+/** something popping in: scales past 1 and settles */
+const pop = (u) => {
+  const x = clamp01(u)
+  return x <= 0 ? 0.001 : 1 + 0.35 * Math.sin(x * Math.PI) * (1 - x)
+}
 export default function MetaOrbit({ active }) {
   const hostRef = useRef(null)
   const activeRef = useRef(active)
@@ -217,6 +254,37 @@ export default function MetaOrbit({ active }) {
       o.visible = false
       scene.add(o)
     })
+    // ---- "paisa hi paisa hoga": the cut-out Showman, the catchphrase, a rain of coins
+    let paisa = null
+    if (PAISA) {
+      const tex = loader.load(PAISA.src)
+      tex.colorSpace = THREE.SRGBColorSpace
+      tex.anisotropy = 4
+      const w = 0.98
+      paisa = new THREE.Mesh(
+        new THREE.PlaneGeometry(w, w * (1070 / 720)),
+        new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false, alphaTest: 0.02 }),
+      )
+      paisa.renderOrder = 7
+      paisa.visible = false
+      scene.add(paisa)
+    }
+    const catchphrase = chip('PAISA HI PAISA HOGA!', 0.27, { bg: '#ffd400', fg: '#111111', weight: 800, border: '#111111' })
+    catchphrase.renderOrder = 8
+    catchphrase.visible = false
+    scene.add(catchphrase)
+    const coinTex = coinTexture()
+    const coins = Array.from({ length: 16 }, (_, i) => {
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.16, 0.16),
+        new THREE.MeshBasicMaterial({ map: coinTex, transparent: true, toneMapped: false }),
+      )
+      m.userData = { x: -1.3 + ((i * 0.53) % 2.4), delay: (i * 0.37) % 2.2, spin: 2 + (i % 4), z: 1.4 + ((i * 0.31) % 1.2) }
+      m.visible = false
+      scene.add(m)
+      return m
+    })
+
     const setAlpha = (obj, a) => {
       const mats = obj.userData?.mats ?? (obj.material ? [obj.material] : [])
       mats.forEach((m) => {
@@ -324,6 +392,35 @@ export default function MetaOrbit({ active }) {
         m.lookAt(camera.position)
         m.scale.setScalar(0.8 + 0.4 * u)
         setAlpha(m, (u > 0 && u < 1 ? Math.sin(u * Math.PI) : 0) * (1 - catching))
+      })
+
+      // ---- "paisa hi paisa hoga": leans in from the right over the wide shot
+      const inn = seg(t, 14.2, 15.0) - seg(t, 18.4, 19.2) // 0 out, 1 in
+      if (paisa) {
+        // waist-up at the bottom-right edge; hands "rub" as a quick, small rock
+        const rub = Math.sin(T * 14) * 0.02
+        paisa.position.set(0.58 + 1.7 * (1 - inn) + rub, -0.5 + Math.sin(T * 1.7) * 0.03, 2.2)
+        paisa.rotation.z = -0.06 + Math.sin(T * 14) * 0.015
+        paisa.lookAt(camera.position)
+        paisa.rotation.z -= 0.06
+        setAlpha(paisa, inn)
+      }
+      const said = seg(t, 15.0, 15.4) - seg(t, 18.2, 18.7)
+      catchphrase.position.set(-0.5, 0.62, 2.35)
+      catchphrase.lookAt(camera.position)
+      catchphrase.rotation.z += -0.09
+      catchphrase.scale.setScalar(pop(said) * (0.9 + 0.1 * said))
+      setAlpha(catchphrase, said)
+      const raining = seg(t, 15.2, 15.6) - seg(t, 18.0, 18.8)
+      coins.forEach((c) => {
+        const d = c.userData
+        const life = ((t - 15.2 - d.delay) % 2.2 + 2.2) % 2.2 // 0..2.2s fall, then recycled
+        const u = life / 2.2
+        c.position.set(d.x + Math.sin(u * 6 + d.delay) * 0.08, 1.3 - u * u * 2.9, d.z)
+        c.rotation.y = T * d.spin
+        c.lookAt(camera.position)
+        c.rotation.y += T * d.spin
+        setAlpha(c, raining * (u < 0.9 ? 1 : (1 - u) * 10))
       })
 
       renderer.render(scene, camera)
