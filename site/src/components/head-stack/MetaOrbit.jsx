@@ -5,21 +5,28 @@ import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { pagesFrom } from './pages.js'
 
 /*
- * The Meta Ads card's visual, after Meta's own brand film: Meta's symbol,
- * built from its official outline, as a glossy 3D piece turning slowly in a
- * bright, airy space, with ad panels drifting around it like cards in orbit.
- * Fills the whole card.
+ * The Meta Ads card's visual, after Meta's brand film: a looping 16-second
+ * sequence of shots inside one bright 3D space.
  *
- * One WebGL canvas. It renders continuously only while the card is in the
- * middle of the pile; otherwise it draws a single frame and sleeps.
+ *   0-4s   the Meta symbol turns in the middle, ad panels orbit it, tag chips
+ *          drift past like the film's LAYOUT / MOVE / COLOR tags
+ *   4-8s   push in: one ad panel comes to the front and fills the frame,
+ *          a Sponsored chip and a burst of likes
+ *   8-13s  the catch: a line reaches out from the ad, a customer is pulled
+ *          in, an order badge pops; then a second customer
+ *   13-16s pull back out to the symbol and loop
+ *
+ * Built from Meta's official symbol outline (extruded, brand gradient). One
+ * WebGL canvas that animates only while the card is in the middle of the pile.
  */
 const ADS = pagesFrom(import.meta.glob('../../assets/ads-mockups/*.webp', { eager: true, import: 'default' }))
+const FACES = pagesFrom(import.meta.glob('../../assets/faces-mockups/*.webp', { eager: true, import: 'default' }))
 const SKY = 0xeef3fb
+const LOOP = 16
 
 /* Meta's symbol, exactly: the official outline (24x24 vector), extruded with
-   deep rounded bevels so the cross-section is close to a round tube, which
-   is how the film renders it. Colour is the brand gradient the mark ships
-   with: #0064E0 on the left sweeping to #0082FB on the right. */
+   deep rounded bevels sized to the stroke so the cross-section is close to a
+   round tube. Colour is the brand gradient the mark ships with. */
 const META_PATH =
   'M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a6.624 6.624 0 0 0 .265.86 5.297 5.297 0 0 0 .371.761c.696 1.159 1.818 1.927 3.593 1.927 1.497 0 2.633-.671 3.965-2.444.76-1.012 1.144-1.626 2.663-4.32l.756-1.339.186-.325c.061.1.121.196.183.3l2.152 3.595c.724 1.21 1.665 2.556 2.47 3.314 1.046.987 1.992 1.22 3.06 1.22 1.075 0 1.876-.355 2.455-.843a3.743 3.743 0 0 0 .81-.973c.542-.939.861-2.127.861-3.745 0-2.72-.681-5.357-2.084-7.45-1.282-1.912-2.957-2.93-4.716-2.93-1.047 0-2.088.467-3.053 1.308-.652.57-1.257 1.29-1.82 2.05-.69-.875-1.335-1.547-1.958-2.056-1.182-.966-2.315-1.303-3.454-1.303zm10.16 2.053c1.147 0 2.188.758 2.992 1.999 1.132 1.748 1.647 4.195 1.647 6.4 0 1.548-.368 2.9-1.839 2.9-.58 0-1.027-.23-1.664-1.004-.496-.601-1.343-1.878-2.832-4.358l-.617-1.028a44.908 44.908 0 0 0-1.255-1.98c.07-.109.141-.224.211-.327 1.12-1.667 2.118-2.602 3.358-2.602zm-10.201.553c1.265 0 2.058.791 2.675 1.446.307.327.737.871 1.234 1.579l-1.02 1.566c-.757 1.163-1.882 3.017-2.837 4.338-1.191 1.649-1.81 1.817-2.486 1.817-.524 0-1.038-.237-1.383-.794-.263-.426-.464-1.13-.464-2.046 0-2.221.63-4.535 1.66-6.088.454-.687.964-1.226 1.533-1.533a2.264 2.264 0 0 1 1.088-.285z'
 const BLUE_L = new THREE.Color(0x0064e0)
@@ -29,19 +36,16 @@ function buildLogo() {
   const svg = new SVGLoader().parse(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="${META_PATH}"/></svg>`)
   const shapes = svg.paths.flatMap((path) => SVGLoader.createShapes(path))
   const geo = new THREE.ExtrudeGeometry(shapes, {
-    // stroke is ~2.2 units wide at its thickest; total depth 0.3 + 2 x 0.95
-    // matches it, so the cross-section is close to round, like the film's tube
     depth: 0.3,
     steps: 1,
     curveSegments: 36,
     bevelEnabled: true,
     bevelThickness: 0.95,
     bevelSize: 1.0,
-    bevelOffset: -1.0, // bevel eats into the outline instead of fattening it
+    bevelOffset: -1.0,
     bevelSegments: 14,
   })
   geo.center()
-  // SVG y runs down; face the camera and size to ~2.9 units wide
   geo.rotateX(Math.PI)
   geo.computeBoundingBox()
   const bb = geo.boundingBox
@@ -49,27 +53,93 @@ function buildLogo() {
   geo.scale(scale, scale, scale)
   geo.computeBoundingBox()
   geo.computeVertexNormals()
-  // brand gradient across x, baked as vertex colours
   const { min, max } = geo.boundingBox
   const pos = geo.attributes.position
   const colors = new Float32Array(pos.count * 3)
   const c = new THREE.Color()
   for (let i = 0; i < pos.count; i++) {
-    const u = (pos.getX(i) - min.x) / (max.x - min.x)
-    c.copy(BLUE_L).lerp(BLUE_R, u)
-    colors[i * 3] = c.r
-    colors[i * 3 + 1] = c.g
-    colors[i * 3 + 2] = c.b
+    c.copy(BLUE_L).lerp(BLUE_R, (pos.getX(i) - min.x) / (max.x - min.x))
+    colors.set([c.r, c.g, c.b], i * 3)
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-  const mat = new THREE.MeshPhysicalMaterial({
-    vertexColors: true,
-    roughness: 0.24,
-    metalness: 0.02,
-    clearcoat: 0.55,
-    clearcoatRoughness: 0.3,
-  })
+  const mat = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.24, metalness: 0.02, clearcoat: 0.55, clearcoatRoughness: 0.3 })
   return new THREE.Mesh(geo, mat)
+}
+
+/* a pill chip drawn on a canvas: white pill, dark text, hairline border */
+function chipTexture(text, { bg = '#ffffff', fg = '#1c2b4a', accent = null } = {}) {
+  const dpr = 2
+  const cv = document.createElement('canvas')
+  const ctx = cv.getContext('2d')
+  const font = `600 ${22 * dpr}px "Instrument Sans", "Segoe UI", system-ui, sans-serif`
+  ctx.font = font
+  const w = Math.ceil(ctx.measureText(text).width + (accent ? 54 : 40) * dpr)
+  const h = 44 * dpr
+  cv.width = w
+  cv.height = h
+  ctx.font = font
+  ctx.fillStyle = bg
+  ctx.strokeStyle = 'rgba(28,43,74,0.18)'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.roundRect(1, 1, w - 2, h - 2, h / 2)
+  ctx.fill()
+  ctx.stroke()
+  if (accent) {
+    ctx.fillStyle = accent
+    ctx.beginPath()
+    ctx.arc(22 * dpr, h / 2, 6 * dpr, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.fillStyle = fg
+  ctx.textBaseline = 'middle'
+  ctx.fillText(text, (accent ? 34 : 20) * dpr, h / 2 + 1)
+  const tex = new THREE.CanvasTexture(cv)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = 4
+  return { tex, aspect: w / h }
+}
+function chip(text, height, opts) {
+  const { tex, aspect } = chipTexture(text, opts)
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(height * aspect, height),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false }),
+  )
+  m.renderOrder = 5
+  return m
+}
+
+/* a round avatar: photo in a circle with a white ring */
+function avatar(src, size) {
+  const g = new THREE.Group()
+  const tex = new THREE.TextureLoader().load(src)
+  tex.colorSpace = THREE.SRGBColorSpace
+  const ring = new THREE.Mesh(
+    new THREE.CircleGeometry(size * 0.56, 48),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, toneMapped: false }),
+  )
+  const face = new THREE.Mesh(
+    new THREE.CircleGeometry(size * 0.5, 48),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false }),
+  )
+  face.position.z = 0.005
+  g.add(ring, face)
+  g.userData.mats = [ring.material, face.material]
+  g.renderOrder = 6
+  return g
+}
+
+const clamp01 = (u) => Math.max(0, Math.min(1, u))
+const smooth = (u) => {
+  const x = clamp01(u)
+  return x * x * (3 - 2 * x)
+}
+/** 0 -> 1 over [a, b], smoothstepped */
+const seg = (t, a, b) => smooth((t - a) / (b - a))
+/** a badge popping in: scales past 1 and settles */
+const pop = (u) => {
+  const x = clamp01(u)
+  return x <= 0 ? 0.001 : 1 + 0.35 * Math.sin(x * Math.PI) * (1 - x)
 }
 
 export default function MetaOrbit({ active }) {
@@ -91,26 +161,21 @@ export default function MetaOrbit({ active }) {
 
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(SKY)
-    scene.fog = new THREE.Fog(SKY, 4.5, 8)
+    scene.fog = new THREE.Fog(SKY, 5, 9)
     const pmrem = new THREE.PMREMGenerator(renderer)
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
     scene.environmentIntensity = 0.7
 
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20)
-    camera.position.set(0, 0.05, 5.2)
-
     const key = new THREE.DirectionalLight(0xffffff, 2.2)
     key.position.set(2.5, 3, 4)
-    scene.add(key)
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xdfe7f5, 0.6))
+    scene.add(key, new THREE.HemisphereLight(0xffffff, 0xdfe7f5, 0.6))
 
     const logo = buildLogo()
-    logo.rotation.x = 0.12
     scene.add(logo)
 
-    // ad panels in orbit: 4:5 planes on a loose ring, each bobbing on its own clock
+    // ---- ad panels on a loose ring
     const loader = new THREE.TextureLoader()
-    const panels = []
     const ring = [
       { a: 0.35, r: 2.1, y: 0.95, s: 0.62 },
       { a: 1.55, r: 2.35, y: -0.75, s: 0.7 },
@@ -119,24 +184,63 @@ export default function MetaOrbit({ active }) {
       { a: 4.75, r: 2.15, y: 0.85, s: 0.6 },
       { a: 5.7, r: 2.5, y: -0.35, s: 0.52 },
     ]
-    ADS.forEach((p, i) => {
+    const panels = ADS.map((p, i) => {
       const spec = ring[i % ring.length]
       const tex = loader.load(p.src)
       tex.colorSpace = THREE.SRGBColorSpace
       tex.anisotropy = 4
-      const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(spec.s, spec.s * 1.25), mat)
-      // a soft card shadow under each panel
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(spec.s, spec.s * 1.25),
+        new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }),
+      )
       const shadow = new THREE.Mesh(
         new THREE.PlaneGeometry(spec.s * 1.06, spec.s * 1.25 * 1.06),
         new THREE.MeshBasicMaterial({ color: 0x9fb2d6, transparent: true, opacity: 0.25 }),
       )
       shadow.position.set(0.02, -0.03, -0.01)
       mesh.add(shadow)
-      mesh.userData = spec
+      mesh.userData = { ...spec, key: p.key }
       scene.add(mesh)
-      panels.push(mesh)
+      return mesh
     })
+    // the ad that comes forward: the Instagram post if we have it
+    const hero = panels.find((m) => m.userData.key === 'instagram') ?? panels[0]
+
+    // ---- floating tag chips, like the film's LAYOUT / MOVE / COLOR
+    const TAGS = ['REELS', 'RETARGETING', 'LOOKALIKE 1%', 'A/B TEST', 'CREATIVE', 'CATALOG']
+    const tags = TAGS.map((t, i) => {
+      const m = chip(t, 0.2)
+      m.userData = { x: -2.6 + ((i * 1.05) % 5.2), y: -1.4 + ((i * 1.7) % 2.8), z: -0.8 + ((i * 0.9) % 1.8), v: 0.12 + (i % 3) * 0.04 }
+      scene.add(m)
+      return m
+    })
+
+    // ---- the catch: sponsored chip, likes, hook line, two customers, order badges
+    const sponsored = chip('Sponsored', 0.16, { accent: '#0a6cff' })
+    const likes = ['❤ 2,318', '❤ 3,102', '❤ 4,860'].map((t) => chip(t, 0.16, { fg: '#e0245e' }))
+    const orders = ['Order ₹3,499 ✓', 'Order ₹1,899 ✓'].map((t) => chip(t, 0.18, { bg: '#0a6cff', fg: '#ffffff' }))
+    const customers = FACES.slice(0, 2).map((f) => avatar(f.src, 0.5))
+    const hook = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(), new THREE.Vector3(0, 0, 0.001)), 4, 0.012, 6, false),
+      new THREE.MeshBasicMaterial({ color: 0x0a6cff, transparent: true, toneMapped: false }),
+    )
+    ;[sponsored, ...likes, ...orders, ...customers, hook].forEach((o) => {
+      o.visible = false
+      scene.add(o)
+    })
+    const rebuildHook = (from, to, bulge) => {
+      const mid = from.clone().lerp(to, 0.5)
+      mid.y += bulge
+      hook.geometry.dispose()
+      hook.geometry = new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(from, mid, to), 48, 0.012, 6, false)
+    }
+    const setAlpha = (obj, a) => {
+      const mats = obj.userData?.mats ?? (obj.material ? [obj.material] : [])
+      mats.forEach((m) => {
+        m.opacity = a
+      })
+      obj.visible = a > 0.01
+    }
 
     const size = () => {
       const w = host.clientWidth || 300
@@ -152,23 +256,111 @@ export default function MetaOrbit({ active }) {
     })
     ro.observe(host)
 
+    // ---- the sequence
+    const camPos = new THREE.Vector3()
+    const camAt = new THREE.Vector3()
+    const heroHome = new THREE.Vector3()
+    const heroFront = new THREE.Vector3(-0.7, 0.05, 2.9)
+    const tmp = new THREE.Vector3()
+    const far = new THREE.Vector3()
+    const near = new THREE.Vector3()
+    const anchor = new THREE.Vector3()
     let raf = 0
-    let t0 = performance.now()
+    const t0 = performance.now()
+
     const draw = (now) => {
-      const t = (now - t0) / 1000
-      logo.rotation.y = t * 0.55
-      logo.rotation.z = Math.sin(t * 0.6) * 0.08
-      const camA = Math.sin(t * 0.25) * 0.12
-      camera.position.x = Math.sin(camA) * 5.2
-      camera.position.z = Math.cos(camA) * 5.2
-      camera.lookAt(0, 0, 0)
+      const T = (now - t0) / 1000
+      const t = T % LOOP
+      const zoomIn = seg(t, 4, 5.6) - seg(t, 13, 14.6) // 0 wide, 1 on the hero
+      const catching = seg(t, 8, 8.6) - seg(t, 12.6, 13.4)
+
+      // symbol: turns in the wide shot, steps back and shrinks during the close shots
+      logo.rotation.y = T * 0.55
+      logo.rotation.z = Math.sin(T * 0.6) * 0.08
+      logo.position.set(1.1 * zoomIn, 0.35 * zoomIn, -1.6 * zoomIn)
+      logo.scale.setScalar(1 - 0.45 * zoomIn)
+
+      // camera: slow drift wide, a gentle push during the close shots
+      const camA = Math.sin(T * 0.25) * 0.12
+      const dist = 5.2 - 0.6 * zoomIn
+      camPos.set(Math.sin(camA) * dist, 0.05 + 0.05 * zoomIn, Math.cos(camA) * dist)
+      camAt.set(-0.25 * zoomIn, 0, 0)
+      camera.position.copy(camPos)
+      camera.lookAt(camAt)
+
+      // panels orbit; the hero leaves its slot and comes to the front, larger
       panels.forEach((m, i) => {
         const { a, r, y } = m.userData
-        const ang = a + t * 0.12
-        m.position.set(Math.cos(ang) * r, y + Math.sin(t * 0.7 + i) * 0.08, Math.sin(ang) * r * 0.55)
-        m.lookAt(camera.position)
-        m.rotation.z += Math.sin(t * 0.5 + i * 1.3) * 0.06
+        const ang = a + T * 0.12
+        tmp.set(Math.cos(ang) * r, y + Math.sin(T * 0.7 + i) * 0.08, Math.sin(ang) * r * 0.55)
+        if (m === hero) {
+          heroHome.copy(tmp)
+          m.position.lerpVectors(heroHome, heroFront, zoomIn)
+          m.scale.setScalar(1 + 1.55 * zoomIn)
+          m.lookAt(camera.position)
+          m.rotation.z += (1 - zoomIn) * Math.sin(T * 0.5 + i * 1.3) * 0.06
+        } else {
+          tmp.z -= 1.2 * zoomIn // the others drift back so the hero owns the frame
+          m.position.copy(tmp)
+          m.scale.setScalar(1 - 0.25 * zoomIn)
+          m.lookAt(camera.position)
+          m.rotation.z += Math.sin(T * 0.5 + i * 1.3) * 0.06
+        }
       })
+
+      // tag chips rise slowly and wrap; they hide during the close shots
+      tags.forEach((m) => {
+        const d = m.userData
+        const y = ((d.y + T * d.v + 1.4) % 2.8) - 1.4
+        m.position.set(d.x, y, d.z)
+        m.lookAt(camera.position)
+        setAlpha(m, (1 - zoomIn) * (0.35 + 0.65 * (1 - Math.abs(y) / 1.4)))
+      })
+
+      // ---- close shot dressing: Sponsored chip and likes bursting off the ad
+      const heroW = hero.userData.s * hero.scale.x
+      const heroH = heroW * 1.25
+      sponsored.position.copy(hero.position).add(tmp.set(-heroW * 0.42, heroH * 0.52, 0.05))
+      sponsored.lookAt(camera.position)
+      setAlpha(sponsored, seg(t, 5.2, 5.7) - seg(t, 13, 13.4))
+      likes.forEach((m, i) => {
+        const start = 6 + i * 0.55
+        const u = seg(t, start, start + 1.6)
+        m.position.copy(hero.position).add(tmp.set(heroW * 0.35 + i * 0.12, -heroH * 0.2 + u * 0.9, 0.06))
+        m.lookAt(camera.position)
+        m.scale.setScalar(0.8 + 0.4 * u)
+        setAlpha(m, u > 0 && u < 1 ? Math.sin(u * Math.PI) : 0)
+      })
+
+      // ---- the catch: two customers, one after the other
+      anchor.copy(hero.position).add(tmp.set(heroW * 0.45, -heroH * 0.1, 0.04)) // the ad's "Shop now" edge
+      let hookShown = false
+      customers.forEach((cust, i) => {
+        const s0 = 8.2 + i * 2.3 // when this customer's beat starts
+        const enter = seg(t, s0, s0 + 0.7) // slides in from the right
+        const line = seg(t, s0 + 0.5, s0 + 1.1) // the line reaches out
+        const pull = seg(t, s0 + 1.1, s0 + 1.7) // pulled to the ad
+        const badge = seg(t, s0 + 1.6, s0 + 2.0) // order badge pops
+        const out = seg(t, s0 + 2.6, s0 + 3.0) // leaves
+        far.set(1.0 + 1.6 * (1 - enter), -0.45 + i * 0.75, 1.2) // enters from off-frame right
+        near.set(anchor.x + 0.5, anchor.y + 0.1 + i * 0.45, anchor.z + 0.1)
+        cust.position.lerpVectors(far, near, pull)
+        cust.lookAt(camera.position)
+        cust.scale.setScalar(0.85 + 0.15 * pull)
+        setAlpha(cust, catching * enter * (1 - out))
+        if (!hookShown && t >= s0 + 0.5 && t < s0 + 3.0 && line > 0) {
+          hookShown = true
+          rebuildHook(anchor, tmp.copy(anchor).lerp(cust.position, line), 0.25 * line)
+          setAlpha(hook, catching * (1 - out))
+        }
+        const b = orders[i]
+        b.position.copy(cust.position).add(tmp.set(-0.22, 0.42, 0.08))
+        b.lookAt(camera.position)
+        b.scale.setScalar(pop(badge))
+        setAlpha(b, catching * badge * (1 - out))
+      })
+      if (!hookShown) setAlpha(hook, 0)
+
       renderer.render(scene, camera)
     }
     const loop = (now) => {
@@ -176,13 +368,8 @@ export default function MetaOrbit({ active }) {
       raf = activeRef.current && !reduced ? requestAnimationFrame(loop) : 0
     }
     const wake = () => {
-      if (!raf) {
-        t0 = performance.now() - (wake.paused ?? 0)
-        raf = requestAnimationFrame(loop)
-      }
+      if (!raf) raf = requestAnimationFrame(loop)
     }
-    // re-check every 300ms whether we should be animating (cheap; keeps the
-    // loop tied to `active` without re-creating the scene)
     const poll = setInterval(() => {
       if (activeRef.current && !reduced) wake()
     }, 300)
@@ -193,13 +380,14 @@ export default function MetaOrbit({ active }) {
       clearInterval(poll)
       cancelAnimationFrame(raf)
       ro.disconnect()
-      panels.forEach((m) => {
-        m.material.map?.dispose()
-        m.material.dispose()
-        m.geometry.dispose()
+      scene.traverse((o) => {
+        if (o.geometry) o.geometry.dispose()
+        const mats = o.material ? [o.material] : []
+        mats.forEach((m) => {
+          m.map?.dispose()
+          m.dispose()
+        })
       })
-      logo.geometry.dispose()
-      logo.material.dispose()
       pmrem.dispose()
       renderer.dispose()
       renderer.domElement.remove()

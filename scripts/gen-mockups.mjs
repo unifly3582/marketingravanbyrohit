@@ -52,6 +52,17 @@ Award-winning web design quality in the Linear / Apple / Stripe school: generous
   },
 }
 
+SETS.faces = {
+  aspect: '1:1',
+  frame: `Photographic head-and-shoulders portrait, square crop, centred, soft studio light, plain light blue-grey background,
+natural skin, real person, no text, no watermark, no logo.`,
+  items: {
+    'customer-1': `A smiling Indian woman in her early 30s, delighted, holding up her phone as if she just ordered something, casual kurta.`,
+    'customer-2': `A cheerful Indian man in his 40s with glasses, laughing lightly, looking at his phone, plain shirt.`,
+    'customer-3': `A young Indian man in his 20s with a light beard, grinning at his phone, hoodie.`,
+  },
+}
+
 const [setName, ...want] = process.argv.slice(2)
 const set = SETS[setName]
 if (!set) {
@@ -71,7 +82,9 @@ const jobs = keys.map(async (key) => {
     return
   }
   console.log(`generating ${setName}/${key}…`)
-  await generate({ prompt: `${set.frame}\n\nThe screen: ${brief}`, out, aspect: '4:5', size: '1K' })
+  await generate({ prompt: `${set.frame}
+
+${set.aspect ? 'The subject' : 'The screen'}: ${brief}`, out, aspect: set.aspect ?? '4:5', size: '1K' })
   console.log(`saved ${out}`)
 })
 
