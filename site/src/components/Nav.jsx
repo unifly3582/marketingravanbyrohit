@@ -1,34 +1,39 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import logo from '../assets/logo-mark.png'
+import { openRavan } from '../lib/ravan.js'
 
-const LINKS = [
-  { label: 'Services', href: '/#heads', anchor: true },
-  { label: 'Work', href: '/works' },
-  { label: 'About', href: '/about' },
-  { label: 'Pricing', href: '/pricing' },
-  { label: 'Blog', href: '/blog' },
-]
-
+/*
+ * The header: logo on the left, one "Talk to Ravan" action on the right.
+ * No page links and no menu — the site is a single page. It turns solid
+ * once past the top, hides while scrolling down and returns on the first
+ * scroll back up.
+ */
 export default function Nav() {
   const [scrolled, setScrolled] = useState(false)
-  const [open, setOpen] = useState(false)
+  const [hidden, setHidden] = useState(false) // slid up out of view
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24)
+    let last = window.scrollY
+    const onScroll = () => {
+      const y = window.scrollY
+      setScrolled(y > 24)
+      const dy = y - last
+      if (y < 80) setHidden(false)
+      else if (dy > 6) setHidden(true)
+      else if (dy < -6) setHidden(false)
+      if (Math.abs(dy) > 6) last = y
+    }
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  const linkCls =
-    'text-[0.78rem] font-semibold tracking-widest text-cream/80 uppercase transition-colors hover:text-gold'
-
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-colors duration-300 ${
+      className={`fixed inset-x-0 top-0 z-50 transition-[transform,background-color] duration-300 ease-out ${
         scrolled ? 'bg-ground/85 backdrop-blur-md border-b border-line' : 'bg-transparent'
-      }`}
+      } ${hidden ? '-translate-y-full' : 'translate-y-0'}`}
     >
       <nav className="container-x flex items-center justify-between py-1 md:py-3">
         <Link to="/" className="flex items-center gap-2 md:gap-3">
@@ -38,68 +43,10 @@ export default function Nav() {
           </span>
         </Link>
 
-        <div className="hidden items-center gap-7 md:flex">
-          {LINKS.map((l) =>
-            l.anchor ? (
-              <a key={l.href} href={l.href} className={linkCls}>{l.label}</a>
-            ) : (
-              <NavLink
-                key={l.href}
-                to={l.href}
-                className={({ isActive }) => `${linkCls} ${isActive ? '!text-gold' : ''}`}
-              >
-                {l.label}
-              </NavLink>
-            ),
-          )}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            className="btn-ghost h-7 w-7 justify-center !p-0 md:hidden"
-            aria-label="Toggle menu"
-            aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-              <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
+        <button type="button" className="btn-ghost !py-1.5 !text-[0.66rem] md:!py-2 md:!text-[0.72rem]" onClick={openRavan}>
+          Talk to Ravan
+        </button>
       </nav>
-
-      {open && (
-        <div className="border-t border-line bg-ground/95 px-6 py-4 backdrop-blur-md md:hidden">
-          {LINKS.map((l) =>
-            l.anchor ? (
-              <a
-                key={l.href}
-                href={l.href}
-                onClick={() => setOpen(false)}
-                className="block py-2.5 text-sm font-semibold uppercase tracking-widest text-cream/85"
-              >
-                {l.label}
-              </a>
-            ) : (
-              <NavLink
-                key={l.href}
-                to={l.href}
-                onClick={() => setOpen(false)}
-                className="block py-2.5 text-sm font-semibold uppercase tracking-widest text-cream/85"
-              >
-                {l.label}
-              </NavLink>
-            ),
-          )}
-          <NavLink
-            to="/contact"
-            onClick={() => setOpen(false)}
-            className="block py-2.5 text-sm font-semibold uppercase tracking-widest text-cream/85"
-          >
-            Contact
-          </NavLink>
-        </div>
-      )}
     </header>
   )
 }

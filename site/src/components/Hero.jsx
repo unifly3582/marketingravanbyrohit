@@ -4,6 +4,7 @@ import { HEADS } from '../data/heads.js'
 import { HeadIcon, Arrow } from './icons.jsx'
 import ShaderGrain from './ShaderGrain.jsx'
 import { PERSONA, portraitFor } from '../lib/portraits.js'
+import { openRavan } from '../lib/ravan.js'
 
 /*
  * The hero: RAVAN IN THE MIDDLE. A giant MARKETING RAVAN wordmark runs along
@@ -268,13 +269,12 @@ export default function Hero() {
             transition={{ duration: 0.7, delay: 0.24 }}
             className="mt-4 flex w-full max-w-[760px] justify-between gap-3 md:mt-4"
           >
-            <a href="/contact" className="btn-primary">
+            <button type="button" onClick={openRavan} className="btn-primary">
               Book a call <Arrow className="h-4 w-4" />
-            </a>
-            <a href="#heads" className="btn-ghost">
-              <span className="md:hidden">What we do</span>
-              <span className="hidden md:inline">See everything we do</span>
-            </a>
+            </button>
+            <button type="button" onClick={openRavan} className="btn-ghost">
+              Talk to Ravan
+            </button>
           </motion.div>
         </div>
 

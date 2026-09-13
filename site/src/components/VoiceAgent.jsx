@@ -1,3 +1,4 @@
+import { RAVAN_OPEN } from '../lib/ravan.js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
@@ -50,6 +51,11 @@ export default function VoiceAgent() {
   const [available, setAvailable] = useState(null) // null = still checking
   const [wsOrigin, setWsOrigin] = useState(null)
   const [open, setOpen] = useState(false)
+  useEffect(() => {
+    const on = () => setOpen(true)
+    window.addEventListener(RAVAN_OPEN, on)
+    return () => window.removeEventListener(RAVAN_OPEN, on)
+  }, [])
   const [screen, setScreen] = useState('intent') // intent | wa | phone | call — the local screens
   const [state, setState] = useState(STATES.idle)
   const [mode, setMode] = useState('text') // text | voice

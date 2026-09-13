@@ -82,7 +82,7 @@ export default function Statement() {
   // `group` is 'h' (heading) or 'p' (paragraph): each runs its own wave
   const renderLine = (line, final, group = 'h') =>
     line.split(' ').map((w, wi, arr) => (
-      <span key={final + wi} className="inline-block whitespace-nowrap">
+      <span key={`${line}-${wi}`} className="inline-block whitespace-nowrap">
         {[...w].map((ch, ci) => (
           <span
             key={ci}

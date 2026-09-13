@@ -1,4 +1,3 @@
-import { HEADS } from '../data/heads.js'
 import logo from '../assets/logo-mark.png'
 
 const SOCIALS = ['X.COM', 'LINKEDIN', 'INSTAGRAM', 'YOUTUBE'] // TODO: real URLs
@@ -8,7 +7,7 @@ export default function Footer() {
     <>
       {/* footer */}
       <footer className="border-t border-line bg-surface/80">
-        <div className="container-x grid gap-10 py-16 md:grid-cols-[1.4fr_0.7fr_1fr_1fr]">
+        <div className="container-x grid gap-10 py-16 md:grid-cols-[1.4fr_0.7fr]">
           <div>
             <div className="flex items-center gap-3">
               <img src={logo} alt="" className="h-12 w-12 rounded-full object-cover object-top" />
@@ -39,7 +38,7 @@ export default function Footer() {
           <div>
             <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-muted">Pages</h3>
             <ul className="mt-4 grid gap-2">
-              {[['Works', '/works'], ['Aurora Case', '/case/aurora-robotics'], ['About', '/about'], ['Pricing', '/pricing'], ['Blog', '/blog'], ['Contact', '/contact']].map(([label, href]) => (
+              {[['Home', '/']].map(([label, href]) => (
                 <li key={href}>
                   <a href={href} className="text-sm text-cream/75 transition-colors hover:text-gold">{label}</a>
                 </li>
@@ -47,31 +46,6 @@ export default function Footer() {
             </ul>
           </div>
 
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-muted">The Ten Heads</h3>
-            <ul className="mt-4 grid gap-2">
-              {HEADS.slice(0, 5).map((h) => (
-                <li key={h.n}>
-                  <a href={h.href ?? '/#heads'} className="text-sm text-cream/75 transition-colors hover:text-gold">
-                    {String(h.n).padStart(2, '0')} — {h.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-muted">&nbsp;</h3>
-            <ul className="mt-4 grid gap-2">
-              {HEADS.slice(5).map((h) => (
-                <li key={h.n}>
-                  <a href={h.href ?? '/#heads'} className="text-sm text-cream/75 transition-colors hover:text-gold">
-                    {String(h.n).padStart(2, '0')} — {h.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
         </div>
 
         <div className="border-t border-line">

@@ -53,39 +53,6 @@ h1, h2, h3 {
   color: var(--color-cream);
 }
 
-/* ---------- aurora light theme (Case: Aurora Robotics) ----------
-   Applied to <html> while the Aurora case page is mounted; flips the whole
-   viewport — nav included — to an arctic white/cyan system matching the robot. */
-.theme-aurora {
-  --color-ground: #F2F7FC;
-  --color-surface: #E9F1F9;
-  --color-card: #FFFFFF;
-  --color-card2: #EDF4FA;
-  --color-cream: #12263A;
-  --color-muted: #5B7188;
-  --color-gold: #1E9BE9;
-  --color-ember: #2ec4de;
-  --color-maroon: #7FB8E0;
-  --color-line: rgba(18, 38, 58, 0.12);
-  background: var(--color-ground);
-  color: var(--color-cream);
-}
-.theme-aurora ::selection {
-  background: #1E9BE9;
-  color: #ffffff;
-}
-.theme-aurora .btn-primary {
-  color: #ffffff;
-  box-shadow: 0 10px 32px rgba(30, 155, 233, 0.3);
-}
-.theme-aurora .btn-primary:hover {
-  box-shadow: 0 16px 40px rgba(30, 155, 233, 0.42);
-}
-.theme-aurora .btn-ghost:hover {
-  border-color: rgba(30, 155, 233, 0.5);
-  background: rgba(30, 155, 233, 0.06);
-}
-
 /* ---------- shared primitives ---------- */
 
 .container-x {
