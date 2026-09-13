@@ -121,6 +121,61 @@
   border: 1px solid currentColor; opacity: 0.55;
 }
 
+/* ---------- visual band (Website Design card) ---------- */
+.hs-card.has-visual {
+  grid-template-rows: auto 1fr auto auto;
+  gap: 0.45rem;
+}
+.hs-card.has-visual h3 {
+  align-self: end;
+  font-size: clamp(0.92rem, 4.1vw, 1.05rem);
+  line-height: 1.1;
+}
+.hs-card.has-visual .hs-tags { display: none; }
+.hs-visual { min-height: 0; height: 100%; }
+
+.hs-browser {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0b0806;
+  border: 1px solid rgba(244, 234, 219, 0.12);
+  box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.7);
+}
+.hs-card.is-light .hs-browser { background: #fff; border-color: rgba(32, 24, 18, 0.14); }
+.hs-browser-bar {
+  display: flex; align-items: center; gap: 4px;
+  height: 16px; padding: 0 7px;
+  background: rgba(244, 234, 219, 0.06);
+  font-size: 8px; letter-spacing: 0.04em; color: var(--color-muted);
+}
+.hs-card.is-light .hs-browser-bar { background: rgba(32, 24, 18, 0.06); color: #6F6354; }
+.hs-browser-bar i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.45; }
+.hs-browser-bar span { margin-left: 4px; padding: 1px 6px; border-radius: 999px; background: rgba(128, 112, 96, 0.18); }
+.hs-browser-view { position: relative; overflow: hidden; }
+.hs-page {
+  position: absolute; inset: 0 auto auto 0;
+  width: 100%; height: auto;
+  display: block;
+  opacity: 0;
+  transition: opacity 0.7s ease;
+  will-change: transform, opacity;
+}
+.hs-page.is-on { opacity: 1; }
+/* pan down the page while it is on, a touch slower than the hold so it never runs out */
+.hs-page.is-on.is-live { animation: hs-pan var(--hold, 5200ms) ease-in-out forwards; }
+@keyframes hs-pan {
+  0%, 12% { transform: translateY(0); }
+  88%, 100% { transform: translateY(calc(-100% + 100cqh)); }
+}
+.hs-browser-view { container-type: size; }
+@media (prefers-reduced-motion: reduce) {
+  .hs-page.is-live { animation: none; }
+}
+
 /* ---------- dots + pill ---------- */
 .hs-dots {
   position: absolute; right: 0.9rem; top: 50%;

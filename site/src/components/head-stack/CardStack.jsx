@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import StackCard from './StackCard.jsx'
 import StackBackdrop from './StackBackdrop.jsx'
 import StackDots from './StackDots.jsx'
+import WebShowcase from './WebShowcase.jsx'
 import { createStackMotion, lookAt } from './stackMotion.js'
 
 const LIGHT = [1, 0, 1, 0, 0, 1, 0, 1, 0, 1]
@@ -196,6 +197,7 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
             head={h}
             light={!!LIGHT[i % LIGHT.length]}
             hidden={i !== front}
+            visual={h.icon === 'uiux' ? <WebShowcase active={i === front} /> : null}
           />
         ))}
       </div>
