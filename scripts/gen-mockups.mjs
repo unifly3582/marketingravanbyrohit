@@ -63,6 +63,22 @@ natural skin, real person, no text, no watermark, no logo.`,
   },
 }
 
+/* the catch: the Meta Ads head himself, out of an ad frame, hauling in customers and money.
+   Uses the agent portrait as a reference so it is the same Ravan the site already shows. */
+SETS.catch = {
+  aspect: '4:5',
+  ref: join(__dirname, '..', 'assets-src', 'agents-cut', 'ads-3.png'),
+  frame: `Polished 3D-animation-style illustration (Pixar look, soft studio light), tall portrait composition, plain light blue-grey
+studio background (#EEF3FB) with soft floor shadow, no text except what is described, no watermark, no real company logos.`,
+  items: {
+    catch: `The character from the reference image (keep his face, crown, moustache, sunglasses and outfit exactly) leans out of a floating
+Instagram-style sponsored post frame (a white card with a photo, a blue "Shop now" button, heart and comment icons) as if it were a window.
+With a big confident grin he sweeps a glowing blue net that is catching a crowd of small smiling customers (tiny stylised Indian people
+holding phones) together with floating rupee coins and ₹500 notes, all being pulled toward the ad frame. Motion lines, a few sparkles,
+the blue of the net matches Meta blue.`,
+  },
+}
+
 const [setName, ...want] = process.argv.slice(2)
 const set = SETS[setName]
 if (!set) {
@@ -84,7 +100,7 @@ const jobs = keys.map(async (key) => {
   console.log(`generating ${setName}/${key}…`)
   await generate({ prompt: `${set.frame}
 
-${set.aspect ? 'The subject' : 'The screen'}: ${brief}`, out, aspect: set.aspect ?? '4:5', size: '1K' })
+${set.aspect === '1:1' ? 'The subject' : 'The picture'}: ${brief}`, out, aspect: set.aspect ?? '4:5', size: '1K', ref: set.ref ? [set.ref] : [] })
   console.log(`saved ${out}`)
 })
 

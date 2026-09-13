@@ -12,8 +12,9 @@ import { pagesFrom } from './pages.js'
  *          drift past like the film's LAYOUT / MOVE / COLOR tags
  *   4-8s   push in: one ad panel comes to the front and fills the frame,
  *          a Sponsored chip and a burst of likes
- *   8-13s  the catch: a line reaches out from the ad, a customer is pulled
- *          in, an order badge pops; then a second customer
+ *   8-13s  the catch: the Meta Ads head leans out of an ad frame with a net
+ *          (a nano banana frame), customers are pulled into it and order
+ *          badges pop, one after the other
  *   13-16s pull back out to the symbol and loop
  *
  * Built from Meta's official symbol outline (extruded, brand gradient). One
@@ -21,6 +22,7 @@ import { pagesFrom } from './pages.js'
  */
 const ADS = pagesFrom(import.meta.glob('../../assets/ads-mockups/*.webp', { eager: true, import: 'default' }))
 const FACES = pagesFrom(import.meta.glob('../../assets/faces-mockups/*.webp', { eager: true, import: 'default' }))
+const CATCH = pagesFrom(import.meta.glob('../../assets/catch-mockups/*.webp', { eager: true, import: 'default' }))[0]
 const SKY = 0xeef3fb
 const LOOP = 16
 
@@ -205,6 +207,27 @@ export default function MetaOrbit({ active }) {
     })
     // the ad that comes forward: the Instagram post if we have it
     const hero = panels.find((m) => m.userData.key === 'instagram') ?? panels[0]
+    // the catch frame: Ravan out of an ad with a net; comes forward for the catch shot
+    let catcher = null
+    if (CATCH) {
+      const spec = { a: 3.1, r: 2.3, y: 0.2, s: 0.66, key: 'catch' }
+      const tex = loader.load(CATCH.src)
+      tex.colorSpace = THREE.SRGBColorSpace
+      tex.anisotropy = 4
+      catcher = new THREE.Mesh(
+        new THREE.PlaneGeometry(spec.s, spec.s * 1.25),
+        new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }),
+      )
+      const shadow = new THREE.Mesh(
+        new THREE.PlaneGeometry(spec.s * 1.06, spec.s * 1.25 * 1.06),
+        new THREE.MeshBasicMaterial({ color: 0x9fb2d6, transparent: true, opacity: 0.25 }),
+      )
+      shadow.position.set(0.02, -0.03, -0.01)
+      catcher.add(shadow)
+      catcher.userData = spec
+      scene.add(catcher)
+      panels.push(catcher)
+    }
 
     // ---- floating tag chips, like the film's LAYOUT / MOVE / COLOR
     const TAGS = ['REELS', 'RETARGETING', 'LOOKALIKE 1%', 'A/B TEST', 'CREATIVE', 'CATALOG']
@@ -261,6 +284,9 @@ export default function MetaOrbit({ active }) {
     const camAt = new THREE.Vector3()
     const heroHome = new THREE.Vector3()
     const heroFront = new THREE.Vector3(-0.7, 0.05, 2.9)
+    const heroSide = new THREE.Vector3(-1.35, 0.5, 2.0) // where the ad waits during the catch
+    const catchFront = new THREE.Vector3(-0.45, -0.02, 3.0)
+    const catchHome = new THREE.Vector3()
     const tmp = new THREE.Vector3()
     const far = new THREE.Vector3()
     const near = new THREE.Vector3()
@@ -295,10 +321,17 @@ export default function MetaOrbit({ active }) {
         tmp.set(Math.cos(ang) * r, y + Math.sin(T * 0.7 + i) * 0.08, Math.sin(ang) * r * 0.55)
         if (m === hero) {
           heroHome.copy(tmp)
-          m.position.lerpVectors(heroHome, heroFront, zoomIn)
-          m.scale.setScalar(1 + 1.55 * zoomIn)
+          m.position.lerpVectors(heroHome, heroFront, zoomIn).lerp(heroSide, catching)
+          m.scale.setScalar((1 + 1.55 * zoomIn) * (1 - 0.5 * catching))
           m.lookAt(camera.position)
           m.rotation.z += (1 - zoomIn) * Math.sin(T * 0.5 + i * 1.3) * 0.06
+        } else if (m === catcher) {
+          catchHome.copy(tmp)
+          catchHome.z -= 1.2 * zoomIn * (1 - catching)
+          m.position.lerpVectors(catchHome, catchFront, catching)
+          m.scale.setScalar((1 - 0.25 * zoomIn) * (1 - catching) + (1 + 1.75) * catching)
+          m.lookAt(camera.position)
+          m.rotation.z += (1 - catching) * Math.sin(T * 0.5 + i * 1.3) * 0.06
         } else {
           tmp.z -= 1.2 * zoomIn // the others drift back so the hero owns the frame
           m.position.copy(tmp)
@@ -322,18 +355,23 @@ export default function MetaOrbit({ active }) {
       const heroH = heroW * 1.25
       sponsored.position.copy(hero.position).add(tmp.set(-heroW * 0.42, heroH * 0.52, 0.05))
       sponsored.lookAt(camera.position)
-      setAlpha(sponsored, seg(t, 5.2, 5.7) - seg(t, 13, 13.4))
+      setAlpha(sponsored, (seg(t, 5.2, 5.7) - seg(t, 13, 13.4)) * (1 - catching))
       likes.forEach((m, i) => {
         const start = 6 + i * 0.55
         const u = seg(t, start, start + 1.6)
         m.position.copy(hero.position).add(tmp.set(heroW * 0.35 + i * 0.12, -heroH * 0.2 + u * 0.9, 0.06))
         m.lookAt(camera.position)
         m.scale.setScalar(0.8 + 0.4 * u)
-        setAlpha(m, u > 0 && u < 1 ? Math.sin(u * Math.PI) : 0)
+        setAlpha(m, (u > 0 && u < 1 ? Math.sin(u * Math.PI) : 0) * (1 - catching))
       })
 
       // ---- the catch: two customers, one after the other
-      anchor.copy(hero.position).add(tmp.set(heroW * 0.45, -heroH * 0.1, 0.04)) // the ad's "Shop now" edge
+      if (catcher) {
+        const cw = catcher.userData.s * catcher.scale.x
+        anchor.copy(catcher.position).add(tmp.set(cw * 0.32, -cw * 1.25 * 0.22, 0.05)) // the mouth of the net
+      } else {
+        anchor.copy(hero.position).add(tmp.set(heroW * 0.45, -heroH * 0.1, 0.04)) // the ad's "Shop now" edge
+      }
       let hookShown = false
       customers.forEach((cust, i) => {
         const s0 = 8.2 + i * 2.3 // when this customer's beat starts
@@ -343,7 +381,7 @@ export default function MetaOrbit({ active }) {
         const badge = seg(t, s0 + 1.6, s0 + 2.0) // order badge pops
         const out = seg(t, s0 + 2.6, s0 + 3.0) // leaves
         far.set(1.0 + 1.6 * (1 - enter), -0.45 + i * 0.75, 1.2) // enters from off-frame right
-        near.set(anchor.x + 0.5, anchor.y + 0.1 + i * 0.45, anchor.z + 0.1)
+        near.set(anchor.x + 0.35, anchor.y + 0.05 + i * 0.4, anchor.z + 0.1)
         cust.position.lerpVectors(far, near, pull)
         cust.lookAt(camera.position)
         cust.scale.setScalar(0.85 + 0.15 * pull)
