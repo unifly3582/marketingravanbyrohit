@@ -272,6 +272,14 @@
   transform: scale(var(--s, 1));
   transform-origin: 0 0;
 }
+/* the camera: pushes in on the backend while the agent thinks, on the phone
+   when a message lands, wide between conversations */
+.hs-wa-cam {
+  position: absolute; inset: 0;
+  transform-origin: 0 0;
+  transition: transform 1.5s cubic-bezier(0.3, 0.7, 0.2, 1);
+  will-change: transform;
+}
 
 /* ---- backend panel ---- */
 .hs-wa-brain {
@@ -518,5 +526,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .hs-wa-live, .hs-wa-spin, .hs-wa-bubble, .hs-wa-thoughts li, .hs-wa-day, .hs-wa-sys, .hs-wa-brain-head b, .hs-wa-phone { animation: none; }
-  .hs-wa-msgs, .hs-wa-banner { transition: none; }
+  .hs-wa-msgs, .hs-wa-banner, .hs-wa-cam { transition: none; }
 }

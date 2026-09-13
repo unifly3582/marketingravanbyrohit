@@ -91,7 +91,22 @@ system('Rohan joined the chat', 2800)
 
 const SCENE_ONE_END = SCRIPT.findIndex((s, i) => i > 0 && s.type === 'reset')
 
-const INIT = { biz: null, msgs: [], thoughts: [], tool: null, typing: false, banner: null, buzz: 0, replied: null, seq: 1 }
+const INIT = { biz: null, msgs: [], thoughts: [], tool: null, typing: false, banner: null, buzz: 0, replied: null, focus: 'wide', seq: 1 }
+
+/* the camera: where the scene pushes in, after the Meta card's zoom shots.
+   Each shot is a zoom and the point (in stage px) it keeps centred; the
+   translate is clamped so the stage always covers the card. */
+const SHOTS = {
+  wide: { z: 1, x: 210, y: 159 },
+  brain: { z: 1.32, x: 112, y: 118 },
+  phone: { z: 1.32, x: 322, y: 150 },
+}
+function camera(focus) {
+  const { z, x, y } = SHOTS[focus] ?? SHOTS.wide
+  const tx = Math.min(0, Math.max(BASE_W - BASE_W * z, BASE_W / 2 - x * z))
+  const ty = Math.min(0, Math.max(BASE_H - BASE_H * z, BASE_H / 2 - y * z))
+  return `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px) scale(${z})`
+}
 
 function reduce(st, s) {
   const id = st.seq
@@ -100,7 +115,7 @@ function reduce(st, s) {
     case 'reset':
       return { ...INIT, biz: s.biz, seq: id + 1 }
     case 'out':
-      return { ...next, msgs: [...st.msgs, { id, dir: 'out', text: s.text, status: 'sent' }], replied: null }
+      return { ...next, msgs: [...st.msgs, { id, dir: 'out', text: s.text, status: 'sent' }], replied: null, focus: 'phone' }
     case 'status': {
       const msgs = st.msgs.slice()
       for (let i = msgs.length - 1; i >= 0; i--) {
@@ -116,6 +131,7 @@ function reduce(st, s) {
         ...next,
         thoughts: [...st.thoughts.map((t) => ({ ...t, state: 'done' })), { id, text: s.text, state: 'run' }].slice(-3),
         tool: s.tool ?? st.tool,
+        focus: 'brain',
       }
     case 'typing':
       return { ...st, typing: true, thoughts: st.thoughts.map((t) => ({ ...t, state: 'done' })) }
@@ -127,11 +143,12 @@ function reduce(st, s) {
         banner: { id, title: st.biz?.name ?? 'WhatsApp', body: s.text },
         buzz: st.buzz + 1,
         replied: s.secs,
+        focus: 'phone',
       }
     case 'banner-off':
       return { ...st, banner: null }
     case 'system':
-      return { ...next, msgs: [...st.msgs, { id, dir: 'sys', text: s.text }] }
+      return { ...next, msgs: [...st.msgs, { id, dir: 'sys', text: s.text }], focus: 'wide' }
     default:
       return st
   }
@@ -226,6 +243,7 @@ export default function WhatsAppAgent({ active }) {
   return (
     <div ref={hostRef} className="hs-wa" aria-hidden="true">
       <div className="hs-wa-stage">
+        <div className="hs-wa-cam" style={{ transform: camera(st.focus) }}>
         {/* ---- backend: what the agent thinks and reaches for ---- */}
         <div className={`hs-wa-brain${st.typing ? ' is-sending' : ''}`}>
           <div className="hs-wa-brain-head">
@@ -334,6 +352,7 @@ export default function WhatsAppAgent({ active }) {
               </span>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>
