@@ -10,7 +10,7 @@ import { pagesFrom } from './pages.js'
  *
  *   0-4s   the Meta symbol turns in the middle, ad panels orbit it, tag chips
  *          drift past like the film's LAYOUT / MOVE / COLOR tags
- *   4-8s   push in: one ad panel comes to the front and fills the frame,
+ *   4-8s   push in: one ad panel comes to the front, fitted to the card's height,
  *          a Sponsored chip and a burst of likes
  *   8-13s  the catch: the Meta Ads head leans out of an ad frame with a net
  *          full of customers and money (a nano banana frame), fitted to the
@@ -244,7 +244,7 @@ export default function MetaOrbit({ active }) {
     const camPos = new THREE.Vector3()
     const camAt = new THREE.Vector3()
     const heroHome = new THREE.Vector3()
-    const heroFront = new THREE.Vector3(-0.7, 0.05, 2.9)
+    const heroFront = new THREE.Vector3(0, 0, 2.9)
     const heroSide = new THREE.Vector3(-1.35, 0.5, 2.0) // where the ad waits during the catch
     const catchFront = new THREE.Vector3(0, 0, 3.0)
     const catchHome = new THREE.Vector3()
@@ -280,7 +280,11 @@ export default function MetaOrbit({ active }) {
         if (m === hero) {
           heroHome.copy(tmp)
           m.position.lerpVectors(heroHome, heroFront, zoomIn).lerp(heroSide, catching)
-          m.scale.setScalar((1 + 1.55 * zoomIn) * (1 - 0.5 * catching))
+          // fit, not zoom: the whole ad shows at the card's height
+          const dAd = camera.position.distanceTo(heroFront)
+          const adViewH = 2 * dAd * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
+          const adFit = (adViewH * 0.98) / (m.userData.s * 1.25)
+          m.scale.setScalar((1 + (adFit - 1) * zoomIn) * (1 - 0.5 * catching))
           m.lookAt(camera.position)
           m.rotation.z += (1 - zoomIn) * Math.sin(T * 0.5 + i * 1.3) * 0.06
         } else if (m === catcher) {
