@@ -3,9 +3,12 @@ import StackCard from './StackCard.jsx'
 import StackBackdrop from './StackBackdrop.jsx'
 import StackDots from './StackDots.jsx'
 import WebShowcase from './WebShowcase.jsx'
+import AdsShowcase from './AdsShowcase.jsx'
 import { createStackMotion, lookAt } from './stackMotion.js'
 
 const LIGHT = [1, 0, 1, 0, 0, 1, 0, 1, 0, 1]
+/* live piece per head, keyed by the head's icon; cards without one show text only */
+const VISUAL = { uiux: WebShowcase, ads: AdsShowcase }
 
 /* scroll budget, in viewport heights. The owner sizes its wrapper with these. */
 export const INTRO_VH = 60 // statement lifts away, pile rises into place
@@ -197,7 +200,7 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
             head={h}
             light={!!LIGHT[i % LIGHT.length]}
             hidden={i !== front}
-            visual={h.icon === 'uiux' ? <WebShowcase active={i === front} /> : null}
+            visual={VISUAL[h.icon] ? (() => { const V = VISUAL[h.icon]; return <V active={i === front} /> })() : null}
           />
         ))}
       </div>

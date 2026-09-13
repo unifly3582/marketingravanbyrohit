@@ -176,6 +176,69 @@
   .hs-page.is-live { animation: none; }
 }
 
+/* ---------- ads dashboard (Meta Ads card) ---------- */
+.hs-ads {
+  height: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 1fr auto;
+  gap: 0.35rem 0.8rem;
+  padding: 0.5rem 0.6rem 0.4rem;
+  border-radius: 8px;
+  background: rgba(244, 234, 219, 0.05);
+  border: 1px solid rgba(244, 234, 219, 0.1);
+  font-variant-numeric: tabular-nums;
+}
+.hs-ads-stat { display: flex; flex-direction: column; justify-content: flex-end; gap: 1px; min-width: 0; }
+.hs-ads-label { font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-muted); white-space: nowrap; }
+.hs-ads-num { font-family: var(--font-display); font-weight: 800; font-size: 1.7rem; line-height: 1; letter-spacing: -0.03em; color: var(--color-cream); }
+.hs-ads-delta { font-size: 0.66rem; font-weight: 600; color: var(--color-gold); }
+.hs-ads-delta::before { content: '▲ '; font-size: 0.5rem; }
+.hs-ads-bars {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+  align-items: end;
+  min-height: 44px;
+  border-bottom: 1px solid rgba(244, 234, 219, 0.14);
+  padding-bottom: 2px;
+}
+.hs-ads-bars i {
+  display: block;
+  height: 100%;
+  border-radius: 3px 3px 0 0;
+  background: var(--color-gold);
+  opacity: 0.55;
+  transform-origin: bottom;
+  will-change: transform;
+}
+.hs-ads-bars i.is-last { opacity: 1; background: var(--color-ember); }
+.hs-ads-log {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 0.4rem;
+  min-width: 0;
+  font-size: 0.66rem; color: var(--color-muted);
+  overflow: hidden;
+}
+.hs-ads-log b {
+  flex: none;
+  font-size: 0.55rem; letter-spacing: 0.1em;
+  padding: 1px 5px; border-radius: 999px;
+  background: rgba(240, 163, 47, 0.16); color: var(--color-gold);
+}
+.hs-ads-line {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  animation: hs-log-in 0.45s ease-out both;
+}
+@keyframes hs-log-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hs-ads-line { animation: none; }
+}
+
 /* ---------- dots + pill ---------- */
 .hs-dots {
   position: absolute; right: 0.9rem; top: 50%;
