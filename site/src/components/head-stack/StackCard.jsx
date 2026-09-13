@@ -3,14 +3,15 @@ import { forwardRef } from 'react'
 /*
  * One card in the pile: a service (one head). Position, tilt and z-index are
  * written straight onto the element by CardStack every frame, so this stays a
- * plain presentational component. `visual`, when given, is a live piece for
- * the top band of the card (the Website Design card's page showcase).
+ * plain presentational component. `visual`, when given, fills the card and
+ * the text rides on top of it; `skin` is an extra class for cards whose
+ * visual sets the whole look (the Meta card's bright blue field).
  */
-const StackCard = forwardRef(function StackCard({ head, light, hidden, visual }, ref) {
+const StackCard = forwardRef(function StackCard({ head, light, hidden, visual, skin }, ref) {
   return (
     <article
       ref={ref}
-      className={`hs-card${light ? ' is-light' : ''}${visual ? ' has-visual' : ''}`}
+      className={`hs-card${light ? ' is-light' : ''}${visual ? ' has-visual' : ''}${skin ? ` ${skin}` : ''}`}
       aria-hidden={hidden || undefined}
     >
       <div className="hs-eyebrow">

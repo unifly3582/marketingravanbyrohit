@@ -1,28 +1,27 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import StackCard from './StackCard.jsx'
 import StackBackdrop from './StackBackdrop.jsx'
 import StackDots from './StackDots.jsx'
 import PageShowcase from './PageShowcase.jsx'
 import { pagesFrom } from './pages.js'
+
+const MetaOrbit = lazy(() => import('./MetaOrbit.jsx'))
 import { createStackMotion, lookAt } from './stackMotion.js'
 
 const LIGHT = [1, 0, 1, 0, 0, 1, 0, 1, 0, 1]
 /* live piece per head, keyed by the head's icon; cards without one show text only.
    Each is a set of tall screen mockups (see scripts/gen-mockups.mjs) in a panning window. */
 const WEB_PAGES = pagesFrom(import.meta.glob('../../assets/web-mockups/*.webp', { eager: true, import: 'default' }))
-const ADS_PAGES = pagesFrom(import.meta.glob('../../assets/ads-mockups/*.webp', { eager: true, import: 'default' }))
-const ADS_LABEL = {
-  manager: 'Ads Manager',
-  instagram: 'Instagram · feed ad',
-  creatives: 'Creative test',
-  audience: 'Audiences',
-  report: 'Weekly report',
-  reels: 'Reels ad',
-}
 const VISUAL = {
   uiux: (props) => <PageShowcase {...props} pages={WEB_PAGES} label={(k) => `${k}.in`} />,
-  ads: (props) => <PageShowcase {...props} pages={ADS_PAGES} label={(k) => ADS_LABEL[k] ?? k} />,
+  ads: (props) => (
+    <Suspense fallback={<div className="hs-meta" />}>
+      <MetaOrbit {...props} />
+    </Suspense>
+  ),
 }
+/* cards whose visual sets the whole card's look */
+const SKIN = { ads: 'is-meta' }
 
 /* scroll budget, in viewport heights. The owner sizes its wrapper with these. */
 export const INTRO_VH = 60 // statement lifts away, pile rises into place
@@ -213,6 +212,7 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
             }}
             head={h}
             light={!!LIGHT[i % LIGHT.length]}
+            skin={SKIN[h.icon]}
             hidden={i !== front}
             visual={VISUAL[h.icon] ? (() => { const V = VISUAL[h.icon]; return <V active={i === front} /> })() : null}
           />
