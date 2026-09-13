@@ -11,7 +11,7 @@ import { pagesFrom } from './pages.js'
  *   0-4s   the Meta symbol turns in the middle, ad panels orbit it, tag chips
  *          drift past like the film's LAYOUT / MOVE / COLOR tags
  *   4-8s   push in: one ad panel comes to the front, fitted to the card's height,
- *          a Sponsored chip and a burst of likes
+ *          with a burst of likes
  *   8-13s  the catch: the Meta Ads head leans out of an ad frame with a net
  *          full of customers and money (a nano banana frame), fitted to the
  *          card's height
@@ -211,10 +211,9 @@ export default function MetaOrbit({ active }) {
       return m
     })
 
-    // ---- the ad's dressing for the push-in: Sponsored chip and likes
-    const sponsored = chip('Sponsored', 0.16, { accent: '#0a6cff' })
+    // ---- the ad's dressing for the push-in: a burst of likes (the ad carries its own Sponsored label)
     const likes = ['❤ 2,318', '❤ 3,102', '❤ 4,860'].map((t) => chip(t, 0.16, { fg: '#e0245e' }))
-    ;[sponsored, ...likes].forEach((o) => {
+    likes.forEach((o) => {
       o.visible = false
       scene.add(o)
     })
@@ -318,9 +317,6 @@ export default function MetaOrbit({ active }) {
       // ---- close shot dressing: Sponsored chip and likes bursting off the ad
       const heroW = hero.userData.s * hero.scale.x
       const heroH = heroW * 1.25
-      sponsored.position.copy(hero.position).add(tmp.set(-heroW * 0.42, heroH * 0.52, 0.05))
-      sponsored.lookAt(camera.position)
-      setAlpha(sponsored, (seg(t, 5.2, 5.7) - seg(t, 13, 13.4)) * (1 - catching))
       likes.forEach((m, i) => {
         const start = 6 + i * 0.55
         const u = seg(t, start, start + 1.6)
