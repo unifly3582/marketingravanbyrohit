@@ -305,7 +305,8 @@ export default function ShaderGrain({
     const uRes = u('u_resolution')
     const uDpr = u('u_pixelRatio')
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    // 1.5 keeps retina laptops at a steady 60fps; the grain hides the difference
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
     function resize() {
       const w = Math.max(1, Math.round(canvas.clientWidth * dpr))
       const h = Math.max(1, Math.round(canvas.clientHeight * dpr))
@@ -355,7 +356,7 @@ export default function ShaderGrain({
       gl.deleteBuffer(buf)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [colors.join(','), seed, speed, scale, turbAmp, turbFreq, turbIter, waveFreq, distBias, dither, exposure, contrast, saturation])
+  }, [colors.join(','), seed, speed, scale, turbAmp, turbFreq, turbIter, waveFreq, distBias, dither, exposure, contrast, saturation, loopSpan, loopPeriod])
 
   return <canvas ref={canvasRef} className={className} aria-hidden="true" />
 }

@@ -17,7 +17,7 @@ import { openRavan } from '../lib/ravan.js'
  */
 
 /* the order heads take the front of the deck: the site order from heads.js
- * (website, ads, social, campaigns, then the AI agents, search last). */
+ * (website, ads, calling, social, campaigns, then the other AI agents, search last). */
 const STAGE_ORDER = HEADS.map((h) => h.icon)
 const STAGE = STAGE_ORDER.map((icon) => HEADS.find((h) => h.icon === icon)).filter(Boolean)
 const DECK_MS = 4200 // a new head steps up every DECK_MS
@@ -184,7 +184,10 @@ export default function Hero() {
     <section id="top" className="container-x pt-10 pb-0 max-md:!px-0 md:pt-24 md:pb-2">
       {/* full-width hero panel */}
       <div className="theme-light relative flex min-h-[660px] flex-col overflow-hidden rounded-3xl border border-line max-md:rounded-none max-md:border-x-0 md:min-h-[580px] lg:min-h-[min(78vh,780px)]">
-        <ShaderGrain className="absolute inset-0 z-0 h-full w-full" />
+        {/* the grain field glides through a 30s window of shader time every
+            16s: visible motion (the default 60-over-50 reads as a still
+            image) without the scintillation a faster sweep causes */}
+        <ShaderGrain className="absolute inset-0 z-0 h-full w-full" loopSpan={30} loopPeriod={16} speed={0.18} />
 
         {/* the wordmark along the foot of the panel, behind Ravan */}
         <div

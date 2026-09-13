@@ -6,6 +6,8 @@ import PageShowcase from './PageShowcase.jsx'
 import { pagesFrom } from './pages.js'
 
 const MetaOrbit = lazy(() => import('./MetaOrbit.jsx'))
+const WhatsAppAgent = lazy(() => import('./WhatsAppAgent.jsx'))
+const VoiceCall = lazy(() => import('./VoiceCall.jsx'))
 import { createStackMotion, lookAt } from './stackMotion.js'
 
 const LIGHT = [1, 0, 1, 0, 0, 1, 0, 1, 0, 1]
@@ -19,9 +21,19 @@ const VISUAL = {
       <MetaOrbit {...props} />
     </Suspense>
   ),
+  voice: (props) => (
+    <Suspense fallback={<div className="vc" />}>
+      <VoiceCall {...props} />
+    </Suspense>
+  ),
+  sdr: (props) => (
+    <Suspense fallback={<div className="hs-wa" />}>
+      <WhatsAppAgent {...props} />
+    </Suspense>
+  ),
 }
-/* cards whose visual sets the whole card's look */
-const SKIN = { ads: 'is-meta' }
+/* cards whose visual sets the whole card's look (they are never 'light') */
+const SKIN = { ads: 'is-meta', voice: 'is-voice', sdr: 'is-wa' }
 
 /* scroll budget, in viewport heights. The owner sizes its wrapper with these. */
 export const INTRO_VH = 60 // statement lifts away, pile rises into place
@@ -211,7 +223,7 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
               cardRefs.current[i] = el
             }}
             head={h}
-            light={!!LIGHT[i % LIGHT.length]}
+            light={!!LIGHT[i % LIGHT.length] && !SKIN[h.icon]}
             skin={SKIN[h.icon]}
             hidden={i !== front}
             visual={VISUAL[h.icon] ? (() => { const V = VISUAL[h.icon]; return <V active={i === front} /> })() : null}

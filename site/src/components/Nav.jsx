@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import logo from '../assets/logo-mark.png'
 import { openRavan } from '../lib/ravan.js'
@@ -6,34 +6,49 @@ import { openRavan } from '../lib/ravan.js'
 /*
  * The header: logo on the left, one "Talk to Ravan" action on the right.
  * No page links and no menu — the site is a single page. It turns solid
- * once past the top, hides while scrolling down and returns on the first
- * scroll back up.
+ * once past the top and rides the scroll: slides up with the page as you
+ * scroll down, slides back down as you scroll up.
  */
 export default function Nav() {
   const [scrolled, setScrolled] = useState(false)
-  const [hidden, setHidden] = useState(false) // slid up out of view
+  const ref = useRef(null)
 
+  /* the header rides with the scroll: every pixel scrolled down pushes it
+     up by a pixel until it is fully out of view, every pixel scrolled up
+     pulls it back down, so it moves as part of the page rather than
+     snapping. Written straight to the element (no state, no transition)
+     so it tracks the wheel with zero lag. */
   useEffect(() => {
     let last = window.scrollY
+    let offset = 0 // 0 = fully shown, h = fully hidden
+    let raf = 0
+    const apply = () => {
+      raf = 0
+      const el = ref.current
+      if (el) el.style.transform = `translateY(${-offset}px)`
+    }
     const onScroll = () => {
       const y = window.scrollY
+      const h = ref.current?.offsetHeight ?? 0
       setScrolled(y > 24)
-      const dy = y - last
-      if (y < 80) setHidden(false)
-      else if (dy > 6) setHidden(true)
-      else if (dy < -6) setHidden(false)
-      if (Math.abs(dy) > 6) last = y
+      offset = y <= 0 ? 0 : Math.min(h, Math.max(0, offset + (y - last)))
+      last = y
+      if (!raf) raf = requestAnimationFrame(apply)
     }
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
   }, [])
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-[transform,background-color] duration-300 ease-out ${
+      ref={ref}
+      className={`fixed inset-x-0 top-0 z-50 will-change-transform transition-colors duration-300 ${
         scrolled ? 'bg-ground/85 backdrop-blur-md border-b border-line' : 'bg-transparent'
-      } ${hidden ? '-translate-y-full' : 'translate-y-0'}`}
+      }`}
     >
       <nav className="container-x flex items-center justify-between py-1 md:py-3">
         <Link to="/" className="flex items-center gap-2 md:gap-3">

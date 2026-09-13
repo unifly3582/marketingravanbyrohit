@@ -71,12 +71,6 @@ h1, h2, h3 {
   color: var(--color-gold);
   text-transform: uppercase;
 }
-.eyebrow::before {
-  content: "";
-  width: 1.6rem;
-  height: 1px;
-  background: linear-gradient(90deg, var(--color-ember), var(--color-gold));
-}
 
 .btn-primary {
   display: inline-flex;

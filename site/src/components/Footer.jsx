@@ -56,9 +56,11 @@ export default function Footer() {
         </div>
 
         {/* giant wordmark */}
-        <div className="overflow-hidden pb-2" aria-hidden="true">
-          <p className="select-none whitespace-nowrap text-center font-display text-[11.5vw] font-extrabold leading-[0.85] tracking-tight text-cream/[0.05]">
-            marketing ravan
+        {/* the wordmark, styled like the hero's: one line, MARKETING RAVAN
+            a single space apart, gold fading to ember, tucked into the foot */}
+        <div className="relative h-[clamp(2.2rem,8.5vw,10rem)] overflow-hidden" aria-hidden="true">
+          <p className="pointer-events-none absolute -bottom-[0.2em] left-1/2 -translate-x-1/2 select-none whitespace-nowrap font-display text-[clamp(2rem,8.2vw,10rem)] font-extrabold leading-none tracking-[-0.045em]">
+            <span className="bg-gradient-to-b from-gold/60 to-ember/25 bg-clip-text text-transparent">MARKETING RAVAN</span>
           </p>
         </div>
       </footer>
