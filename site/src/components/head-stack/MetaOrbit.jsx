@@ -1,56 +1,73 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { pagesFrom } from './pages.js'
 
 /*
- * The Meta Ads card's visual, after Meta's own brand film: the blue infinity
- * loop as a glossy 3D tube turning slowly in a bright, airy space, with ad
- * panels drifting around it like cards in orbit. Fills the whole card.
+ * The Meta Ads card's visual, after Meta's own brand film: Meta's symbol,
+ * built from its official outline, as a glossy 3D piece turning slowly in a
+ * bright, airy space, with ad panels drifting around it like cards in orbit.
+ * Fills the whole card.
  *
  * One WebGL canvas. It renders continuously only while the card is in the
  * middle of the pile; otherwise it draws a single frame and sleeps.
  */
 const ADS = pagesFrom(import.meta.glob('../../assets/ads-mockups/*.webp', { eager: true, import: 'default' }))
-const META_BLUE = 0x0866ff
 const SKY = 0xeef3fb
 
-/* the loop: a lemniscate whose two lobes pass over and under each other, drawn
-   as a tube whose thickness swells and thins the way the logo's stroke does */
-class MetaCurve extends THREE.Curve {
-  getPoint(u, target = new THREE.Vector3()) {
-    const t = u * Math.PI * 2
-    const d = 1 + Math.sin(t) ** 2
-    const x = (1.25 * Math.cos(t)) / d
-    const y = (1.25 * Math.sin(t) * Math.cos(t)) / d
-    const z = 0.28 * Math.sin(t)
-    return target.set(x, y * 1.15, z)
-  }
-}
+/* Meta's symbol, exactly: the official outline (24x24 vector), extruded with
+   deep rounded bevels so the cross-section is close to a round tube, which
+   is how the film renders it. Colour is the brand gradient the mark ships
+   with: #0064E0 on the left sweeping to #0082FB on the right. */
+const META_PATH =
+  'M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a6.624 6.624 0 0 0 .265.86 5.297 5.297 0 0 0 .371.761c.696 1.159 1.818 1.927 3.593 1.927 1.497 0 2.633-.671 3.965-2.444.76-1.012 1.144-1.626 2.663-4.32l.756-1.339.186-.325c.061.1.121.196.183.3l2.152 3.595c.724 1.21 1.665 2.556 2.47 3.314 1.046.987 1.992 1.22 3.06 1.22 1.075 0 1.876-.355 2.455-.843a3.743 3.743 0 0 0 .81-.973c.542-.939.861-2.127.861-3.745 0-2.72-.681-5.357-2.084-7.45-1.282-1.912-2.957-2.93-4.716-2.93-1.047 0-2.088.467-3.053 1.308-.652.57-1.257 1.29-1.82 2.05-.69-.875-1.335-1.547-1.958-2.056-1.182-.966-2.315-1.303-3.454-1.303zm10.16 2.053c1.147 0 2.188.758 2.992 1.999 1.132 1.748 1.647 4.195 1.647 6.4 0 1.548-.368 2.9-1.839 2.9-.58 0-1.027-.23-1.664-1.004-.496-.601-1.343-1.878-2.832-4.358l-.617-1.028a44.908 44.908 0 0 0-1.255-1.98c.07-.109.141-.224.211-.327 1.12-1.667 2.118-2.602 3.358-2.602zm-10.201.553c1.265 0 2.058.791 2.675 1.446.307.327.737.871 1.234 1.579l-1.02 1.566c-.757 1.163-1.882 3.017-2.837 4.338-1.191 1.649-1.81 1.817-2.486 1.817-.524 0-1.038-.237-1.383-.794-.263-.426-.464-1.13-.464-2.046 0-2.221.63-4.535 1.66-6.088.454-.687.964-1.226 1.533-1.533a2.264 2.264 0 0 1 1.088-.285z'
+const BLUE_L = new THREE.Color(0x0064e0)
+const BLUE_R = new THREE.Color(0x0082fb)
 
 function buildLogo() {
-  const curve = new MetaCurve()
-  const geo = new THREE.TubeGeometry(curve, 260, 0.17, 28, true)
-  // vary the stroke: thick on the outer sweeps, thin through the crossing
-  const pos = geo.attributes.position
-  const tmp = new THREE.Vector3()
-  const centre = new THREE.Vector3()
-  for (let i = 0; i < pos.count; i++) {
-    const seg = Math.floor(i / 29) // 28 radial + 1
-    const u = seg / 260
-    const t = u * Math.PI * 2
-    const k = 0.72 + 0.32 * Math.cos(2 * t + 0.9) // 0.4 .. 1.04 of base radius
-    curve.getPoint(u % 1, centre)
-    tmp.fromBufferAttribute(pos, i).sub(centre).multiplyScalar(k).add(centre)
-    pos.setXYZ(i, tmp.x, tmp.y, tmp.z)
-  }
+  const svg = new SVGLoader().parse(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="${META_PATH}"/></svg>`)
+  const shapes = svg.paths.flatMap((path) => SVGLoader.createShapes(path))
+  const geo = new THREE.ExtrudeGeometry(shapes, {
+    // stroke is ~2.2 units wide at its thickest; total depth 0.3 + 2 x 0.95
+    // matches it, so the cross-section is close to round, like the film's tube
+    depth: 0.3,
+    steps: 1,
+    curveSegments: 36,
+    bevelEnabled: true,
+    bevelThickness: 0.95,
+    bevelSize: 1.0,
+    bevelOffset: -1.0, // bevel eats into the outline instead of fattening it
+    bevelSegments: 14,
+  })
+  geo.center()
+  // SVG y runs down; face the camera and size to ~2.9 units wide
+  geo.rotateX(Math.PI)
+  geo.computeBoundingBox()
+  const bb = geo.boundingBox
+  const scale = 2.9 / (bb.max.x - bb.min.x)
+  geo.scale(scale, scale, scale)
+  geo.computeBoundingBox()
   geo.computeVertexNormals()
+  // brand gradient across x, baked as vertex colours
+  const { min, max } = geo.boundingBox
+  const pos = geo.attributes.position
+  const colors = new Float32Array(pos.count * 3)
+  const c = new THREE.Color()
+  for (let i = 0; i < pos.count; i++) {
+    const u = (pos.getX(i) - min.x) / (max.x - min.x)
+    c.copy(BLUE_L).lerp(BLUE_R, u)
+    colors[i * 3] = c.r
+    colors[i * 3 + 1] = c.g
+    colors[i * 3 + 2] = c.b
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
   const mat = new THREE.MeshPhysicalMaterial({
-    color: META_BLUE,
-    roughness: 0.22,
-    metalness: 0.05,
-    clearcoat: 0.6,
-    clearcoatRoughness: 0.25,
+    vertexColors: true,
+    roughness: 0.24,
+    metalness: 0.02,
+    clearcoat: 0.55,
+    clearcoatRoughness: 0.3,
   })
   return new THREE.Mesh(geo, mat)
 }
