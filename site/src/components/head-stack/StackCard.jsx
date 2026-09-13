@@ -3,7 +3,8 @@ import { forwardRef } from 'react'
 /*
  * One card in the pile: a service (one head). Position, tilt and z-index are
  * written straight onto the element by CardStack every frame, so this stays a
- * plain presentational component. `visual`, when given, fills the card and
+ * plain presentational component. `head.hl`, when set, is the opening words
+ * of the title the skin may colour as the accent line. `visual`, when given, fills the card and
  * the text rides on top of it; `skin` is an extra class for cards whose
  * visual sets the whole look (the Meta card's bright blue field).
  */
@@ -19,7 +20,16 @@ const StackCard = forwardRef(function StackCard({ head, light, hidden, visual, s
         <b>{String(head.n).padStart(2, '0')}</b>
       </div>
       {visual ? <div className="hs-visual">{visual}</div> : null}
-      <h3>{head.title}</h3>
+      <h3>
+        {head.hl && head.title.startsWith(head.hl) ? (
+          <>
+            <em>{head.hl}</em>
+            {head.title.slice(head.hl.length)}
+          </>
+        ) : (
+          head.title
+        )}
+      </h3>
       <div className="hs-foot">
         <span className="hs-metric">{head.metric}</span>
         <span className="hs-tags">

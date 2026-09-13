@@ -264,6 +264,33 @@
   background: linear-gradient(to top, rgba(8, 18, 14, 0.96) 0%, rgba(8, 18, 14, 0.62) 42%, rgba(8, 18, 14, 0) 100%);
 }
 .hs-card.is-wa .hs-metric { background: rgba(37, 211, 102, 0.14); color: #6fe6a3; }
+/* the title as a headline: the accent line in WhatsApp green, the rest white,
+   large at display optical size, rising in when the card comes to the front */
+.hs-card.is-wa h3 {
+  bottom: 2.7rem;
+  font-size: clamp(1.5rem, 7vw, 1.8rem);
+  font-weight: 800;
+  font-variation-settings: 'opsz' 96;
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  color: #fff;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+}
+.hs-card.is-wa h3 em {
+  display: block;
+  font-style: normal;
+  background: linear-gradient(92deg, #c4ffdd 0%, #25d366 55%, #7defb0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 14px rgba(37, 211, 102, 0.35));
+}
+.hs-card.is-wa:not([aria-hidden]) h3 { animation: hs-title-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+@keyframes hs-title-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hs-card.is-wa::after { height: 66%; }
 
 .hs-wa { position: absolute; inset: 0; overflow: hidden; font-family: var(--font-body); }
 .hs-wa-stage {
@@ -527,4 +554,5 @@
 @media (prefers-reduced-motion: reduce) {
   .hs-wa-live, .hs-wa-spin, .hs-wa-bubble, .hs-wa-thoughts li, .hs-wa-day, .hs-wa-sys, .hs-wa-brain-head b, .hs-wa-phone { animation: none; }
   .hs-wa-msgs, .hs-wa-banner, .hs-wa-cam { transition: none; }
+  .hs-card.is-wa h3 { animation: none; }
 }

@@ -30,6 +30,7 @@ export const HEADS = [
     n: 3,
     short: 'WHATSAPP AI',
     title: 'WhatsApp Agents for Sales & Support',
+    hl: 'WhatsApp Agents',
     metric: 'Replies in Under 5s, 24/7',
     icon: 'sdr',
     href: '/heads/sdr',
