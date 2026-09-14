@@ -9,7 +9,7 @@ export const HEADS = [
     short: 'WEBSITE DESIGN',
     title: 'Websites That Turn Visitors Into Customers',
     hl: 'Websites That Turn',
-    metric: '100 Lighthouse Score',
+    metric: '3.2x More Enquiries',
     icon: 'uiux',
     href: '/heads/uiux',
     desc: 'Fast, interactive websites in the Linear, Apple and Stripe school — designed to convert, built to load instantly, and kept fresh every month.',

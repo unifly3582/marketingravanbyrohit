@@ -2,9 +2,8 @@ import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 're
 import StackCard from './StackCard.jsx'
 import StackBackdrop from './StackBackdrop.jsx'
 import StackDots from './StackDots.jsx'
-import PageShowcase from './PageShowcase.jsx'
-import PosterArt, { ScoreRing } from './PosterArt.jsx'
-import { pagesFrom } from './pages.js'
+import PosterArt from './PosterArt.jsx'
+import WebStory from './WebStory.jsx'
 
 const MetaOrbit = lazy(() => import('./MetaOrbit.jsx'))
 const WhatsAppAgent = lazy(() => import('./WhatsAppAgent.jsx'))
@@ -12,17 +11,12 @@ const VoiceCall = lazy(() => import('./VoiceCall.jsx'))
 import { createStackMotion, lookAt } from './stackMotion.js'
 
 const LIGHT = [1, 0, 1, 0, 0, 1, 0, 1, 0, 1]
-/* live piece per head, keyed by the head's icon; cards without one show text only.
-   Each is a set of tall screen mockups (see scripts/gen-mockups.mjs) in a panning window. */
-const WEB_PAGES = pagesFrom(import.meta.glob('../../assets/web-mockups/*.webp', { eager: true, import: 'default' }))
+/* live piece per head, keyed by the head's icon. Story cards (website, Meta,
+   WhatsApp, calling) run a loop while at the front; poster cards animate a
+   small illustration. */
 const poster = (kind) => (props) => <PosterArt {...props} kind={kind} />
 const VISUAL = {
-  uiux: (props) => (
-    <div className="hs-web">
-      <PageShowcase {...props} pages={WEB_PAGES} label={(k) => `${k}.in`} />
-      <ScoreRing active={props.active} />
-    </div>
-  ),
+  uiux: (props) => <WebStory {...props} />,
   social: poster('social'),
   campaign: poster('campaign'),
   ecom: poster('ecom'),

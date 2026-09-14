@@ -3,8 +3,7 @@ import './poster.css'
 
 /*
  * Small animated illustrations for the cards that have no story of their
- * own (social, campaigns, ecommerce, ERP, automation, search), plus the
- * Lighthouse score ring on the website card. Each is drawn on a 320 x 242
+ * own (social, campaigns, ecommerce, ERP, automation, search). Each is drawn on a 320 x 242
  * stage and scaled to the card with `--s`, so it is crisp at any width.
  * Every animation is CSS or SMIL; the card only plays while it is at the
  * front of the pile (`active`), other cards hold their first frame.
@@ -260,35 +259,6 @@ export default function PosterArt({ kind, active }) {
   return (
     <div ref={ref} className={`hs-art is-${kind}${live ? ' is-live' : ''}`} aria-hidden="true">
       <div className="hs-art-stage">{Art ? <Art live={live} /> : null}</div>
-    </div>
-  )
-}
-
-/* ---- the website card's Lighthouse ring: fills and counts to 100 ---- */
-const R = 21
-const CIRC = 2 * Math.PI * R
-export function ScoreRing({ active }) {
-  const [n, setN] = useState(reduced ? 100 : 0)
-  useEffect(() => {
-    if (!active || reduced) return
-    let raf
-    const t0 = performance.now()
-    const tick = (now) => {
-      const u = Math.min(1, (now - t0) / 1500)
-      setN(Math.round(100 * (1 - (1 - u) ** 3)))
-      if (u < 1) raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [active])
-  return (
-    <div className={`hs-score${active ? ' is-live' : ''}`} aria-hidden="true">
-      <svg viewBox="0 0 52 52">
-        <circle className="hs-score-track" cx="26" cy="26" r={R} />
-        <circle className="hs-score-arc" cx="26" cy="26" r={R} strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - n / 100)} />
-      </svg>
-      <b>{n}</b>
-      <span>Lighthouse</span>
     </div>
   )
 }

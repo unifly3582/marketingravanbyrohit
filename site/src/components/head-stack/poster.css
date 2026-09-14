@@ -1,5 +1,4 @@
-/* Poster skins for the head cards without a story of their own, and the
-   website card's framed browser. Card geometry and the shared has-visual
+/* Poster skins for the head cards without a story of their own. Card geometry and the shared has-visual
    layout live in head-stack.css; this only adds the look. */
 
 /* ---------- the poster card: accent colour, glow, dot grid ---------- */
@@ -43,8 +42,7 @@
 .hs-card.is-poster .hs-eyebrow b { color: var(--hs-accent); }
 
 /* the headline treatment shared by poster and website cards */
-.hs-card.is-poster h3,
-.hs-card.is-web h3 {
+.hs-card.is-poster h3 {
   bottom: 2.75rem;
   font-size: clamp(1.4rem, 6.6vw, 1.7rem);
   font-weight: 800;
@@ -54,8 +52,7 @@
   color: var(--hs-ink);
   text-shadow: 0 2px 18px color-mix(in srgb, var(--hs-base) 70%, transparent);
 }
-.hs-card.is-poster h3 em,
-.hs-card.is-web h3 em {
+.hs-card.is-poster h3 em {
   display: block;
   font-style: normal;
   background: linear-gradient(92deg, var(--hs-accent-2) 0%, var(--hs-accent) 60%, var(--hs-accent-2) 100%);
@@ -64,19 +61,16 @@
   color: transparent;
   filter: drop-shadow(0 0 14px color-mix(in srgb, var(--hs-accent) 40%, transparent));
 }
-.hs-card.is-poster.is-light h3 em,
-.hs-card.is-web h3 em {
+.hs-card.is-poster.is-light h3 em {
   background-image: linear-gradient(92deg, color-mix(in srgb, var(--hs-accent) 80%, #000) 0%, var(--hs-accent) 55%, color-mix(in srgb, var(--hs-accent) 65%, #000) 100%);
   filter: none;
 }
-.hs-card.is-poster:not([aria-hidden]) h3,
-.hs-card.is-web:not([aria-hidden]) h3 { animation: hs-poster-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.hs-card.is-poster:not([aria-hidden]) h3 { animation: hs-poster-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
 @keyframes hs-poster-in {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.hs-card.is-poster .hs-metric,
-.hs-card.is-web .hs-metric {
+.hs-card.is-poster .hs-metric {
   background: var(--hs-accent);
   color: var(--hs-chip-ink);
   font-weight: 700;
@@ -416,90 +410,8 @@
   86%, 100% { background: rgba(30, 21, 15, 0.06); color: #5b4a3b; border-color: rgba(30, 21, 15, 0.1); }
 }
 
-/* ---------- the website card: ivory ground, a framed browser leaning in ---------- */
-.hs-card.is-web {
-  --hs-base: #f6eee1;
-  --hs-ink: #1e150f;
-  --hs-accent: #e2571e;
-  --hs-accent-2: #f0a32f;
-  --hs-chip-ink: #fff;
-  background:
-    radial-gradient(60% 55% at 70% 30%, rgba(240, 163, 47, 0.35) 0%, transparent 70%),
-    radial-gradient(rgba(30, 21, 15, 0.09) 1px, transparent 1.2px) 0 0 / 14px 14px,
-    linear-gradient(160deg, #fff8ec 0%, #f6eee1 55%, #ede1cd 100%);
-  color: var(--hs-ink);
-  border-color: rgba(226, 87, 30, 0.3);
-}
-.hs-card.is-web .hs-eyebrow { color: #6f6354; text-shadow: none; }
-.hs-card.is-web .hs-eyebrow b { color: var(--hs-accent); }
-.hs-card.is-web::after {
-  height: 70%;
-  background: linear-gradient(to top, #f6eee1 0%, #f6eee1 22%, rgba(246, 238, 225, 0.82) 48%, rgba(246, 238, 225, 0) 100%);
-}
-.hs-web { position: absolute; inset: 0; overflow: hidden; perspective: 700px; }
-.hs-web .hs-browser {
-  position: absolute; left: 36%; top: 15%;
-  width: 76%; height: 100%;
-  grid-template-rows: auto 1fr;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow:
-    0 0 0 1px rgba(30, 21, 15, 0.1),
-    0 30px 50px -20px rgba(30, 21, 15, 0.55),
-    -20px 20px 60px -30px rgba(226, 87, 30, 0.45);
-  transform: rotateY(-14deg) rotateX(4deg) rotateZ(1deg);
-  transform-origin: 20% 40%;
-}
-.hs-web .hs-browser-bar {
-  display: flex; align-items: center; gap: 4px;
-  height: 18px; padding: 0 8px;
-  background: #f1ebe2;
-  border-bottom: 1px solid rgba(30, 21, 15, 0.08);
-}
-.hs-web .hs-browser-bar i { width: 5px; height: 5px; border-radius: 50%; background: #d9cfc2; }
-.hs-web .hs-browser-bar i:nth-child(1) { background: #ff5f57; }
-.hs-web .hs-browser-bar i:nth-child(2) { background: #febc2e; }
-.hs-web .hs-browser-bar i:nth-child(3) { background: #28c840; }
-.hs-web .hs-browser-bar span {
-  margin-left: 8px; flex: 1;
-  height: 11px; line-height: 11px; padding: 0 8px;
-  border-radius: 999px; background: #fff;
-  font-size: 7px; font-weight: 600; color: #6f6354;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.hs-score {
-  position: absolute; left: 5%; top: 18%;
-  width: 24%; max-width: 84px; aspect-ratio: 1 / 1;
-  display: grid; place-items: center;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 16px 34px -16px rgba(30, 21, 15, 0.55), 0 0 0 1px rgba(30, 21, 15, 0.06);
-  z-index: 2;
-}
-.hs-score svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
-.hs-score circle { fill: none; stroke-width: 4.5; }
-.hs-score-track { stroke: #efe6d8; }
-.hs-score-arc { stroke: var(--hs-accent); stroke-linecap: round; transition: stroke-dashoffset 0.12s linear; }
-.hs-score b {
-  position: relative; z-index: 1;
-  font-family: var(--font-display); font-weight: 800;
-  font-size: clamp(1rem, 6vw, 1.5rem); line-height: 1;
-  color: #1e150f; margin-top: -0.4em;
-  font-variant-numeric: tabular-nums;
-}
-.hs-score span {
-  position: absolute; bottom: 20%;
-  font-size: 0.42rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
-  color: #8a7d70;
-}
-.hs-score.is-live { animation: hs-score-pop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
-@keyframes hs-score-pop {
-  from { transform: scale(0.8); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .hs-art.is-live * { animation-play-state: paused; }
-  .hs-card.is-poster h3, .hs-card.is-web h3, .hs-score.is-live { animation: none; }
+  .hs-card.is-poster h3 { animation: none; }
   .hs-geo-q { max-width: 140px; border-right: 0; }
 }
