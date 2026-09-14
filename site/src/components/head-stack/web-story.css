@@ -27,8 +27,8 @@
 
 /* ---------- the story at the left ---------- */
 .ws-copy {
-  position: absolute; left: 14px; top: 44px; width: 114px;
-  display: flex; flex-direction: column; gap: 6px;
+  position: absolute; left: 14px; top: 126px; width: 116px;
+  display: flex; flex-direction: column; gap: 5px;
   animation: ws-rise 0.6s cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }
 .ws-step {
@@ -40,11 +40,11 @@
   font-family: var(--font-display);
   font-weight: 800;
   font-variation-settings: 'opsz' 96;
-  font-size: 14.5px; line-height: 1.02; letter-spacing: -0.03em;
+  font-size: 14px; line-height: 1.02; letter-spacing: -0.03em;
   color: #fff;
   text-wrap: balance;
 }
-.ws-note { margin: 0; font-size: 8.5px; line-height: 1.35; color: rgba(244, 234, 219, 0.62); }
+.ws-note { margin: 0; font-size: 8px; line-height: 1.35; color: rgba(244, 234, 219, 0.62); }
 .ws-enquiry, .ws-since {
   display: inline-flex; align-items: center; gap: 4px;
   width: max-content;
@@ -56,7 +56,7 @@
 .ws-enquiry svg { width: 9px; height: 9px; }
 .ws-since { background: rgba(255, 255, 255, 0.08); color: rgba(244, 234, 219, 0.7); border: 1px solid rgba(255, 255, 255, 0.12); font-weight: 600; }
 /* the catchphrase, in the last beat: three short sentences, the last one gold */
-.ws.is-result .ws-line { font-size: 16.5px; }
+.ws.is-result .ws-line { font-size: 15.5px; }
 .ws-line em { font-style: normal; color: #f0a32f; }
 
 /* ---------- the camera and the window ---------- */
@@ -72,12 +72,11 @@
   position: absolute; inset: 0;
   border-radius: 9px;
   background: #0e0b09;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 30px 50px -18px rgba(0, 0, 0, 0.9), 0 0 60px -20px rgba(226, 87, 30, 0.45);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 30px 50px -18px rgba(0, 0, 0, 0.9), -16px 0 60px -24px rgba(226, 87, 30, 0.5);
   overflow: hidden;
-  transform: scale(0.96); opacity: 0;
-  transition: transform 0.6s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.4s ease;
+  transform: perspective(900px) rotateY(-7deg);
+  transform-origin: 0 50%;
 }
-.ws.is-painted .ws-win, .ws .ws-win { transform: scale(1); opacity: 1; }
 .ws-bar {
   height: 14px; display: flex; align-items: center; gap: 3px; padding: 0 7px;
   background: #1a1411; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -120,30 +119,13 @@
   font-family: inherit; font-size: 6.8px; font-weight: 700;
 }
 .ws-pic {
-  position: absolute; left: 10px; right: 10px; top: 104px; height: 66px;
-  border-radius: 46px 46px 8px 8px;
-  background:
-    radial-gradient(60% 50% at 30% 30%, rgba(255, 216, 160, 0.9), transparent 70%),
-    radial-gradient(50% 60% at 78% 70%, rgba(226, 87, 30, 0.75), transparent 70%),
-    linear-gradient(160deg, #6b4a34 0%, #2d1e17 100%);
+  position: absolute; left: 10px; right: 10px; top: 100px; height: 70px;
+  border-radius: 50px 50px 8px 8px;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   overflow: hidden;
+  background: #2d1e17;
 }
-/* a window's light falling across the room */
-.ws-pic::before {
-  content: '';
-  position: absolute; left: 30%; top: -10%; width: 26%; height: 120%;
-  background: linear-gradient(to right, transparent, rgba(255, 240, 210, 0.22), transparent);
-  transform: skewX(-18deg);
-}
-/* a sofa, a line of floor */
-.ws-pic::after {
-  content: '';
-  position: absolute; left: 14%; right: 14%; bottom: 8px; height: 14px;
-  border-radius: 6px 6px 3px 3px;
-  background: linear-gradient(180deg, #c9a27a, #8d6a4a);
-  box-shadow: 0 6px 0 -3px rgba(0, 0, 0, 0.35);
-}
+.ws-pic img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; }
 .ws-price {
   position: absolute; right: 8px; top: 8px; z-index: 1;
   padding: 3px 6px; border-radius: 999px;
@@ -166,12 +148,7 @@
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
-.ws-quote i {
-  flex: none; width: 16px; height: 16px; border-radius: 50%;
-  display: grid; place-items: center;
-  background: linear-gradient(135deg, #f0a32f, #e2571e); color: #1a1008;
-  font-style: normal; font-weight: 800; font-size: 8px;
-}
+.ws-quote img { flex: none; width: 18px; height: 18px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1.5px rgba(240, 163, 47, 0.7); }
 .ws-quote p { margin: 0; font-size: 7px; line-height: 1.3; color: #fff; }
 .ws-quote small { display: block; margin-top: 2px; font-size: 6px; color: rgba(244, 234, 219, 0.55); }
 .ws-shield {
@@ -325,7 +302,38 @@
 .ws-work { height: 96px; padding-top: 10px !important; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .ws-work > b { font-family: Georgia, 'Times New Roman', serif; font-weight: 400; font-size: 11px; color: #fff; }
 .ws-work > div { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 5px; margin-top: 7px; height: 52px; }
-.ws-work i { display: block; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
-.ws-work i.is-a { grid-row: span 1; background: radial-gradient(70% 60% at 30% 30%, rgba(255, 216, 160, 0.8), transparent 70%), linear-gradient(160deg, #5a4030, #2a1c15); }
-.ws-work i.is-b { background: radial-gradient(60% 60% at 70% 30%, rgba(240, 163, 47, 0.7), transparent 70%), linear-gradient(160deg, #3b3a44, #1a1a20); }
-.ws-work i.is-c { background: radial-gradient(60% 60% at 40% 70%, rgba(95, 211, 163, 0.5), transparent 70%), linear-gradient(160deg, #2f3d36, #161f1a); }
+.ws-work img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
+
+/* ---------- the visitor: her portrait fills the left, fading into the room ---------- */
+.ws-visitor {
+  position: absolute; left: -14px; top: -6px;
+  width: 168px; height: 168px;
+  object-fit: cover; object-position: 62% 30%;
+  -webkit-mask-image: radial-gradient(90% 90% at 40% 35%, #000 30%, rgba(0, 0, 0, 0.55) 60%, transparent 92%);
+  mask-image: radial-gradient(90% 90% at 40% 35%, #000 30%, rgba(0, 0, 0, 0.55) 60%, transparent 92%);
+  opacity: 0.95;
+  filter: saturate(1.05) contrast(1.05);
+  pointer-events: none;
+}
+.ws.is-result .ws-visitor { filter: saturate(1.1) brightness(1.08); }
+.ws-visitor-tag {
+  position: absolute; left: 14px; top: 104px;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px 3px 6px; border-radius: 999px;
+  background: rgba(20, 15, 12, 0.88); color: rgba(244, 234, 219, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 7.5px; font-weight: 600; white-space: nowrap;
+  animation: ws-pop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.ws-visitor-tag i {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #f0a32f;
+  box-shadow: 0 0 0 0 rgba(240, 163, 47, 0.6);
+  animation: ws-live 1.8s ease-out infinite;
+}
+.ws-visitor-tag.is-booked { background: #1f9d6a; color: #fff; border-color: transparent; }
+.ws-visitor-tag.is-booked i { background: #fff; animation: none; }
+@keyframes ws-live {
+  0% { box-shadow: 0 0 0 0 rgba(240, 163, 47, 0.6); }
+  70%, 100% { box-shadow: 0 0 0 5px rgba(240, 163, 47, 0); }
+}

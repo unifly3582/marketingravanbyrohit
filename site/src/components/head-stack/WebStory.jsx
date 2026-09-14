@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import hero from '../../assets/web-story/hero.webp'
+import home1 from '../../assets/web-story/home-1.webp'
+import home2 from '../../assets/web-story/home-2.webp'
+import home3 from '../../assets/web-story/home-3.webp'
+import couple from '../../assets/web-story/couple.webp'
+import visitor from '../../assets/web-story/visitor.webp'
 import './web-story.css'
 
 /*
@@ -13,7 +19,9 @@ import './web-story.css'
  *   11.5-17s  ACTION     one button, a nudge at the moment of hesitation, booked
  *   17-22s    RESULT     the site dims, the number lands, the catchphrase
  *
- * Plain DOM: the mini site is real markup, so it stays crisp at card size.
+ * Plain DOM: the mini site is real markup, so it stays crisp at card size;
+ * the photos (nano banana, assets-src/web-story) give it its warmth. The
+ * visitor herself sits at the left, lit by her phone, the copy over her.
  * One rAF loop quantised to 100 ms drives `t`; every element decides from `t`
  * whether it exists, CSS does the entrances. Runs only while the card is at
  * the front; cards behind hold a mid-story frame so the pile never looks empty.
@@ -24,10 +32,10 @@ const HOLD_T = 2.4 // the frame cards show while they are not at the front
 const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const BEATS = [
-  { at: 0.6, key: 'attention', step: '01 · Attention', line: 'A stranger decides in 3 seconds.', note: 'One promise, one picture, one button. Nothing to decode.' },
-  { at: 6.0, key: 'trust', step: '02 · Trust', line: 'Doubt shows up on scroll two. So does proof.', note: 'Real names, real numbers, placed where hesitation starts.' },
-  { at: 11.5, key: 'action', step: '03 · Action', line: 'One clear next step. No forms, no friction.', note: 'A nudge at the moment of doubt. The button does the rest.' },
-  { at: 17.0, key: 'result', step: 'The result', line: 'Looks good. Reads minds.', em: 'Wins customers.', note: null },
+  { at: 0.6, key: 'attention', step: '01 · Attention', line: 'She decides in 3 seconds.', note: 'One promise, one picture, one button.', tag: 'Priya · browsing aangan.in' },
+  { at: 6.0, key: 'trust', step: '02 · Trust', line: 'Doubt arrives on scroll two. So does proof.', note: 'Real names, real numbers, where hesitation starts.', tag: 'reading the reviews' },
+  { at: 11.5, key: 'action', step: '03 · Action', line: 'One clear next step.', note: 'A nudge at the moment of doubt. The button does the rest.', tag: 'hovering the button…' },
+  { at: 17.0, key: 'result', step: 'The result', line: 'Looks good. Reads minds.', em: 'Wins customers.', note: null, tag: 'a customer now' },
 ]
 const beatOf = (t) => [...BEATS].reverse().find((b) => t >= b.at) ?? null
 
@@ -134,6 +142,15 @@ export default function WebStory({ active }) {
   return (
     <div ref={hostRef} className={`ws is-${key}${painted ? ' is-painted' : ''}`} aria-hidden="true">
       <div className="ws-stage">
+        {/* ---- the visitor, lit by her phone ---- */}
+        <img className="ws-visitor" src={visitor} alt="" decoding="async" />
+        {beat && (
+          <span key={booked ? 'booked' : beat.key} className={`ws-visitor-tag${booked ? ' is-booked' : ''}`}>
+            <i />
+            {booked && key === 'action' ? 'visit booked ✓' : beat.tag}
+          </span>
+        )}
+
         {/* ---- the story, told at the left ---- */}
         {beat && (
           <div key={beat.key} className="ws-copy">
@@ -184,6 +201,7 @@ export default function WebStory({ active }) {
                     Book a free visit
                   </button>
                   <div className="ws-pic">
+                    <img src={hero} alt="" decoding="async" />
                     <span className="ws-price">₹4.2L · full 2BHK</span>
                   </div>
                 </section>
@@ -205,7 +223,7 @@ export default function WebStory({ active }) {
                     <span>Asian Paints</span>
                   </div>
                   <figure className="ws-quote">
-                    <i>P</i>
+                    <img src={couple} alt="" decoding="async" />
                     <div>
                       <p>“They understood our home before we did.”</p>
                       <small>Priya & Aman · Baner</small>
@@ -234,9 +252,9 @@ export default function WebStory({ active }) {
                 <section className="ws-work">
                   <b>Recent homes</b>
                   <div>
-                    <i className="is-a" />
-                    <i className="is-b" />
-                    <i className="is-c" />
+                    <img src={home1} alt="" decoding="async" />
+                    <img src={home2} alt="" decoding="async" />
+                    <img src={home3} alt="" decoding="async" />
                   </div>
                 </section>
 
