@@ -3,6 +3,7 @@ import StackCard from './StackCard.jsx'
 import StackBackdrop from './StackBackdrop.jsx'
 import StackDots from './StackDots.jsx'
 import PageShowcase from './PageShowcase.jsx'
+import PosterArt, { ScoreRing } from './PosterArt.jsx'
 import { pagesFrom } from './pages.js'
 
 const MetaOrbit = lazy(() => import('./MetaOrbit.jsx'))
@@ -14,8 +15,20 @@ const LIGHT = [1, 0, 1, 0, 0, 1, 0, 1, 0, 1]
 /* live piece per head, keyed by the head's icon; cards without one show text only.
    Each is a set of tall screen mockups (see scripts/gen-mockups.mjs) in a panning window. */
 const WEB_PAGES = pagesFrom(import.meta.glob('../../assets/web-mockups/*.webp', { eager: true, import: 'default' }))
+const poster = (kind) => (props) => <PosterArt {...props} kind={kind} />
 const VISUAL = {
-  uiux: (props) => <PageShowcase {...props} pages={WEB_PAGES} label={(k) => `${k}.in`} />,
+  uiux: (props) => (
+    <div className="hs-web">
+      <PageShowcase {...props} pages={WEB_PAGES} label={(k) => `${k}.in`} />
+      <ScoreRing active={props.active} />
+    </div>
+  ),
+  social: poster('social'),
+  campaign: poster('campaign'),
+  ecom: poster('ecom'),
+  erp: poster('erp'),
+  agent: poster('agent'),
+  geo: poster('geo'),
   ads: (props) => (
     <Suspense fallback={<div className="hs-meta" />}>
       <MetaOrbit {...props} />
@@ -33,7 +46,19 @@ const VISUAL = {
   ),
 }
 /* cards whose visual sets the whole card's look (they are never 'light') */
-const SKIN = { ads: 'is-meta', voice: 'is-voice', sdr: 'is-wa' }
+const SKIN = {
+  uiux: 'is-web',
+  ads: 'is-meta',
+  voice: 'is-voice',
+  sdr: 'is-wa',
+  // poster cards (PosterArt + poster.css): accent tone per head, light/dark kept alternating
+  social: 'is-poster tone-social',
+  campaign: 'is-poster tone-campaign is-light',
+  ecom: 'is-poster tone-ecom',
+  erp: 'is-poster tone-erp is-light',
+  agent: 'is-poster tone-agent',
+  geo: 'is-poster tone-geo is-light',
+}
 
 /* scroll budget, in viewport heights. The owner sizes its wrapper with these. */
 export const INTRO_VH = 60 // statement lifts away, pile rises into place
