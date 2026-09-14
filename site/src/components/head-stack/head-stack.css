@@ -172,38 +172,6 @@
 .hs-meta { position: absolute; inset: 0; background: #eef3fb; }
 .hs-meta canvas { display: block; width: 100%; height: 100%; }
 
-/* the page window, now edge to edge */
-.hs-browser {
-  height: 100%;
-  min-height: 0;
-  display: grid;
-  grid-template-rows: 1fr;
-  overflow: hidden;
-  background: #0b0806;
-}
-.hs-card.is-light .hs-browser { background: #fff; }
-.hs-browser-bar { display: none; }
-.hs-browser-view { position: relative; overflow: hidden; }
-.hs-page {
-  position: absolute; inset: 0 auto auto 0;
-  width: 100%; height: auto;
-  display: block;
-  opacity: 0;
-  transition: opacity 0.7s ease;
-  will-change: transform, opacity;
-}
-.hs-page.is-on { opacity: 1; }
-/* pan down the page while it is on, a touch slower than the hold so it never runs out */
-.hs-page.is-on.is-live { animation: hs-pan var(--hold, 5200ms) ease-in-out forwards; }
-@keyframes hs-pan {
-  0%, 12% { transform: translateY(0); }
-  88%, 100% { transform: translateY(calc(-100% + 100cqh)); }
-}
-.hs-browser-view { container-type: size; }
-@media (prefers-reduced-motion: reduce) {
-  .hs-page.is-live { animation: none; }
-}
-
 /* ---------- dots + pill ---------- */
 .hs-dots {
   position: absolute; right: 0.9rem; top: 50%;

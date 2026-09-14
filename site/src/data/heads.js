@@ -8,7 +8,6 @@ export const HEADS = [
     n: 1,
     short: 'WEBSITE DESIGN',
     title: 'Websites That Turn Visitors Into Customers',
-    hl: 'Websites That Turn',
     metric: '3.2x More Enquiries',
     icon: 'uiux',
     href: '/heads/uiux',

@@ -3,7 +3,6 @@ import StackCard from './StackCard.jsx'
 import StackBackdrop from './StackBackdrop.jsx'
 import StackDots from './StackDots.jsx'
 import PosterArt from './PosterArt.jsx'
-import WebStory from './WebStory.jsx'
 
 const MetaOrbit = lazy(() => import('./MetaOrbit.jsx'))
 const WhatsAppAgent = lazy(() => import('./WhatsAppAgent.jsx'))
@@ -11,12 +10,12 @@ const VoiceCall = lazy(() => import('./VoiceCall.jsx'))
 import { createStackMotion, lookAt } from './stackMotion.js'
 
 const LIGHT = [1, 0, 1, 0, 0, 1, 0, 1, 0, 1]
-/* live piece per head, keyed by the head's icon. Story cards (website, Meta,
-   WhatsApp, calling) run a loop while at the front; poster cards animate a
-   small illustration. */
+/* live piece per head, keyed by the head's icon; a head without one (the
+   website card, for now) is a plain text card. Story cards (Meta, WhatsApp,
+   calling) run a loop while at the front; poster cards animate a small
+   illustration. */
 const poster = (kind) => (props) => <PosterArt {...props} kind={kind} />
 const VISUAL = {
-  uiux: (props) => <WebStory {...props} />,
   social: poster('social'),
   campaign: poster('campaign'),
   ecom: poster('ecom'),
@@ -41,7 +40,6 @@ const VISUAL = {
 }
 /* cards whose visual sets the whole card's look (they are never 'light') */
 const SKIN = {
-  uiux: 'is-web',
   ads: 'is-meta',
   voice: 'is-voice',
   sdr: 'is-wa',
