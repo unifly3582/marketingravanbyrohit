@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ravan Head Stack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ground: #0D0907;
+    --surface: #16100C;
+    --card: #1D1510;
+    --cream: #F4EADB;
+    --muted: #A3937F;
+    --gold: #F0A32F;
+    --ember: #E2571E;
+    --line: rgba(244, 234, 219, 0.14);
+    --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: #070403;
+    color: var(--cream);
+    font-family: var(--font-body);
+    display: grid;
+    place-items: center;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  /* phone frame on wide screens; edge-to-edge on a real phone */
+  .phone {
+    position: relative;
+    width: min(100vw, 400px);
+    height: min(100dvh, 780px);
+    background: var(--ground);
+    overflow: hidden;
+    border-radius: 0;
+    isolation: isolate;
+  }
+  @media (min-width: 480px) and (min-height: 820px) {
+    .phone { border-radius: 40px; box-shadow: 0 0 0 10px #1a1411, 0 40px 80px rgba(0,0,0,.6); }
+  }
+
+  /* ---------- 1. backdrop: repeating giant text, counter-scrolls ---------- */
+  .backdrop {
+    position: absolute; inset: 0;
+    display: flex; justify-content: center;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .backdrop-col {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 86px;
+    line-height: var(--row);
+    letter-spacing: -0.03em;
+    text-transform: uppercase;
+    color: var(--cream);
+    text-align: center;
+    white-space: nowrap;
+    will-change: transform;
+  }
+  .backdrop-col span { display: block; height: var(--row); }
+  .backdrop-col span:nth-child(even) { color: var(--gold); }
+
+  /* ---------- 2. card ---------- */
+  .stack { position: absolute; inset: 0; }
+  .card {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: var(--cw); height: var(--ch);
+    margin: calc(var(--ch) / -2) 0 0 calc(var(--cw) / -2);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 30px 50px -20px rgba(0,0,0,.75), 0 10px 20px rgba(0,0,0,.35);
+    overflow: hidden;
+    will-change: transform;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: 12px 14px 10px;
+    gap: 6px;
+  }
+  .card.is-light { background: var(--cream); color: #201812; border-color: rgba(32,24,18,.15); }
+  .card .eyebrow {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600;
+  }
+  .card.is-light .eyebrow { color: #6F6354; }
+  .card .eyebrow b { color: var(--ember); font-family: var(--font-display); font-size: 13px; letter-spacing: 0; }
+  .card h3 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 17px;
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    align-self: center;
+  }
+  .card .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .card .metric {
+    font-size: 12px; font-weight: 600;
+    padding: 5px 9px; border-radius: 999px;
+    background: rgba(240,163,47,.14); color: var(--gold);
+    white-space: nowrap;
+  }
+  .card.is-light .metric { background: rgba(226,87,30,.12); color: #B8441A; }
+  .card .bars { display: flex; gap: 3px; align-items: flex-end; height: 18px; }
+  .card .bars i { display: block; width: 5px; background: var(--muted); opacity: .45; border-radius: 2px; }
+  .card.is-light .bars i { background: #201812; opacity: .3; }
+
+  /* ---------- 3. dots + pill ---------- */
+  .hud {
+    position: absolute; left: 0; right: 0; bottom: 22px;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    padding: 0 18px; z-index: 50; pointer-events: none;
+  }
+  .pill {
+    pointer-events: auto;
+    justify-self: start;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 14px; border-radius: 999px;
+    background: rgba(13,9,7,.75); backdrop-filter: blur(8px);
+    border: 1.5px solid var(--gold);
+    color: var(--cream); font-weight: 600; font-size: 14px;
+    font-family: var(--font-body);
+    text-decoration: none;
+  }
+  .pill:focus-visible { outline: 2px solid var(--cream); outline-offset: 2px; }
+  .dots { display: flex; gap: 6px; justify-self: center; }
+  .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--cream); opacity: .3; transition: opacity .3s, transform .3s; }
+  .dots i.on { opacity: 1; transform: scale(1.3); }
+  .speed {
+    pointer-events: auto; justify-self: end;
+    font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    background: rgba(13,9,7,.75); border: 1px solid var(--line); color: var(--muted);
+    border-radius: 999px; padding: 8px 10px; cursor: pointer; font-family: var(--font-body);
+  }
+  .speed[aria-pressed="true"] { color: var(--gold); border-color: var(--gold); }
+
+  .hint {
+    position: absolute; top: 16px; left: 0; right: 0; text-align: center;
+    font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    z-index: 50; pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) { .dots i { transition: none; } }
+</style></head><body>
+
+<div class="phone" id="phone">
+  <div class="backdrop"><div class="backdrop-col" id="backdrop"></div></div>
+  <div class="stack" id="stack"></div>
+  <div class="hint">swipe up or down · middle card is always on top</div>
+  <div class="hud">
+    <a class="pill" href="#" onclick="return false">↗ See this head</a>
+    <div class="dots" id="dots"></div>
+    <button class="speed" id="speed" aria-pressed="false">slow</button>
+  </div>
+</div>
+
+<script>
+/* ---------- data: the ten heads, in site order ---------- */
+const HEADS = [
+  { n: 1,  short: 'Website design',     title: 'Websites that turn visitors into customers', metric: '100 Lighthouse' },
+  { n: 2,  short: 'Meta ads',           title: 'Facebook & Instagram ads that bring buyers',  metric: '+250% ROAS' },
+  { n: 3,  short: 'Social media',       title: 'Your social media, managed every day',        metric: '30 posts / month' },
+  { n: 4,  short: 'Digital campaigns',  title: 'Google, YouTube & email, full-funnel',        metric: '3x pipeline' },
+  { n: 5,  short: 'WhatsApp AI',        title: 'WhatsApp agents for sales & support',        metric: 'Replies < 5s' },
+  { n: 6,  short: 'AI calling',         title: 'Voice agents that never miss a lead',         metric: 'Picks up < 1s' },
+  { n: 7,  short: 'Ecommerce AI',       title: 'Agents that run and grow your online store',  metric: '+40% repeat orders' },
+  { n: 8,  short: 'Brand & content',    title: 'A brand people remember and share',           metric: 'One voice everywhere' },
+  { n: 9,  short: 'SEO & GEO',          title: 'Found on Google and inside AI answers',       metric: 'Page-one rankings' },
+  { n: 10, short: 'Growth data',        title: 'Every rupee tracked back to a result',        metric: 'Weekly dashboard' },
+];
+/* slots, not cards, own the look. r = slot relative to the middle:
+   -1 top (tilted left, tucked behind), 0 middle (tilted right, on top),
+   +1 bottom (tilted left, its right corner tucked behind). Slots beyond that
+   alternate so the pile keeps reading as a pile when it is tall.            */
+const SLOT = {
+  '-3': { tilt: -11, x:  4 },
+  '-2': { tilt:   8, x: -3 },
+  '-1': { tilt: -12, x: -5 },
+   '0': { tilt:   9, x:  0 },
+   '1': { tilt: -10, x:  6 },
+   '2': { tilt:   7, x: -4 },
+   '3': { tilt: -11, x:  3 },
+};
+const slotAt = s => SLOT[String(Math.max(-3, Math.min(3, s)))];
+/* look of a card sitting at fractional slot s: blend the two nearest slots */
+function lookAt(s) {
+  const a = Math.floor(s), b = a + 1, t = s - a;
+  const A = slotAt(a), B = slotAt(b);
+  return { tilt: A.tilt + (B.tilt - A.tilt) * t, x: A.x + (B.x - A.x) * t };
+}
+const LIGHT  = [ 1, 0, 1, 0, 0, 1, 0, 1, 0, 1 ];
+
+/* ---------- geometry ---------- */
+const phone = document.getElementById('phone');
+const stackEl = document.getElementById('stack');
+const bdEl = document.getElementById('backdrop');
+const dotsEl = document.getElementById('dots');
+const N = HEADS.length;
+let CW, CH, PITCH, ROW;
+
+function layout() {
+  const W = phone.clientWidth;
+  CW = Math.round(W * 0.62);
+  CH = Math.round(CW / 1.32);
+  PITCH = Math.round(CH * 1.09);
+  ROW = 78;
+  phone.style.setProperty('--cw', CW + 'px');
+  phone.style.setProperty('--ch', CH + 'px');
+  phone.style.setProperty('--row', ROW + 'px');
+}
+layout();
+addEventListener('resize', layout);
+
+/* backdrop rows: enough to cover the frame plus one row of travel each side */
+const WORDS = ['Ten heads', 'One retainer'];
+const ROWS = 16;
+bdEl.innerHTML = Array.from({ length: ROWS }, (_, i) => `<span>${WORDS[i % 2]}</span>`).join('');
+bdEl.style.marginTop = -(ROWS * ROW - phone.clientHeight) / 2 + 'px';
+
+/* cards */
+const cards = HEADS.map((h, i) => {
+  const el = document.createElement('article');
+  el.className = 'card' + (LIGHT[i] ? ' is-light' : '');
+  el.innerHTML = `
+    <div class="eyebrow"><span>${h.short}</span><b>${String(h.n).padStart(2, '0')}</b></div>
+    <h3>${h.title}</h3>
+    <div class="foot"><span class="metric">${h.metric}</span>
+      <span class="bars">${[6,11,8,14,10,17,12].map(v => `<i style="height:${v}px"></i>`).join('')}</span></div>`;
+  stackEl.appendChild(el);
+  return el;
+});
+dotsEl.innerHTML = HEADS.map(() => '<i></i>').join('');
+const dots = [...dotsEl.children];
+
+/* ---------- motion engine ----------
+   Keyframes measured from the reference at 30fps (whole-stack position, px,
+   over a 192px step). Every value below is a fraction of one step, so the
+   motion scales with the card size.
+     SINK  0.30s : stack settles DOWN 13% of a step, ease in-out
+     SLIDE 0.63s : bell-shaped velocity, peak 4 steps/s, lands 5% PAST the target
+     DRIFT 0.35s : creeps back to the target
+     REST        : still until the next tick; one tick every 1.53s
+   The backdrop text counter-moves 1.4x during the sink, then travels one row
+   the other way with a ~20px overshoot that decays with the drift.
+   The next card takes the top z-index the instant the slide starts.        */
+const STEP_PX = 192;
+const SINK_K  = [0, 1, 3, 7, 11, 16, 20, 23, 25, 25].map(v => v / STEP_PX);
+const SLIDE_K = [0, -2, -7, -16, -29, -47, -71, -97, -123, -146, -166, -182, -195, -205, -213, -219, -223, -226, -227, -227].map(v => v / STEP_PX);
+const DRIFT_K = [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10].map(v => v / STEP_PX);
+const FPS = 30;
+const PERIOD = 1.53;
+const OVER = 19;            // backdrop overshoot, px
+
+/* sample a keyframe table at time t (seconds), linear between frames */
+function sample(K, t) {
+  const f = Math.max(0, Math.min(K.length - 1, t * FPS));
+  const i = Math.floor(f), a = f - i;
+  return i >= K.length - 1 ? K[K.length - 1] : K[i] + (K[i + 1] - K[i]) * a;
+}
+const dur = K => (K.length - 1) / FPS;
+const easeOutCubic = u => 1 - Math.pow(1 - u, 3);
+
+let active = 0;          // card the layout is centered on
+let front = 0;           // card holding the top z-index
+let dir = 1;             // +1 next, -1 previous
+let phase = 'rest';      // rest | sink | slide | drift
+let t0 = performance.now();
+let tick0 = performance.now();
+let speed = 1;
+let progress = 0, colRot = 0, bgY = 0, bgBase = 0, sinkEnd = 0, landed = 0;
+let paused = false;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const wrap = i => ((i % N) + N) % N;
+const rel = i => { let r = i - active; if (r > N / 2) r -= N; if (r < -N / 2) r += N; return r; };
+const dist = (i, j) => { let d = Math.abs(i - j); return Math.min(d, N - d); };
+
+function render() {
+  cards.forEach((el, i) => {
+    const r = rel(i);
+    if (Math.abs(r) > 3) { el.style.visibility = 'hidden'; return; }
+    el.style.visibility = 'visible';
+    const s = r - progress;                 // fractional slot while travelling
+    const look = lookAt(s);
+    const x = look.x / 100 * CW;
+    const y = s * PITCH;
+    el.style.transform = `translate(${x}px, ${y}px) rotate(${look.tilt + colRot}deg)`;
+    el.style.zIndex = N - dist(i, front);   // the middle slot is always on top
+  });
+  bdEl.style.transform = `translateY(${bgBase + bgY}px)`;
+  dots.forEach((d, i) => d.classList.toggle('on', i === front));
+}
+
+function step(now) {
+  const el = (now - t0) / 1000 * speed;
+  if (phase === 'rest') {
+    progress = 0; colRot = 0; bgY = 0;
+    if (!paused && (now - tick0) / 1000 * speed >= PERIOD) begin(1);
+  } else if (phase === 'sink') {
+    const k = sample(SINK_K, el);                           // 0 .. +0.13 (down)
+    progress = -dir * k;
+    colRot = dir * 3 * (k / SINK_K[SINK_K.length - 1]);    // slight lean with the sink
+    bgY = -dir * 1.4 * k * PITCH;                           // text counter-moves
+    if (el >= dur(SINK_K)) { phase = 'slide'; t0 = now; sinkEnd = progress; front = wrap(active + dir); }
+  } else if (phase === 'slide') {
+    const k = sample(SLIDE_K, el);                          // 0 .. -1.18 step
+    const u = Math.min(1, el / dur(SLIDE_K));
+    progress = sinkEnd - dir * k;                           // ends at +1.05
+    colRot = dir * 3 * (1 - u);
+    const bFrom = -dir * 1.4 * SINK_K[SINK_K.length - 1] * PITCH, bTo = dir * (ROW + OVER);
+    bgY = bFrom + (bTo - bFrom) * Math.min(1, -k / 1.05);
+    if (el >= dur(SLIDE_K)) {
+      active = wrap(active + dir);
+      progress -= dir;                                      // same picture, re-based on the new middle
+      bgBase += dir * ROW;
+      if (Math.abs(bgBase) >= ROW * 2) bgBase -= Math.sign(bgBase) * ROW * 2;  // text repeats every 2 rows
+      landed = progress; phase = 'drift'; t0 = now;
+    }
+  } else if (phase === 'drift') {
+    const k = sample(DRIFT_K, el);                          // 0 .. +0.052 step
+    progress = landed - dir * k;                            // creeps from +0.05 past back to 0
+    colRot = 0;
+    bgY = dir * OVER * (1 - easeOutCubic(Math.min(1, el / dur(DRIFT_K))));
+    if (el >= dur(DRIFT_K)) { phase = 'rest'; progress = 0; bgY = 0; t0 = now; }
+  }
+  render();
+  requestAnimationFrame(step);
+}
+
+function begin(d) {
+  if (phase !== 'rest') return;
+  dir = d;
+  tick0 = performance.now();
+  if (reduced) { active = wrap(active + d); front = active; render(); return; }
+  phase = 'sink'; t0 = performance.now();
+}
+
+/* swipe: pause while touching, step on release */
+let sy = null;
+phone.addEventListener('pointerdown', e => { sy = e.clientY; paused = true; });
+phone.addEventListener('pointerup', e => {
+  if (sy !== null) { const dy = e.clientY - sy; if (dy < -30) begin(1); else if (dy > 30) begin(-1); }
+  sy = null; paused = false; tick0 = performance.now();
+});
+phone.addEventListener('pointercancel', () => { sy = null; paused = false; });
+addEventListener('keydown', e => { if (e.key === 'ArrowUp') begin(1); if (e.key === 'ArrowDown') begin(-1); });
+document.getElementById('speed').addEventListener('click', e => {
+  speed = speed === 1 ? 0.25 : 1;
+  e.currentTarget.setAttribute('aria-pressed', speed !== 1);
+});
+document.addEventListener('visibilitychange', () => { t0 = performance.now(); tick0 = performance.now(); });
+
+render();
+requestAnimationFrame(step);
+</script>
+</body></html>
