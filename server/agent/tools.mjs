@@ -220,11 +220,11 @@ export function buildToolSpecs({
             label: "Speak reply",
             description:
               "Say something to the caller — this text is spoken aloud by text-to-speech, not read. " +
-              "Use short, plain spoken sentences: no lists, no markdown, no headings. Say numbers and " +
+              "One short sentence, two at most: no lists, no markdown, no headings. Say numbers and " +
               "prices the way a person would say them. Mirror the caller's language. Never invent facts " +
               "that are not in the playbook. Call this exactly once per turn, as your final action.",
             schema: z.object({
-              text: z.string().max(600).describe("What to say, as plain spoken words"),
+              text: z.string().max(220).describe("What to say, one or two short spoken sentences"),
             }),
             run: traced("speak", "Speak reply", async ({ text }) => {
               if (replySent) {
