@@ -10,7 +10,22 @@ import { transcribe, synthesize } from "./sarvam-speech.mjs";
 import { runAgent } from "../agent/whatsapp-agent.mjs";
 import { insertMessage, touchConversation, completeCall } from "../db.mjs";
 
-const GREETING = "Namaste! Marketing Ravan se baat kar rahe hain. Main aapki kaise madad kar sakta hoon?";
+// What she says the moment the call connects, before the caller has said a
+// word. Override with VOICE_GREETING in the env (restart to apply). `{name}`
+// becomes the caller's first name when the lead has one, and is dropped
+// cleanly when it does not.
+const DEFAULT_GREETING =
+  "Namaste {name}! Main Priya bol rahi hoon, Marketing Ravan se. " +
+  "Aapne hamari website par call request ki thi, isliye call kiya hai. " +
+  "Kya abhi do minute baat kar sakte hain?";
+
+export function renderGreeting(template, contactName) {
+  const first = (contactName ?? "").trim().split(/\s+/)[0];
+  const out = first ? template.replace(/\{name\}/g, `${first} ji`) : template.replace(/\s*\{name\}/g, "");
+  return out.replace(/\s{2,}/g, " ").trim();
+}
+
+const greeting = (contactName) => renderGreeting(process.env.VOICE_GREETING || DEFAULT_GREETING, contactName);
 const MAX_CALL_MS = 10 * 60 * 1000; // safety cap if hangup detection ever fails
 const OUT_FRAME_MS = 20;
 const SAMPLE_RATE = 8000;
@@ -72,7 +87,7 @@ export class CallSession {
   _greet() {
     if (this.greeted) return;
     this.greeted = true;
-    this._speak(GREETING, { log: true });
+    this._speak(greeting(this.contactName), { log: true });
   }
 
   _handleAudio(pcm16) {
