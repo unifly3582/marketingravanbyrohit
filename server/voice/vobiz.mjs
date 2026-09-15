@@ -52,7 +52,11 @@ export function callIdFromAnswerBody(body = {}) {
   return body.CallUUID ?? body.call_uuid ?? body.RequestUUID ?? body.request_uuid ?? null;
 }
 
-/** XML response for the answer_url callback: open a bidirectional media stream to our WS endpoint. */
+/**
+ * XML response for the answer_url callback: open a bidirectional media stream
+ * to our WS endpoint. `contentType` is explicit because Vobiz defaults inbound
+ * audio to L16 8 kHz, while session.mjs decodes every frame as mu-law.
+ */
 export function answerXml(streamUrl) {
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n  <Stream bidirectional="true" keepCallAlive="true">${streamUrl}</Stream>\n</Response>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n  <Stream bidirectional="true" keepCallAlive="true" contentType="audio/x-mulaw;rate=8000">${streamUrl}</Stream>\n</Response>`;
 }
