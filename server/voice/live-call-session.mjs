@@ -58,7 +58,11 @@ const IDLE_GRACE_MS = Number(env("VOICE_IDLE_GRACE_MS", 6_000));
 const OPEN_ON_HELLO_MS = Number(env("VOICE_HELLO_SPEECH_MS", 120));
 /** A pickup "hello" is short and often quiet; this is well below the level used for turn-taking. */
 const HELLO_RMS = Number(env("VOICE_HELLO_RMS", 300));
-const OPEN_AFTER_SILENCE_MS = Number(env("VOICE_OPEN_AFTER_MS", 2500));
+// Vobiz opens the stream 1-2 s after pickup, and most people say hello at
+// pickup — before the stream exists (logged: near-silence for the whole
+// first 2.5 s on a call where the caller had said hello). So the wait is
+// short: a late hello still opens instantly, an early one is not waited for.
+const OPEN_AFTER_SILENCE_MS = Number(env("VOICE_OPEN_AFTER_MS", 1000));
 /** Never play anything in the first moments of the stream; the media path is still settling. */
 const MIN_SETTLE_MS = 400;
 /**
