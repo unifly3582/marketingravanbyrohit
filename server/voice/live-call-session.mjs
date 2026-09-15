@@ -59,6 +59,16 @@ const OPEN_ON_HELLO_MS = Number(env("VOICE_HELLO_SPEECH_MS", 250));
 const OPEN_AFTER_SILENCE_MS = Number(env("VOICE_OPEN_AFTER_MS", 2500));
 /** Never play anything in the first moments of the stream; the media path is still settling. */
 const MIN_SETTLE_MS = 400;
+/**
+ * Outbound audio is paced to real time, keeping this much queued at Vobiz.
+ * Measured on live calls: while Vobiz is playing our audio it sends back
+ * digital silence for the caller (peak 0), so a whole opener dumped into
+ * its queue at once muted the caller for ten seconds, lost their "hello
+ * hello", and tripped the silence check. Pacing keeps the muted window to
+ * what is actually being said, and makes clearAudio on barge-in drop
+ * milliseconds rather than seconds.
+ */
+const PLAYOUT_LEAD_MS = 350;
 
 /** Vobiz's L16 is little-endian on the way out (proven on live calls); flip this if the way in turns out otherwise. */
 const SWAP_INPUT_BYTES = env("VOICE_LIVE_SWAP_IN", "0") === "1";
@@ -85,8 +95,11 @@ export class LiveCallSession {
     this.outcome = { escalated: false, endCall: false };
     this.transcript = [];
     this.pending = { user: "", agent: "" };
-    /** Model audio that arrived before Vobiz opened the stream. */
+    /** Model audio waiting to be paced out to Vobiz. */
     this.outQueue = [];
+    this.pumping = false;
+    /** Wall-clock time up to which audio has been handed to Vobiz for playback. */
+    this.playheadAt = 0;
     this.greeted = false;
     this.ended = false;
     this.createdAt = Date.now();
@@ -182,6 +195,7 @@ export class LiveCallSession {
       onInterrupted: () => {
         this._flush();
         this.outQueue = [];
+        this.playheadAt = Date.now();
         this._send({ event: "clearAudio", streamId: this.streamId });
       },
       onTurnComplete: () => {
@@ -326,19 +340,42 @@ export class LiveCallSession {
   // ---------------- model -> Vobiz ----------------
 
   _play(pcm24k) {
-    if (!this.ws || !this.streamId || !this.gateOpen) {
-      this.outQueue.push(pcm24k);
-      return;
-    }
-    this._sendAudio(pcm24k);
+    this.outQueue.push(pcm24k);
+    this._pump();
   }
 
-  /** The stream just became playable: send whatever the model said meanwhile. */
+  /** The stream just became playable: start pacing out whatever is queued. */
   _flushOut() {
-    if (!this.ws || !this.streamId || !this.gateOpen) return;
-    const queued = this.outQueue;
-    this.outQueue = [];
-    for (const chunk of queued) this._sendAudio(chunk);
+    this._pump();
+  }
+
+  /** Hand chunks to Vobiz just ahead of real time, never as a burst. */
+  _pump() {
+    if (this.pumping) return;
+    this.pumping = true;
+    const step = () => {
+      if (this.ended || !this.ws || !this.streamId || !this.gateOpen) {
+        this.pumping = false;
+        return;
+      }
+      const now = Date.now();
+      if (this.playheadAt < now) this.playheadAt = now;
+      const lead = this.playheadAt - now;
+      if (lead > PLAYOUT_LEAD_MS) {
+        setTimeout(step, lead - PLAYOUT_LEAD_MS);
+        return;
+      }
+      const chunk = this.outQueue.shift();
+      if (!chunk) {
+        this.pumping = false;
+        this._touchIdle(); // playback drains: the caller's silence clock starts here
+        return;
+      }
+      this._sendAudio(chunk);
+      this.playheadAt += (chunk.length / (OUTPUT_SAMPLE_RATE * 2)) * 1000;
+      setImmediate(step);
+    };
+    step();
   }
 
   _sendAudio(pcm24k) {
@@ -376,11 +413,16 @@ export class LiveCallSession {
 
   // ---------------- silence ----------------
 
-  /** Restart the silence clock: the caller spoke, or the agent is still talking. */
+  /**
+   * Restart the silence clock: the caller spoke, or the agent is still
+   * talking. Time the agent's audio is still playing at Vobiz does not count
+   * — the caller cannot be heard during it (see PLAYOUT_LEAD_MS).
+   */
   _touchIdle() {
     clearTimeout(this.idleTimer);
     if (!this.ws || this.ended) return;
-    this.idleTimer = setTimeout(() => this._onIdle(), IDLE_MS);
+    const playing = Math.max(0, this.playheadAt - Date.now());
+    this.idleTimer = setTimeout(() => this._onIdle(), IDLE_MS + playing);
   }
 
   /**
