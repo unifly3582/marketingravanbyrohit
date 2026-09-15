@@ -52,6 +52,8 @@ const CHANNEL = {
  * @param {string} [args.engine]      'mastra' | 'langgraph'
  * @param {string} [args.model]       overrides AGENT_MODEL for this run
  * @param {(runId: string|null) => void} [args.onStart]
+ * @param {Array<{role: "user"|"assistant", text: string}>} [args.turns]  voice
+ *   only: the call so far, oldest first, excluding the utterance in `text`.
  * @param {(text: string) => void} [args.onSpeak]  voice only: fired the moment
  *   the model calls speak_reply, so the caller hears the reply while the run
  *   is still closing out. The same text is also returned as `reply`.
@@ -72,6 +74,7 @@ export async function runAgent({
   model = null,
   onStart = null,
   onSpeak = null,
+  turns = [],
 }) {
   const cfg = CHANNEL[channel] ?? CHANNEL.whatsapp;
   const runTrigger = trigger ?? cfg.defaultTrigger;
@@ -152,7 +155,7 @@ export async function runAgent({
 
     const userMessage =
       channel === "voice"
-        ? voiceUserTurn(contactName, phone10, text)
+        ? voiceUserTurn(contactName, phone10, text, turns)
         : (context ? `${context}\n\n` : "") + userTurn(contactName, phone10, text);
 
     const result = await engineModule.run({

@@ -195,5 +195,18 @@ export function threadContext(history = [], conversation = null) {
 }
 
 /** How one spoken caller utterance is presented to the model. */
-export const voiceUserTurn = (contactName, phone10, transcript) =>
-  `Caller ${contactName ?? `+91${phone10}`} said, on the phone:\n\n${transcript}`;
+/**
+ * One caller utterance, with the call so far in front of it. Voice runs are
+ * one utterance each and load no thread from the database (a phone call is
+ * not a WhatsApp thread), so without this the agent greets the caller afresh
+ * on every turn — which is exactly what the first live call did.
+ */
+export const voiceUserTurn = (contactName, phone10, transcript, turns = []) => {
+  const who = contactName ?? `+91${phone10}`;
+  const prior = turns
+    .filter((t) => t?.text)
+    .map((t) => `${t.role === "user" ? `Caller` : `You`}: ${t.text}`)
+    .join("\n");
+  const sofar = prior ? `The call so far:\n${prior}\n\n` : "";
+  return `${sofar}Caller ${who} said, on the phone, just now:\n\n${transcript}`;
+};

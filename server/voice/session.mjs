@@ -96,27 +96,44 @@ export class CallSession {
       });
       if (!transcript) return;
 
+      // The call so far, before this utterance is added to it.
+      const turns = this.turns.slice();
       await this._log("in", transcript);
 
       // Start speaking the moment the model calls speak_reply, not when the
       // whole run returns: the engine keeps reasoning for a couple of seconds
-      // after the reply tool (a trailing "ready for the next turn" step), and
-      // on a phone every one of those seconds is dead air.
-      let speaking = null;
-      const result = await runAgent({
+      // after the reply tool (bookkeeping, then a trailing "ready for the
+      // next turn" step), and on a phone every one of those seconds is dead
+      // air. The microphone is handed back as soon as the reply has been
+      // spoken, too — the run's tail end finishes in the background, and a
+      // caller who answers quickly is heard rather than dropped.
+      let resolveFirst;
+      const firstReply = new Promise((r) => { resolveFirst = r; });
+      const run = runAgent({
         channel: "voice",
         phone10: this.phone10,
         text: transcript,
         contactName: this.contactName,
         trigger: "voice_inbound",
-        onSpeak: (text) => {
-          if (!speaking) speaking = this._speak(text, { log: true });
-        },
+        turns,
+        onSpeak: (text) => resolveFirst(text),
+      }).then((result) => {
+        resolveFirst(result.reply || null); // no-op if speak_reply already fired
+        return result;
       });
 
-      if (!speaking && result.reply) speaking = this._speak(result.reply, { log: true });
-      if (speaking) await speaking;
-      if (result.endCall) this._hangup("agent_ended");
+      const text = await firstReply;
+      const speech = text ? this._speak(text, { log: true }) : Promise.resolve();
+      this.lastSpeech = speech;
+      await speech;
+
+      run
+        .then(async (result) => {
+          if (!result.endCall) return;
+          await this.lastSpeech; // let the goodbye finish playing first
+          this._hangup("agent_ended");
+        })
+        .catch((err) => console.error("voice agent run", this.attemptId, err.message));
     } finally {
       this.turnInFlight = false;
     }
