@@ -12,6 +12,7 @@
 // already exists to look it back up from.
 
 import { randomUUID } from "node:crypto";
+import express from "express";
 import { WebSocketServer } from "ws";
 import { sb, recordCall, upsertLead, completeCall } from "../db.mjs";
 import * as vobiz from "./vobiz.mjs";
@@ -137,7 +138,8 @@ export function attach(httpServer, app) {
     });
   });
 
-  app.post("/api/voice/answer/:callId", async (req, res) => {
+  // Vobiz posts the answer callback form-encoded, not as JSON.
+  app.post("/api/voice/answer/:callId", express.urlencoded({ extended: true }), async (req, res) => {
     const attemptId = req.params.callId;
     const info = await callInfo(attemptId).catch((err) => {
       console.error("voice answer: lookup failed", err.message);
@@ -147,6 +149,11 @@ export function attach(httpServer, app) {
       console.error("voice answer: unknown call id", attemptId);
       return res.status(404).end();
     }
+    // Vobiz posts here on answer and again when the call ends; the second
+    // post is the only hangup signal we get, so its shape is logged until the
+    // status fields are pinned down and unanswered calls can be closed out.
+    const b = req.body ?? {};
+    console.log("voice answer", attemptId.slice(0, 8), JSON.stringify({ Event: b.Event, CallStatus: b.CallStatus, Direction: b.Direction, keys: Object.keys(b).slice(0, 20) }));
     prepareOpener(attemptId, info.contactName);
     const streamUrl = `${wsBase()}/api/voice/stream/${attemptId}`;
     res.type("text/xml").send(vobiz.answerXml(streamUrl));
