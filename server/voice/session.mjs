@@ -19,6 +19,18 @@ const DEFAULT_GREETING =
   "Aapne hamari website par call request ki thi, isliye call kiya hai. " +
   "Kya abhi do minute baat kar sakte hain?";
 
+/**
+ * Split a reply into a short first chunk and the rest, at the first sentence
+ * or clause boundary past ~25 characters. Short replies stay whole.
+ */
+export function splitForSpeech(text) {
+  const t = String(text ?? "").trim();
+  if (t.length < 60) return [t];
+  const m = /^(.{25,}?[।.!?,;:])\s+(\S.*)$/s.exec(t);
+  if (!m) return [t];
+  return [m[1].trim(), m[2].trim()];
+}
+
 export function renderGreeting(template, contactName) {
   const first = (contactName ?? "").trim().split(/\s+/)[0];
   const out = first ? template.replace(/\{name\}/g, `${first} ji`) : template.replace(/\s*\{name\}/g, "");
@@ -204,17 +216,27 @@ export class CallSession {
     // swallows its own failures.
     if (log) this._log("out", text);
 
-    let pcm16;
-    try {
-      pcm16 = audio ? await audio : await synthesize(text, { sampleRate: SAMPLE_RATE });
-    } catch (err) {
-      console.error("voice TTS", this.attemptId, err.message);
-      return;
-    }
-    onAudio?.();
+    // Sarvam's TTS is a whole-utterance round trip (1-2.4 s measured for one
+    // sentence), so a two-sentence reply is split at the first boundary and
+    // both halves are synthesised at once: the caller hears the first half
+    // while the second is still being made.
+    const parts = audio ? [audio] : splitForSpeech(text).map((t) => synthesize(t, { sampleRate: SAMPLE_RATE }));
 
     this.agentSpeaking = true;
-    await this._streamAudioOut(pcm16);
+    let first = true;
+    for (const part of parts) {
+      let pcm16;
+      try {
+        pcm16 = await part;
+      } catch (err) {
+        console.error("voice TTS", this.attemptId, err.message);
+        continue;
+      }
+      if (!pcm16) continue;
+      if (first) { onAudio?.(); first = false; }
+      if (!this.agentSpeaking) break; // barged in during an earlier part
+      await this._streamAudioOut(pcm16);
+    }
     this.agentSpeaking = false;
     this._send({ event: "checkpoint", streamId: this.streamId, name: "tts" });
   }
