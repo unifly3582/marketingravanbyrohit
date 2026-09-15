@@ -59,7 +59,14 @@ export async function transcribe(pcm16Buf, { sampleRate = 8000, languageCode = "
  */
 export async function synthesize(
   text,
-  { speaker = env("SARVAM_TTS_SPEAKER", "priya"), languageCode = "en-IN", sampleRate = 8000 } = {}
+  {
+    speaker = env("SARVAM_TTS_SPEAKER", "priya"),
+    languageCode = "en-IN",
+    sampleRate = 8000,
+    // Bulbul's pace: 1 is its natural rate, which sounds a little slow on a
+    // phone line. Requested "a little faster" on 2026-09-15.
+    pace = Number(env("SARVAM_TTS_PACE", "1.15")),
+  } = {}
 ) {
   const key = apiKey();
   if (!key) throw new Error("SARVAM_API_KEY (or SARVAM_SAMVAAD_API_KEY) not configured");
@@ -74,6 +81,7 @@ export async function synthesize(
       model: TTS_MODEL,
       speech_sample_rate: sampleRate,
       output_audio_codec: "linear16",
+      pace: Number.isFinite(pace) ? Math.min(3, Math.max(0.3, pace)) : 1,
     }),
   });
   if (!res.ok) {

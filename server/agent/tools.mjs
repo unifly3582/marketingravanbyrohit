@@ -13,7 +13,7 @@
 
 import { z } from "zod";
 import { sb, recentMessages, upsertLead, windowOpen } from "../db.mjs";
-import { sendText, sendTemplate } from "../wa.mjs";
+import { sendText, sendTemplate, sendMessage } from "../wa.mjs";
 
 export const EMBED_MODEL = "gemini-embedding-001";
 /** Must match the policies.embedding column, which is vector(1024). */
@@ -122,7 +122,15 @@ async function searchPlaybook(query, limit = 5) {
  *   duplicate what the model is already saying aloud).
  * @returns {Array<{name: string, description: string, schema: import('zod').ZodTypeAny, node: string, label: string, run: (input: object) => Promise<object>}>}
  */
-export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, channel = "whatsapp", onSpeak = null }) {
+export function buildToolSpecs({
+  tracer,
+  phone10,
+  demo = false,
+  outcome = {},
+  channel = "whatsapp",
+  onSpeak = null,
+  contactName = null,
+}) {
   /** The customer's number right now — see the ctx.phone10 note above. */
   const who = () => (typeof phone10 === "function" ? phone10() : phone10);
   // One reply per turn, enforced here rather than in the prompt.
@@ -236,6 +244,44 @@ export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, ch
                 try { onSpeak(text); } catch (err) { console.error("speak_reply onSpeak", err.message); }
               }
               return { spoken: !demo, simulated: demo, text };
+            }),
+          },
+          {
+            name: "send_whatsapp_message",
+            node: "whatsapp",
+            label: "Send WhatsApp message",
+            description:
+              "Send the caller a WhatsApp message on the number you are speaking to, in your words. " +
+              "Use it when they ask for something in writing, to send a summary of what you " +
+              "discussed, a price from the playbook, or a link — or near the end of a good call so " +
+              "the conversation continues where they can see it. Write it as a short WhatsApp " +
+              "message in their language. Say it is on its way before you send it, and claim only " +
+              "what the tool result confirms was actually sent.",
+            schema: z.object({
+              text: z
+                .string()
+                .max(700)
+                .describe("The message, one to three short sentences, in the caller's language"),
+              reason: z.string().describe("Why, one short phrase"),
+            }),
+            run: traced("whatsapp", "Send WhatsApp message", async ({ text, reason }) => {
+              if (demo) return { sent: false, simulated: true, phone10: who(), text, reason };
+              // Free text only inside WhatsApp's 24-hour window; otherwise the
+              // text rides inside the approved handoff template, which asks
+              // them to reply — and the reply opens the window for the rest.
+              const r = await sendMessage(who(), text, { name: contactName, source: "voice-agent" });
+              return {
+                sent: true,
+                message_id: r.messageId,
+                mode: r.mode,
+                delivered_as: r.text,
+                note:
+                  r.mode === "template"
+                    ? "They have not messaged us on WhatsApp yet, so it went inside our approved " +
+                      "template and asks them to reply. Tell them to reply to it to continue there."
+                    : undefined,
+                reason,
+              };
             }),
           },
           {

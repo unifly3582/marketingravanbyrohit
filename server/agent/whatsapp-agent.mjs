@@ -151,7 +151,7 @@ export async function runAgent({
     // whether the thread was escalated, and (voice only) whether the model
     // asked to end the call. Authoritative over the model's trailing text.
     const outcome = { reply: null, escalated: false, endCall: false };
-    const specs = buildToolSpecs({ tracer, phone10, demo, outcome, channel, onSpeak });
+    const specs = buildToolSpecs({ tracer, phone10, demo, outcome, channel, onSpeak, contactName });
 
     const userMessage =
       channel === "voice"
