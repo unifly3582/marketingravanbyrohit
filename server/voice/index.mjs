@@ -32,6 +32,25 @@ const publicBase = () => env("PUBLIC_BASE_URL", "http://147.93.28.140:8100");
  * VOICE_ENGINE and a restart; nothing else differs.
  */
 const voiceEngine = () => (env("VOICE_ENGINE", "live") === "sarvam" ? "sarvam" : "live");
+
+/**
+ * Live sessions by call id, created at dial time so the model is connected
+ * and the opener already spoken by the time the stream opens. Removed when
+ * the session ends, however it ends.
+ */
+const phoneSessions = new Map();
+function liveSessionFor(attemptId, info) {
+  let s = phoneSessions.get(attemptId);
+  if (s) return s;
+  s = new LiveCallSession({
+    attemptId,
+    phone10: info.phone10,
+    contactName: info.contactName,
+    onEnd: (id) => phoneSessions.delete(id),
+  });
+  phoneSessions.set(attemptId, s);
+  return s;
+}
 /** wss:// over https, ws:// over http — derived from PUBLIC_BASE_URL so there's one source of truth for the host. */
 const wsBase = () => publicBase().replace(/^http/, "ws");
 
@@ -46,6 +65,11 @@ export async function dialOut(phone10, { name, source = "website" } = {}) {
   } catch (err) {
     await completeCall(attemptId, { status: "dial_failed", duration: 0, failure_reason: err.message }).catch(() => {});
     throw err;
+  }
+  // The phone is ringing; get the model on the line now, not after pickup.
+  if (voiceEngine() === "live") {
+    const info = (await callInfo(attemptId).catch(() => null)) ?? { phone10, contactName: name ?? null };
+    liveSessionFor(attemptId, info);
   }
   return attemptId;
 }
@@ -166,6 +190,7 @@ export function attach(httpServer, app) {
     const b = req.body ?? {};
     if (b.Event === "Hangup") {
       const answered = !!b.AnswerTime && b.AnswerTime !== "";
+      phoneSessions.get(attemptId)?.abandon(answered ? "caller_hangup" : "no_answer");
       if (!answered) {
         completeCall(attemptId, {
           status: "no_answer",
@@ -178,7 +203,10 @@ export function attach(httpServer, app) {
     }
     const engine = voiceEngine();
     if (engine === "sarvam") prepareOpener(attemptId, info.contactName);
-    else pending.set(attemptId, { answeredAt: Date.now(), greetingAudio: null });
+    else {
+      liveSessionFor(attemptId, info);
+      pending.set(attemptId, { answeredAt: Date.now(), greetingAudio: null });
+    }
     const streamUrl = `${wsBase()}/api/voice/stream/${attemptId}`;
     res.type("text/xml").send(
       vobiz.answerXml(streamUrl, engine === "live" ? { contentType: LIVE_INPUT_CONTENT_TYPE } : {})
@@ -221,7 +249,7 @@ export function attach(httpServer, app) {
           if (prepared) console.log("voice stream open", attemptId.slice(0, 8), `${Date.now() - prepared.answeredAt} ms after answer`);
           wss.handleUpgrade(req, socket, head, (ws) => {
             if (voiceEngine() === "live") {
-              new LiveCallSession(ws, { attemptId, phone10: info.phone10, contactName: info.contactName });
+              liveSessionFor(attemptId, info).attach(ws);
               return;
             }
             new CallSession(ws, {

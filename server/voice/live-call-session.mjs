@@ -10,6 +10,14 @@
 // linear audio and play 24 kHz linear audio, which are exactly the model's
 // formats, so nothing here resamples anything.
 //
+// The session is created when the call is *dialed*, not when the stream
+// opens: the model connects and speaks the opener while the phone is still
+// ringing, the audio is held here, and the moment Vobiz opens the stream it
+// is flushed. Measured before this: 2-2.5 s from stream open to first sound,
+// on top of Vobiz's own ~1.5 s between pickup and stream — the caller heard
+// four seconds of nothing. A session whose call is never answered is closed
+// by the hangup callback or a timer, and costs nothing while idle.
+//
 // Everything the website session does — tools, tracing, transcript — is
 // reused; what differs is the far end of the socket (a caller on the PSTN
 // rather than a browser), the opener (the configured script, verbatim) and
@@ -29,19 +37,32 @@ const env = (k, d) => process.env[k] ?? d;
 export const LIVE_INPUT_CONTENT_TYPE = `audio/x-l16;rate=${INPUT_SAMPLE_RATE}`;
 
 const MAX_CALL_MS = 10 * 60 * 1000; // safety cap if hangup detection ever fails
+/** Dialed but no stream yet after this long: nobody picked up. */
+const RING_TIMEOUT_MS = 90 * 1000;
 /** After end_call: how long to wait for the goodbye to finish playing before cutting. */
 const HANGUP_GRACE_MS = 5000;
+/** Caller silent for this long after the agent finished: check once, then hang up. */
+const IDLE_MS = Number(env("VOICE_IDLE_MS", 10_000));
+const IDLE_GRACE_MS = Number(env("VOICE_IDLE_GRACE_MS", 6_000));
 
 /** Vobiz's L16 is little-endian on the way out (proven on live calls); flip this if the way in turns out otherwise. */
 const SWAP_INPUT_BYTES = env("VOICE_LIVE_SWAP_IN", "0") === "1";
 
 export class LiveCallSession {
-  constructor(ws, { attemptId, phone10, contactName = null }) {
-    this.ws = ws;
+  /**
+   * @param {object} opts
+   * @param {string} opts.attemptId
+   * @param {string} opts.phone10
+   * @param {string|null} [opts.contactName]
+   * @param {(attemptId: string) => void} [opts.onEnd]  registry cleanup
+   */
+  constructor({ attemptId, phone10, contactName = null, onEnd = null }) {
     this.attemptId = attemptId;
     this.phone10 = phone10;
     this.contactName = contactName;
+    this.onEnd = onEnd;
 
+    this.ws = null;
     this.streamId = null;
     this.live = null;
     this.tracer = null;
@@ -49,17 +70,21 @@ export class LiveCallSession {
     this.outcome = { escalated: false, endCall: false };
     this.transcript = [];
     this.pending = { user: "", agent: "" };
+    /** Model audio that arrived before Vobiz opened the stream. */
+    this.outQueue = [];
     this.greeted = false;
     this.ended = false;
-    this.startedAt = Date.now();
+    this.createdAt = Date.now();
+    this.attachedAt = null;
     this.firstAudioAt = null;
     this.hangupTimer = null;
+    this.idleTimer = null;
+    this.idleNudged = false;
 
-    this.maxTimer = setTimeout(() => this._end("max_duration"), MAX_CALL_MS);
-
-    ws.on("message", (raw) => this._onVobizMessage(raw));
-    ws.on("close", () => this._end("caller_hangup"));
-    ws.on("error", (err) => console.error("live-call ws error", this.attemptId, err.message));
+    this.ringTimer = setTimeout(() => {
+      if (!this.ws) this._end("no_answer");
+    }, RING_TIMEOUT_MS);
+    this.maxTimer = null;
 
     this._boot().catch((err) => {
       console.error("live-call boot", this.attemptId, err.message);
@@ -85,12 +110,13 @@ export class LiveCallSession {
       // A live call cannot wait on Supabase either side of every tool call.
       defer: true,
     });
+    if (this.ended) return;
     const opened = await this.tracer.step("inbound-audio", {
       kind: "trigger",
-      label: "Call answered",
+      label: "Call placed",
       input: { phone10: this.phone10, model },
     });
-    await opened.ok({ answered: true });
+    await opened.ok({ dialed: true });
 
     // The phone tool set, minus speak_reply: the model speaks for itself here.
     // end_call is reworded for the same reason.
@@ -123,12 +149,20 @@ export class LiveCallSession {
       tools: [...this.specs.values()],
       voice: env("VOICE_LIVE_VOICE", "Kore"),
 
-      onOpen: () => this._maybeGreet(),
-      onAudio: (pcm) => this._play(pcm),
-      onInputTranscript: (text) => this._transcript("user", text),
+      onOpen: () => this._greet(),
+      onAudio: (pcm) => {
+        this._play(pcm);
+        this._touchIdle();
+      },
+      onInputTranscript: (text) => {
+        this.idleNudged = false;
+        this._touchIdle();
+        this._transcript("user", text);
+      },
       onOutputTranscript: (text) => this._transcript("agent", text),
       onInterrupted: () => {
         this._flush();
+        this.outQueue = [];
         this._send({ event: "clearAudio", streamId: this.streamId });
       },
       onTurnComplete: () => {
@@ -147,23 +181,44 @@ export class LiveCallSession {
   }
 
   /**
-   * The opener, once both ends are up: the model is ready and Vobiz has sent
-   * the stream's "start" (before that there is nowhere to play audio to).
-   * The configured script is spoken verbatim, so what the caller hears first
-   * is the line the business wrote, in the model's voice.
+   * The opener, spoken as soon as the model is up — usually while the phone
+   * is still ringing. The audio waits in outQueue until the stream opens. The
+   * configured script is spoken verbatim, so what the caller hears first is
+   * the line the business wrote, in the model's voice.
    */
-  _maybeGreet() {
-    if (this.greeted || !this.live?.ready || !this.streamId) return;
+  _greet() {
+    if (this.greeted || !this.live?.ready) return;
     this.greeted = true;
     const line = greeting(this.contactName);
     this.live.sendText(
-      `[The call has just been answered by ${this.contactName ?? "the caller"}. Say exactly this, ` +
+      `[You have just called ${this.contactName ?? "this person"} and they have picked up. Say exactly this, ` +
         `word for word, and nothing else, then wait for them to reply: "${line}" ` +
         `If they talk over you while you are saying it, do not start it again — answer what they said and carry on.]`
     );
   }
 
-  // ---------------- Vobiz -> model ----------------
+  // ---------------- the call stream ----------------
+
+  /** Vobiz opened the media stream: from here on audio flows both ways. */
+  attach(ws) {
+    if (this.ended || this.ws) {
+      try { ws.close(); } catch { /* ignore */ }
+      return;
+    }
+    this.ws = ws;
+    this.attachedAt = Date.now();
+    clearTimeout(this.ringTimer);
+    this.maxTimer = setTimeout(() => this._end("max_duration"), MAX_CALL_MS);
+    ws.on("message", (raw) => this._onVobizMessage(raw));
+    ws.on("close", () => this._end("caller_hangup"));
+    ws.on("error", (err) => console.error("live-call ws error", this.attemptId, err.message));
+    this._touchIdle();
+    console.log(
+      "live-call",
+      this.attemptId.slice(0, 8),
+      `stream attached ${this.attachedAt - this.createdAt} ms after dial, model ${this.live?.ready ? "ready" : "not ready"}, ${this.outQueue.length} chunks waiting`
+    );
+  }
 
   _onVobizMessage(raw) {
     if (this.ended) return;
@@ -176,12 +231,12 @@ export class LiveCallSession {
     switch (msg.event) {
       case "start":
         this.streamId = msg.start?.streamId ?? msg.streamId ?? null;
-        this._maybeGreet();
+        this._flushOut();
         break;
       case "media": {
         if (!this.streamId && msg.streamId) {
           this.streamId = msg.streamId;
-          this._maybeGreet();
+          this._flushOut();
         }
         const b64 = msg.media?.payload;
         if (!b64) return;
@@ -192,8 +247,7 @@ export class LiveCallSession {
       }
       case "playedStream":
         // The goodbye has finished playing; now it is safe to hang up.
-        console.log("live-call", this.attemptId.slice(0, 8), "playedStream", JSON.stringify(msg).slice(0, 120));
-        if ((msg.name ?? msg.checkpoint?.name ?? msg.streamId) && this.outcome.endCall) this._end("agent_ended");
+        if (this.outcome.endCall) this._end("agent_ended");
         break;
       case "stop":
         this._end("caller_hangup");
@@ -206,10 +260,25 @@ export class LiveCallSession {
   // ---------------- model -> Vobiz ----------------
 
   _play(pcm24k) {
-    if (!this.streamId) return;
+    if (!this.ws || !this.streamId) {
+      this.outQueue.push(pcm24k);
+      return;
+    }
+    this._sendAudio(pcm24k);
+  }
+
+  /** The stream just became playable: send whatever the model said meanwhile. */
+  _flushOut() {
+    if (!this.ws || !this.streamId) return;
+    const queued = this.outQueue;
+    this.outQueue = [];
+    for (const chunk of queued) this._sendAudio(chunk);
+  }
+
+  _sendAudio(pcm24k) {
     if (!this.firstAudioAt) {
       this.firstAudioAt = Date.now();
-      console.log("live-call", this.attemptId.slice(0, 8), `first audio ${this.firstAudioAt - this.startedAt} ms after stream open`);
+      console.log("live-call", this.attemptId.slice(0, 8), `first audio ${this.firstAudioAt - (this.attachedAt ?? this.createdAt)} ms after stream open`);
     }
     // Vobiz queues playAudio and plays it out in order, so the model's bursts
     // go straight through; clearAudio on barge-in drops whatever is queued.
@@ -225,8 +294,7 @@ export class LiveCallSession {
    * the time the tool fires, but the model may still be finishing the
    * sentence, so a checkpoint goes out after a short beat and the line is
    * cut when Vobiz reports the checkpoint played — or after a grace period,
-   * whichever comes first. On the first live call the turnComplete-only
-   * trigger never fired and the caller had to hang up themselves.
+   * whichever comes first.
    */
   _hangupAfterAudio() {
     if (this.hangupTimer) return;
@@ -237,7 +305,37 @@ export class LiveCallSession {
   }
 
   _send(obj) {
-    if (this.ws.readyState === this.ws.OPEN) this.ws.send(JSON.stringify(obj));
+    if (this.ws && this.ws.readyState === this.ws.OPEN) this.ws.send(JSON.stringify(obj));
+  }
+
+  // ---------------- silence ----------------
+
+  /** Restart the silence clock: the caller spoke, or the agent is still talking. */
+  _touchIdle() {
+    clearTimeout(this.idleTimer);
+    if (!this.ws || this.ended) return;
+    this.idleTimer = setTimeout(() => this._onIdle(), IDLE_MS);
+  }
+
+  /**
+   * Nothing from the caller for IDLE_MS after the agent went quiet. Once, she
+   * asks whether they can hear her; if that too meets silence, the line is
+   * cut — a dead call otherwise bills by the minute until the safety cap.
+   */
+  _onIdle() {
+    if (this.ended || !this.ws) return;
+    if (!this.idleNudged) {
+      this.idleNudged = true;
+      console.log("live-call", this.attemptId.slice(0, 8), "caller silent, checking in");
+      this.live?.sendText(
+        "[The caller has said nothing for ten seconds. Ask once, in three or four words, whether they can hear you. " +
+          "If they still say nothing, say a short goodbye and call end_call.]"
+      );
+      this.idleTimer = setTimeout(() => this._onIdle(), IDLE_GRACE_MS + 4000);
+      return;
+    }
+    console.log("live-call", this.attemptId.slice(0, 8), "caller still silent, hanging up");
+    this._end("idle");
   }
 
   // ---------------- tools ----------------
@@ -297,34 +395,48 @@ export class LiveCallSession {
 
   // ---------------- teardown ----------------
 
+  /** The call ended before the stream ever opened (hangup callback said so). */
+  abandon(reason = "no_answer") {
+    if (!this.ws) this._end(reason);
+  }
+
   async _end(reason) {
     if (this.ended) return;
     this.ended = true;
+    clearTimeout(this.ringTimer);
     clearTimeout(this.maxTimer);
     clearTimeout(this.hangupTimer);
+    clearTimeout(this.idleTimer);
     this._flush();
+    this.onEnd?.(this.attemptId);
 
     this.live?.close();
     try {
-      this.ws.close();
+      this.ws?.close();
     } catch {
       /* already closing */
     }
 
-    const durationSec = Math.round((Date.now() - this.startedAt) / 1000);
+    const answered = !!this.attachedAt;
+    const durationSec = answered ? Math.round((Date.now() - this.attachedAt) / 1000) : 0;
     const failed = reason === "boot_failed" || reason === "model_error";
     const spoke = this.transcript.some((t) => t.role === "user");
-    await completeCall(this.attemptId, {
-      status: failed ? "failed" : spoke ? "connected" : "no_speech",
-      duration: durationSec,
-      interaction_transcript: this.transcript,
-      failure_reason: failed ? reason : null,
-    }).catch((err) => console.error("live-call completeCall", err.message));
+    // A call that never connected is closed out by the hangup callback with
+    // Vobiz's own cause; the session does not overwrite that.
+    if (answered || failed) {
+      await completeCall(this.attemptId, {
+        status: failed ? "failed" : spoke ? "connected" : "no_speech",
+        duration: durationSec,
+        interaction_transcript: this.transcript,
+        failure_reason: failed ? reason : null,
+      }).catch((err) => console.error("live-call completeCall", err.message));
+    }
 
     if (this.tracer) {
       const done = await this.tracer.step("done", { kind: "output", label: "Call complete" });
       await done.ok({
         reason,
+        answered,
         duration_seconds: durationSec,
         turns: this.transcript.length,
         escalated: this.outcome.escalated,
@@ -332,6 +444,7 @@ export class LiveCallSession {
       });
       await this.tracer.finish(failed ? "failed" : "succeeded", {
         reason,
+        answered,
         duration_seconds: durationSec,
         transcript: this.transcript,
         escalated: this.outcome.escalated,
