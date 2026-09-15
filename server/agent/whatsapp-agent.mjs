@@ -16,7 +16,7 @@ import { currentOffer, userTurn, voiceUserTurn, threadContext } from "./prompt.m
 const HISTORY_IN_PROMPT = 12;
 import { startRun } from "./trace.mjs";
 import { loadEngine, engineSupports, engineFor } from "./engines/index.mjs";
-import { requireModel, productionModel, demoModel } from "./models.mjs";
+import { requireModel, productionModel, demoModel, voiceModel } from "./models.mjs";
 
 /** Per-channel workflow/graph wiring — see agent/graph.mjs for the node lists. */
 const CHANNEL = {
@@ -52,6 +52,9 @@ const CHANNEL = {
  * @param {string} [args.engine]      'mastra' | 'langgraph'
  * @param {string} [args.model]       overrides AGENT_MODEL for this run
  * @param {(runId: string|null) => void} [args.onStart]
+ * @param {(text: string) => void} [args.onSpeak]  voice only: fired the moment
+ *   the model calls speak_reply, so the caller hears the reply while the run
+ *   is still closing out. The same text is also returned as `reply`.
  *   Fired as soon as the run row exists, before any model call. Lets a caller
  *   hand the id to a browser (or a live call) that wants to watch/use the run
  *   as soon as it exists. Always fires exactly once, with null if the run
@@ -68,6 +71,7 @@ export async function runAgent({
   engine = null,
   model = null,
   onStart = null,
+  onSpeak = null,
 }) {
   const cfg = CHANNEL[channel] ?? CHANNEL.whatsapp;
   const runTrigger = trigger ?? cfg.defaultTrigger;
@@ -75,7 +79,7 @@ export async function runAgent({
   // A demo run defaults to the demo model, not the production one — otherwise
   // any caller that forgets to pass a model quietly bills anonymous traffic at
   // production rates.
-  const modelId = model ?? (demo ? demoModel() : productionModel());
+  const modelId = model ?? (demo ? demoModel() : channel === "voice" ? voiceModel() : productionModel());
   // Unknown model, or an engine that cannot reach its provider, is a
   // configuration error — fail before spending anything.
   const info = requireModel(modelId);
@@ -144,7 +148,7 @@ export async function runAgent({
     // whether the thread was escalated, and (voice only) whether the model
     // asked to end the call. Authoritative over the model's trailing text.
     const outcome = { reply: null, escalated: false, endCall: false };
-    const specs = buildToolSpecs({ tracer, phone10, demo, outcome, channel });
+    const specs = buildToolSpecs({ tracer, phone10, demo, outcome, channel, onSpeak });
 
     const userMessage =
       channel === "voice"

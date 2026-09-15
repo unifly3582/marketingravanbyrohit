@@ -83,6 +83,13 @@ export const modelInfo = (id) => MODELS[id] ?? null;
 export const providerOf = (id) => MODELS[id]?.provider ?? "google";
 
 export const productionModel = () => process.env.AGENT_MODEL ?? DEFAULT_MODEL;
+/**
+ * Phone calls: same brain as WhatsApp unless AGENT_VOICE_MODEL says otherwise.
+ * A caller waits in silence for every second of model time (13 s measured on
+ * gemini-3.8-flash for a one-word turn, 2026-09-15), so this is the one place
+ * a faster, cheaper model can be swapped in without touching WhatsApp.
+ */
+export const voiceModel = () => process.env.AGENT_VOICE_MODEL ?? productionModel();
 export const demoModel = () =>
   process.env.AGENT_DEMO_MODEL ?? process.env.AGENT_MODEL ?? DEFAULT_DEMO_MODEL;
 

@@ -29,6 +29,7 @@ export class CallSession {
     this.agentSpeaking = false;
     this.turnInFlight = false;
     this.ended = false;
+    this.greeted = false;
 
     this.maxDurationTimer = setTimeout(() => this._hangup("max_duration"), MAX_CALL_MS);
 
@@ -47,9 +48,13 @@ export class CallSession {
     switch (msg.event) {
       case "start":
         this.streamId = msg.start?.streamId ?? msg.streamId ?? null;
-        this._speak(GREETING, { log: true });
+        this._greet();
         break;
       case "media": {
+        // Every media frame carries the streamId too, so a lost or late
+        // "start" event no longer costs the greeting or the reply audio.
+        if (!this.streamId && msg.streamId) this.streamId = msg.streamId;
+        if (!this.greeted) this._greet();
         const b64 = msg.media?.payload;
         if (!b64) return;
         this._handleAudio(mulawToPcm16(Buffer.from(b64, "base64")));
@@ -61,6 +66,13 @@ export class CallSession {
       default:
         break; // playedStream / clearedAudio acks — nothing to react to
     }
+  }
+
+  /** Say hello once, however the stream announced itself. */
+  _greet() {
+    if (this.greeted) return;
+    this.greeted = true;
+    this._speak(GREETING, { log: true });
   }
 
   _handleAudio(pcm16) {
@@ -86,15 +98,24 @@ export class CallSession {
 
       await this._log("in", transcript);
 
+      // Start speaking the moment the model calls speak_reply, not when the
+      // whole run returns: the engine keeps reasoning for a couple of seconds
+      // after the reply tool (a trailing "ready for the next turn" step), and
+      // on a phone every one of those seconds is dead air.
+      let speaking = null;
       const result = await runAgent({
         channel: "voice",
         phone10: this.phone10,
         text: transcript,
         contactName: this.contactName,
         trigger: "voice_inbound",
+        onSpeak: (text) => {
+          if (!speaking) speaking = this._speak(text, { log: true });
+        },
       });
 
-      if (result.reply) await this._speak(result.reply, { log: true });
+      if (!speaking && result.reply) speaking = this._speak(result.reply, { log: true });
+      if (speaking) await speaking;
       if (result.endCall) this._hangup("agent_ended");
     } finally {
       this.turnInFlight = false;
@@ -116,15 +137,19 @@ export class CallSession {
   }
 
   async _speak(text, { log = false } = {}) {
-    if (log) await this._log("out", text);
+    // Logging is two Supabase writes; they run alongside synthesis rather
+    // than in front of it. _log() already swallows its own failures.
+    const logged = log ? this._log("out", text) : null;
 
     let pcm16;
     try {
       pcm16 = await synthesize(text, { sampleRate: SAMPLE_RATE });
     } catch (err) {
       console.error("voice TTS", this.attemptId, err.message);
+      if (logged) await logged;
       return;
     }
+    if (logged) await logged;
 
     this.agentSpeaking = true;
     await this._streamAudioOut(pcm16);

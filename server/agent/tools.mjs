@@ -122,7 +122,7 @@ async function searchPlaybook(query, limit = 5) {
  *   duplicate what the model is already saying aloud).
  * @returns {Array<{name: string, description: string, schema: import('zod').ZodTypeAny, node: string, label: string, run: (input: object) => Promise<object>}>}
  */
-export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, channel = "whatsapp" }) {
+export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, channel = "whatsapp", onSpeak = null }) {
   /** The customer's number right now — see the ctx.phone10 note above. */
   const who = () => (typeof phone10 === "function" ? phone10() : phone10);
   // One reply per turn, enforced here rather than in the prompt.
@@ -230,6 +230,11 @@ export function buildToolSpecs({ tracer, phone10, demo = false, outcome = {}, ch
               }
               replySent = true;
               outcome.reply = text;
+              // Hand the text to the call right now (see runAgent's onSpeak);
+              // a listener failure must not turn into a tool error.
+              if (!demo && onSpeak) {
+                try { onSpeak(text); } catch (err) { console.error("speak_reply onSpeak", err.message); }
+              }
               return { spoken: !demo, simulated: demo, text };
             }),
           },

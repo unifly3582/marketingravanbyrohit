@@ -147,7 +147,28 @@ export function attach(httpServer, app) {
 
     const match = pathname.match(STREAM_PATH_RE);
     if (match) {
-      return wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req, match[1]));
+      // The call row is looked up *before* the upgrade completes. Vobiz sends
+      // its "start" event (carrying the streamId) the instant the socket
+      // opens; doing the lookup after "connection" left a ~200 ms window
+      // with no message listener, and that first event was silently lost —
+      // no streamId, no greeting, and playAudio frames stamped with null.
+      // (Observed on the first live call, 2026-09-15.) Data that arrives
+      // during the lookup stays buffered on the raw socket until
+      // handleUpgrade attaches the WebSocket parser.
+      const attemptId = match[1];
+      callInfo(attemptId)
+        .catch(() => null)
+        .then((info) => {
+          if (!info) {
+            console.error("voice stream: unmatched call id", attemptId);
+            socket.destroy();
+            return;
+          }
+          wss.handleUpgrade(req, socket, head, (ws) => {
+            new CallSession(ws, { attemptId, phone10: info.phone10, contactName: info.contactName });
+          });
+        });
+      return;
     }
 
     if (pathname === WEB_STREAM_PATH) {
@@ -175,16 +196,6 @@ export function attach(httpServer, app) {
     }
 
     socket.destroy();
-  });
-
-  wss.on("connection", async (ws, req, attemptId) => {
-    const info = await callInfo(attemptId).catch(() => null);
-    if (!info) {
-      console.error("voice stream: unmatched call id", attemptId);
-      ws.close();
-      return;
-    }
-    new CallSession(ws, { attemptId, phone10: info.phone10, contactName: info.contactName });
   });
 
   console.log("voice pipeline attached: POST /api/voice/answer/:callId, WS /api/voice/stream/:callId");
