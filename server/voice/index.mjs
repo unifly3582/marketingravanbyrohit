@@ -17,12 +17,21 @@ import { WebSocketServer } from "ws";
 import { sb, recordCall, upsertLead, completeCall } from "../db.mjs";
 import * as vobiz from "./vobiz.mjs";
 import { CallSession, greeting } from "./session.mjs";
+import { LiveCallSession, LIVE_INPUT_CONTENT_TYPE } from "./live-call-session.mjs";
 import { synthesize } from "./sarvam-speech.mjs";
 import { WebVoiceSession, WEB_STREAM_PATH, INPUT_SAMPLE_RATE, OUTPUT_SAMPLE_RATE } from "./web-session.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 
 const publicBase = () => env("PUBLIC_BASE_URL", "http://147.93.28.140:8100");
+
+/**
+ * Which brain answers the phone. "live": Gemini Live end to end, ~1 s to
+ * reply (live-call-session.mjs). "sarvam": Sarvam STT -> Gemini text ->
+ * Sarvam TTS, Priya's voice, ~4 s to reply (session.mjs). Switch with
+ * VOICE_ENGINE and a restart; nothing else differs.
+ */
+const voiceEngine = () => (env("VOICE_ENGINE", "live") === "sarvam" ? "sarvam" : "live");
 /** wss:// over https, ws:// over http — derived from PUBLIC_BASE_URL so there's one source of truth for the host. */
 const wsBase = () => publicBase().replace(/^http/, "ws");
 
@@ -149,14 +158,31 @@ export function attach(httpServer, app) {
       console.error("voice answer: unknown call id", attemptId);
       return res.status(404).end();
     }
-    // Vobiz posts here on answer and again when the call ends; the second
-    // post is the only hangup signal we get, so its shape is logged until the
-    // status fields are pinned down and unanswered calls can be closed out.
+    // Vobiz posts here on answer (Event=StartApp) and again when the call
+    // ends (Event=Hangup, with the cause). The hangup post is the only signal
+    // for a call that was never answered — the stream never opens, so no
+    // session ever closes the row — and it is what marks those as failed
+    // rather than leaving them "dispatched" forever.
     const b = req.body ?? {};
-    console.log("voice answer", attemptId.slice(0, 8), JSON.stringify({ Event: b.Event, CallStatus: b.CallStatus, Direction: b.Direction, keys: Object.keys(b).slice(0, 20) }));
-    prepareOpener(attemptId, info.contactName);
+    if (b.Event === "Hangup") {
+      const answered = !!b.AnswerTime && b.AnswerTime !== "";
+      if (!answered) {
+        completeCall(attemptId, {
+          status: "no_answer",
+          duration: 0,
+          failure_reason: b.HangupCauseName || b.HangupCause || "not answered",
+        }).catch((err) => console.error("voice hangup completeCall", err.message));
+      }
+      console.log("voice hangup", attemptId.slice(0, 8), b.HangupCauseName ?? "", answered ? `${b.BillDuration ?? "?"}s` : "not answered");
+      return res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+    }
+    const engine = voiceEngine();
+    if (engine === "sarvam") prepareOpener(attemptId, info.contactName);
+    else pending.set(attemptId, { answeredAt: Date.now(), greetingAudio: null });
     const streamUrl = `${wsBase()}/api/voice/stream/${attemptId}`;
-    res.type("text/xml").send(vobiz.answerXml(streamUrl));
+    res.type("text/xml").send(
+      vobiz.answerXml(streamUrl, engine === "live" ? { contentType: LIVE_INPUT_CONTENT_TYPE } : {})
+    );
   });
 
   // `path` on WebSocketServer only matches a fixed string, and the call id is
@@ -194,6 +220,10 @@ export function attach(httpServer, app) {
           pending.delete(attemptId);
           if (prepared) console.log("voice stream open", attemptId.slice(0, 8), `${Date.now() - prepared.answeredAt} ms after answer`);
           wss.handleUpgrade(req, socket, head, (ws) => {
+            if (voiceEngine() === "live") {
+              new LiveCallSession(ws, { attemptId, phone10: info.phone10, contactName: info.contactName });
+              return;
+            }
             new CallSession(ws, {
               attemptId,
               phone10: info.phone10,

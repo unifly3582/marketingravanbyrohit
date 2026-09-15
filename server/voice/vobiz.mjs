@@ -55,8 +55,9 @@ export function callIdFromAnswerBody(body = {}) {
 /**
  * XML response for the answer_url callback: open a bidirectional media stream
  * to our WS endpoint. `contentType` is explicit because Vobiz defaults inbound
- * audio to L16 8 kHz, while session.mjs decodes every frame as mu-law.
+ * audio to L16 8 kHz: the Sarvam pipeline (session.mjs) decodes mu-law 8 kHz,
+ * the Gemini Live pipeline (live-call-session.mjs) wants L16 16 kHz.
  */
-export function answerXml(streamUrl) {
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n  <Stream bidirectional="true" keepCallAlive="true" contentType="audio/x-mulaw;rate=8000">${streamUrl}</Stream>\n</Response>`;
+export function answerXml(streamUrl, { contentType = "audio/x-mulaw;rate=8000" } = {}) {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n  <Stream bidirectional="true" keepCallAlive="true" contentType="${contentType}">${streamUrl}</Stream>\n</Response>`;
 }
