@@ -30,7 +30,7 @@ export const LIVE_INPUT_CONTENT_TYPE = `audio/x-l16;rate=${INPUT_SAMPLE_RATE}`;
 
 const MAX_CALL_MS = 10 * 60 * 1000; // safety cap if hangup detection ever fails
 /** After end_call: how long to wait for the goodbye to finish playing before cutting. */
-const HANGUP_GRACE_MS = 8000;
+const HANGUP_GRACE_MS = 5000;
 
 /** Vobiz's L16 is little-endian on the way out (proven on live calls); flip this if the way in turns out otherwise. */
 const SWAP_INPUT_BYTES = env("VOICE_LIVE_SWAP_IN", "0") === "1";
@@ -158,7 +158,8 @@ export class LiveCallSession {
     const line = greeting(this.contactName);
     this.live.sendText(
       `[The call has just been answered by ${this.contactName ?? "the caller"}. Say exactly this, ` +
-        `word for word, and nothing else, then wait for them to reply: "${line}"]`
+        `word for word, and nothing else, then wait for them to reply: "${line}" ` +
+        `If they talk over you while you are saying it, do not start it again — answer what they said and carry on.]`
     );
   }
 
@@ -191,7 +192,8 @@ export class LiveCallSession {
       }
       case "playedStream":
         // The goodbye has finished playing; now it is safe to hang up.
-        if (msg.name === "bye") this._end("agent_ended");
+        console.log("live-call", this.attemptId.slice(0, 8), "playedStream", JSON.stringify(msg).slice(0, 120));
+        if ((msg.name ?? msg.checkpoint?.name ?? msg.streamId) && this.outcome.endCall) this._end("agent_ended");
         break;
       case "stop":
         this._end("caller_hangup");
@@ -218,10 +220,20 @@ export class LiveCallSession {
     });
   }
 
+  /**
+   * end_call was invoked. The goodbye is usually already queued at Vobiz by
+   * the time the tool fires, but the model may still be finishing the
+   * sentence, so a checkpoint goes out after a short beat and the line is
+   * cut when Vobiz reports the checkpoint played — or after a grace period,
+   * whichever comes first. On the first live call the turnComplete-only
+   * trigger never fired and the caller had to hang up themselves.
+   */
   _hangupAfterAudio() {
     if (this.hangupTimer) return;
-    this._send({ event: "checkpoint", streamId: this.streamId, name: "bye" });
-    this.hangupTimer = setTimeout(() => this._end("agent_ended"), HANGUP_GRACE_MS);
+    this.hangupTimer = setTimeout(() => {
+      this._send({ event: "checkpoint", streamId: this.streamId, name: "bye" });
+      this.hangupTimer = setTimeout(() => this._end("agent_ended"), HANGUP_GRACE_MS);
+    }, 1200);
   }
 
   _send(obj) {
@@ -238,6 +250,7 @@ export class LiveCallSession {
         // spec.run is traced and turns its own failures into { error }, so a
         // bad tool call is something the model recovers from, not a dropped call.
         const response = await spec.run(args ?? {});
+        if (name === "end_call") this._hangupAfterAudio();
         return { id, name, response };
       })
     );
