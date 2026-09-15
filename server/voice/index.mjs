@@ -174,10 +174,15 @@ export function attach(httpServer, app) {
   // Vobiz posts the answer callback form-encoded, not as JSON.
   app.post("/api/voice/answer/:callId", express.urlencoded({ extended: true }), async (req, res) => {
     const attemptId = req.params.callId;
-    const info = await callInfo(attemptId).catch((err) => {
-      console.error("voice answer: lookup failed", err.message);
-      return null;
-    });
+    // A call dialed by this process already has its session; no need to go
+    // to Supabase (~150 ms) before Vobiz gets its XML.
+    const known = phoneSessions.get(attemptId);
+    const info = known
+      ? { phone10: known.phone10, contactName: known.contactName }
+      : await callInfo(attemptId).catch((err) => {
+          console.error("voice answer: lookup failed", err.message);
+          return null;
+        });
     if (!info) {
       console.error("voice answer: unknown call id", attemptId);
       return res.status(404).end();
@@ -236,7 +241,8 @@ export function attach(httpServer, app) {
       // during the lookup stays buffered on the raw socket until
       // handleUpgrade attaches the WebSocket parser.
       const attemptId = match[1];
-      callInfo(attemptId)
+      const known = phoneSessions.get(attemptId);
+      (known ? Promise.resolve({ phone10: known.phone10, contactName: known.contactName }) : callInfo(attemptId))
         .catch(() => null)
         .then((info) => {
           if (!info) {

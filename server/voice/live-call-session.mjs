@@ -62,9 +62,13 @@ const HELLO_RMS = Number(env("VOICE_HELLO_RMS", 300));
 // pickup — before the stream exists (logged: near-silence for the whole
 // first 2.5 s on a call where the caller had said hello). So the wait is
 // short: a late hello still opens instantly, an early one is not waited for.
-const OPEN_AFTER_SILENCE_MS = Number(env("VOICE_OPEN_AFTER_MS", 1000));
+// Requested 2026-09-15: "very instant after hello" — people who hear
+// nothing say hello again. So the wait is zero: the opener starts as soon
+// as the stream is up; a hello that lands mid-opener is simply talked over,
+// which is what a human caller does too.
+const OPEN_AFTER_SILENCE_MS = Number(env("VOICE_OPEN_AFTER_MS", 0));
 /** Never play anything in the first moments of the stream; the media path is still settling. */
-const MIN_SETTLE_MS = 400;
+const MIN_SETTLE_MS = Number(env("VOICE_SETTLE_MS", 150));
 /**
  * Outbound audio is paced to real time, keeping this much queued at Vobiz.
  * Measured on live calls: while Vobiz is playing our audio it sends back
