@@ -45,6 +45,7 @@ export class CallSession {
     this.turnInFlight = false;
     this.ended = false;
     this.greeted = false;
+    this.greetingPlaying = false;
 
     this.maxDurationTimer = setTimeout(() => this._hangup("max_duration"), MAX_CALL_MS);
 
@@ -83,16 +84,31 @@ export class CallSession {
     }
   }
 
-  /** Say hello once, however the stream announced itself. */
-  _greet() {
+  /**
+   * Say hello once, however the stream announced itself. The opener plays
+   * through whatever the caller does: nearly everyone says "hello?" as they
+   * pick up, and treating that as a barge-in cut the script off within a
+   * second on every live call of 2026-09-15. Audio heard meanwhile is
+   * discarded — it is the pickup "hello", not an answer to anything.
+   */
+  async _greet() {
     if (this.greeted) return;
     this.greeted = true;
-    this._speak(greeting(this.contactName), { log: true });
+    this.greetingPlaying = true;
+    try {
+      await this._speak(greeting(this.contactName), { log: true });
+    } finally {
+      this.greetingPlaying = false;
+      this.vad.reset();
+    }
   }
 
   _handleAudio(pcm16) {
-    const { speechStarted, utteranceEnded } = this.vad.push(pcm16);
-    if (speechStarted && this.agentSpeaking) this._bargeIn();
+    const { sustainedSpeech, utteranceEnded } = this.vad.push(pcm16);
+    if (this.greetingPlaying) return;
+    // Interrupt only on sustained speech: a click, a cough or a stray syllable
+    // used to clear the reply mid-sentence.
+    if (sustainedSpeech && this.agentSpeaking) this._bargeIn();
     if (utteranceEnded && !this.turnInFlight) this._handleUtterance(utteranceEnded);
   }
 

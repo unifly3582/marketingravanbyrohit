@@ -87,6 +87,7 @@ export class VoiceActivityDetector {
    * @param {number} [opts.speechRms]         RMS above this = speech frame
    * @param {number} [opts.endOfTurnSilenceMs] trailing silence -> utterance ended
    * @param {number} [opts.minSpeechMs]       ignore utterances shorter than this (coughs, clicks)
+   * @param {number} [opts.sustainedMs]       loud for this long -> `sustainedSpeech` (barge-in)
    */
   constructor({
     sampleRate = 8000,
@@ -94,12 +95,14 @@ export class VoiceActivityDetector {
     speechRms = 500,
     endOfTurnSilenceMs = 650,
     minSpeechMs = 200,
+    sustainedMs = 400,
   } = {}) {
     this.sampleRate = sampleRate;
     this.frameSamples = Math.round((sampleRate * frameMs) / 1000);
     this.speechRms = speechRms;
     this.endOfTurnSilenceFrames = Math.ceil(endOfTurnSilenceMs / frameMs);
     this.minSpeechFrames = Math.ceil(minSpeechMs / frameMs);
+    this.sustainedFrames = Math.ceil(sustainedMs / frameMs);
     this.reset();
   }
 
@@ -128,7 +131,9 @@ export class VoiceActivityDetector {
    * barge-in) without the detector knowing anything about calls or sockets.
    *
    * @param {Buffer} pcm16Chunk
-   * @returns {{ speechStarted: boolean, utteranceEnded: Buffer|null, isSpeaking: boolean }}
+   * @returns {{ speechStarted: boolean, sustainedSpeech: boolean, utteranceEnded: Buffer|null, isSpeaking: boolean }}
+   *   `speechStarted` fires on the first loud frame; `sustainedSpeech` once the
+   *   caller has been loud for `sustainedMs` in a row — the one to interrupt on.
    */
   push(pcm16Chunk) {
     let buf = Buffer.concat([this._tail, pcm16Chunk]);
@@ -138,6 +143,7 @@ export class VoiceActivityDetector {
     buf = buf.subarray(0, usable);
 
     let speechStarted = false;
+    let sustainedSpeech = false;
     let utteranceEnded = null;
 
     for (let off = 0; off < buf.length; off += frameBytes) {
@@ -149,6 +155,7 @@ export class VoiceActivityDetector {
         this._speaking = true;
         this._silenceFrames = 0;
         this._speechFrames++;
+        if (this._speechFrames === this.sustainedFrames) sustainedSpeech = true;
         this._utterance.push(frame);
       } else if (this._speaking) {
         this._silenceFrames++;
@@ -165,6 +172,6 @@ export class VoiceActivityDetector {
       }
     }
 
-    return { speechStarted, utteranceEnded, isSpeaking: this._speaking };
+    return { speechStarted, sustainedSpeech, utteranceEnded, isSpeaking: this._speaking };
   }
 }
