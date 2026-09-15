@@ -55,7 +55,9 @@ const IDLE_GRACE_MS = Number(env("VOICE_IDLE_GRACE_MS", 6_000));
  * the caller's "hello" — and that hello is dropped rather than sent to the
  * model, which would otherwise answer it on top of the opener.
  */
-const OPEN_ON_HELLO_MS = Number(env("VOICE_HELLO_SPEECH_MS", 250));
+const OPEN_ON_HELLO_MS = Number(env("VOICE_HELLO_SPEECH_MS", 120));
+/** A pickup "hello" is short and often quiet; this is well below the level used for turn-taking. */
+const HELLO_RMS = Number(env("VOICE_HELLO_RMS", 300));
 const OPEN_AFTER_SILENCE_MS = Number(env("VOICE_OPEN_AFTER_MS", 2500));
 /** Never play anything in the first moments of the stream; the media path is still settling. */
 const MIN_SETTLE_MS = 400;
@@ -111,7 +113,7 @@ export class LiveCallSession {
     /** Until the caller has said hello (or the pause runs out), audio is held both ways. */
     this.gateOpen = false;
     this.gateTimer = null;
-    this.helloVad = new VoiceActivityDetector({ sampleRate: INPUT_SAMPLE_RATE, sustainedMs: OPEN_ON_HELLO_MS });
+    this.helloVad = new VoiceActivityDetector({ sampleRate: INPUT_SAMPLE_RATE, sustainedMs: OPEN_ON_HELLO_MS, speechRms: HELLO_RMS });
 
     this.ringTimer = setTimeout(() => {
       if (!this.ws) this._end("no_answer");
