@@ -18,8 +18,8 @@ export const HEADS = [
   {
     n: 2,
     short: 'META ADS',
-    title: 'Facebook & Instagram Ads That Bring Buyers',
-    metric: '+250% Ad ROAS',
+    title: 'Meta Ads That Turn Attention Into Enquiries',
+    metric: 'Attention. Interest. Enquiries.',
     icon: 'ads',
     href: '/heads/ads',
     desc: 'Meta campaigns run end to end — AI-generated creatives, audience testing, retargeting and landing pages tuned for every segment in real time.',

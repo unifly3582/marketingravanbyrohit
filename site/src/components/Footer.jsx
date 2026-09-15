@@ -36,9 +36,9 @@ export default function Footer() {
           </div>
 
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-muted">Pages</h3>
+            <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-muted">Explore</h3>
             <ul className="mt-4 grid gap-2">
-              {[['Home', '/']].map(([label, href]) => (
+              {[['Home', '/'], ['Our services', '/#heads']].map(([label, href]) => (
                 <li key={href}>
                   <a href={href} className="text-sm text-cream/75 transition-colors hover:text-gold">{label}</a>
                 </li>

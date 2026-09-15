@@ -40,16 +40,7 @@ export default function Statement({ trigger } = {}) {
       return
     }
 
-    const tl = gsap.timeline({
-      scrollTrigger: {
-        trigger: trigger?.current ?? ref.current,
-        // finish while the whole block is still on screen: the reveal ends
-        // once the section top reaches a fifth of the way down the viewport
-        start: 'top 85%',
-        end: 'top 20%',
-        scrub: true,
-      },
-    })
+    const tl = gsap.timeline({ paused: true })
 
     // Heading and paragraph reveal together: each group gets its own wave,
     // both starting at 0 and both spanning the same timeline length. The
@@ -73,9 +64,20 @@ export default function Statement({ trigger } = {}) {
         FRONT + HOLD,
       )
     }
+    // Attach after the timeline has its full duration, including when the
+    // visitor opens #heads directly or returns here through hot reload.
+    const scroll = ScrollTrigger.create({
+      animation: tl,
+      trigger: trigger?.current ?? ref.current,
+      start: 'top 85%',
+      end: 'top 20%',
+      scrub: true,
+    })
+    const refresh = requestAnimationFrame(() => scroll.refresh())
     return () => {
-      tl.scrollTrigger?.kill()
-      tl.kill()
+      cancelAnimationFrame(refresh)
+      scroll.kill()
+      tl.revert()
     }
   }, [trigger])
 
@@ -88,7 +90,7 @@ export default function Statement({ trigger } = {}) {
             key={ci}
             className={`ltr ltr-${group} inline-block`}
             data-final={final}
-            style={{ color: DIM, filter: 'blur(10px)', willChange: 'color, filter' }}
+            style={{ color: final, willChange: 'color, filter' }}
           >
             {ch}
           </span>

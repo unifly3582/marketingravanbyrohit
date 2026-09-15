@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { HEADS } from '../data/heads.js'
 import { HeadIcon, Arrow } from './icons.jsx'
@@ -152,10 +152,38 @@ function Lineup({ k, onAdvance, reduced }) {
 }
 
 export default function Hero() {
+  const heroRef = useRef(null)
   const [reduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [word, setWord] = useState(0) // index into WORDS
   const [k, setK] = useState(0) // absolute index of the head at the front
   const [paused, setPaused] = useState(false)
+
+  // Fade the light stage into the statement as the visitor leaves the hero.
+  // Write to a wrapper so the portrait's own animation keeps its transforms.
+  useEffect(() => {
+    const el = heroRef.current
+    if (!el) return
+    const media = matchMedia('(prefers-reduced-motion: reduce)')
+    let frame = 0
+    const paint = () => {
+      frame = 0
+      const box = el.getBoundingClientRect()
+      const progress = Math.max(0, Math.min(1, -box.top / Math.max(1, box.height * .78)))
+      el.style.setProperty('--bridge-shade', (progress * .96).toFixed(3))
+      el.style.setProperty('--bridge-drift', `${media.matches ? 0 : progress * 65}px`)
+    }
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(paint) }
+    paint()
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    media.addEventListener('change', schedule)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+      media.removeEventListener('change', schedule)
+    }
+  }, [])
 
   useEffect(() => {
     if (reduced) return
@@ -181,9 +209,9 @@ export default function Hero() {
   const advance = () => setK((v) => v + 1)
 
   return (
-    <section id="top" className="container-x pt-10 pb-0 max-md:!px-0 md:pt-24 md:pb-2">
+    <section ref={heroRef} id="top" className="hero-connected container-x pt-10 pb-0 max-md:!px-0 md:pt-24 md:pb-2">
       {/* full-width hero panel */}
-      <div className="theme-light relative flex min-h-[660px] flex-col overflow-hidden rounded-3xl border border-line max-md:rounded-none max-md:border-x-0 md:min-h-[580px] lg:min-h-[min(78vh,780px)]">
+      <div className="hero-connected-panel theme-light relative flex min-h-[660px] flex-col overflow-hidden rounded-3xl border border-line max-md:rounded-none max-md:border-x-0 md:min-h-[580px] lg:min-h-[min(78vh,780px)]">
         {/* the grain field glides through a 30s window of shader time every
             16s: visible motion (the default 60-over-50 reads as a still
             image) without the scintillation a faster sweep causes */}
@@ -282,7 +310,7 @@ export default function Hero() {
         </div>
 
         {/* Ravan, in the middle, taking whatever height is left */}
-        <div className="relative z-[5] mt-1 min-h-[280px] flex-1 md:mt-2">
+        <div className="hero-connected-mascot relative z-[5] mt-1 min-h-[280px] flex-1 md:mt-2">
           <div className="absolute bottom-0 left-1/2 h-[115%] w-[min(100%,140vh)] max-w-[1100px] -translate-x-1/2 md:h-[125%] md:max-w-[1375px]">
             <Lineup k={k} onAdvance={advance} reduced={reduced} />
           </div>

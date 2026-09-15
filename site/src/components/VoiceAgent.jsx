@@ -28,6 +28,23 @@ import WhatsAppLive from './WhatsAppLive.jsx'
 
 const CAPTION_LIMIT = 14
 
+function ProjectContactFallback({ onClose }) {
+  const dialogRef = useRef(null)
+  useEffect(() => {
+    const dialog = dialogRef.current
+    dialog?.showModal()
+    return () => dialog?.close()
+  }, [])
+  return <dialog ref={dialogRef} onCancel={onClose} aria-labelledby="project-contact-title" className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-line bg-surface p-7 text-cream shadow-2xl backdrop:bg-black/70">
+    <button type="button" onClick={onClose} aria-label="Close contact options" className="absolute right-4 top-4 rounded-full p-2 text-muted hover:text-cream"><Cross className="h-4 w-4" /></button>
+    <p className="eyebrow mb-5">A conversation starts here</p>
+    <h2 id="project-contact-title" className="mb-4 text-3xl font-bold leading-tight">Tell us what you have in mind.</h2>
+    <p className="mb-6 text-sm leading-relaxed text-muted">Ravan is unavailable right now. Email us your business, what you’d like to improve, and any timing you have in mind.</p>
+    <a href="mailto:hello@marketingravan.com?subject=Let%27s%20discuss%20my%20project" className="btn-primary">Email your project brief ↗</a>
+    <p className="mt-4 text-xs text-muted">hello@marketingravan.com</p>
+  </dialog>
+}
+
 /** What the launcher says, by page. The corner button should know where it is. */
 const LAUNCHER_LABEL = {
   '/heads/sdr': 'Try the WhatsApp agent',
@@ -277,7 +294,7 @@ export default function VoiceAgent() {
     if (item.focus) inputRef.current?.focus()
   }
 
-  if (available === false) return null
+  if (available === false) return open ? <ProjectContactFallback onClose={() => setOpen(false)} /> : null
 
   const launcherLabel = LAUNCHER_LABEL[pathname] ?? 'Ask Ravan'
 

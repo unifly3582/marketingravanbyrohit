@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import beauty from '../../assets/meta-ad-concepts/beauty.webp'
 import sneaker from '../../assets/meta-ad-concepts/sneaker.webp'
 import travel from '../../assets/meta-ad-concepts/travel.webp'
@@ -28,30 +28,27 @@ function SignalIcon({ kind }) {
 }
 
 export default function MetaAdsShowcase({ active }) {
-  const ref = useRef(null)
-  const [visible, setVisible] = useState(false)
   const [paused, setPaused] = useState(false)
   const [step, setStep] = useState(0)
   const [reduced, setReduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [pageVisible, setPageVisible] = useState(() => !document.hidden)
   useEffect(() => {
-    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting && entry.intersectionRatio > .65), { threshold: [0, .65] })
-    if (ref.current) observer.observe(ref.current)
     const media = matchMedia('(prefers-reduced-motion: reduce)')
     const onMotion = () => setReduced(media.matches)
     const onVisibility = () => setPageVisible(!document.hidden)
     media.addEventListener('change', onMotion)
     document.addEventListener('visibilitychange', onVisibility)
-    return () => { observer.disconnect(); media.removeEventListener('change', onMotion); document.removeEventListener('visibilitychange', onVisibility) }
+    return () => { media.removeEventListener('change', onMotion); document.removeEventListener('visibilitychange', onVisibility) }
   }, [])
-  const playing = active && visible && pageVisible && !paused && !reduced
+  // The stack supplies active only while this second card is at the front.
+  const playing = active && pageVisible && !paused && !reduced
   useEffect(() => {
     if (!playing) return
     const timer = setTimeout(() => setStep((n) => (n + 1) % STORY.length), 3400)
     return () => clearTimeout(timer)
   }, [playing, step])
   const scene = STORY[step]
-  return <div ref={ref} className={`ma-story${playing ? ' is-playing' : ''}`}>
+  return <div className={`ma-story${playing ? ' is-playing' : ''}`}>
     <div className="ma-copy" key={step}><strong>{scene.title}</strong><span>{scene.sub}</span></div>
     <div className="ma-network"><Platform name="facebook" /><span>Facebook</span><i>+</i><Platform name="instagram" /><span>Instagram</span><small>FEED · STORIES · REELS</small></div>
     <div className="ma-feed" aria-label="Example Meta ad creatives">

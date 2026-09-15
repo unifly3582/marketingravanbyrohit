@@ -9,7 +9,8 @@ const SCENES = [
   { image: skincare, kind: 'Beauty & ecommerce', title: 'Earn their trust.', accent: 'In every detail.', cue: 'Clarity builds confidence', detail: 'Your story. Your product. Beautifully clear.', icon: 'shield', color: '#ffb9c8' },
   { image: architecture, kind: 'Architecture & interiors', title: 'Be their first choice.', accent: 'Build brand value.', cue: 'A brand worth remembering', detail: 'A distinct identity visitors recognise.', icon: 'crown', color: '#e4f79b' },
 ]
-const DURATION = 3400
+// All three beats land within two seconds; hold the outcome before replaying.
+const DURATIONS = [650, 650, 3700]
 
 function StoryIcon({ kind }) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -36,13 +37,16 @@ export default function WebsiteShowcase({ active }) {
   }, [])
   const playing = active && visible && pageVisible && !paused && !reduced
   useEffect(() => {
+    if (!active || !visible) setScene(0)
+  }, [active, visible])
+  useEffect(() => {
     if (!playing) return
-    const timer = setTimeout(() => setScene((i) => (i + 1) % SCENES.length), DURATION)
+    const timer = setTimeout(() => setScene((i) => (i + 1) % SCENES.length), DURATIONS[scene])
     return () => clearTimeout(timer)
   }, [playing, scene])
   const story = SCENES[scene]
   return (
-    <div ref={ref} className={`ws-story${playing ? ' is-playing' : ''}`} style={{ '--story-accent': story.color, '--story-duration': `${DURATION}ms` }}>
+    <div ref={ref} className={`ws-story${playing ? ' is-playing' : ''}`} style={{ '--story-accent': story.color, '--story-duration': `${DURATIONS[scene]}ms` }}>
       <div className="ws-aura" aria-hidden="true" />
       <div className="ws-headline" key={`title-${scene}`}><strong>{story.title}</strong><em>{story.accent}</em></div>
       <div className="ws-gallery" aria-label="Premium website design concepts">

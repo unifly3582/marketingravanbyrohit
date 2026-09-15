@@ -1,17 +1,15 @@
 import Hero from '../components/Hero.jsx'
 import HeadStack from '../components/head-stack/HeadStack.jsx'
+import './home-transition.css'
 
 /*
- * Homepage (2026-09-13): hero, then one pinned block that carries the
- * statement line into the ten-head card pile (HeadStack renders Statement
- * inside itself), then the site footer. The older "What we do" stage and the
- * sections after it still exist under components/ for reuse.
+ * The hero blends into the statement and service cards.
  */
 export default function Home() {
   return (
-    <>
+    <div className="home-connected">
       <Hero />
       <HeadStack />
-    </>
+    </div>
   )
 }
