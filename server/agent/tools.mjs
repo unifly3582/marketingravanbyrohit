@@ -226,25 +226,31 @@ export function buildToolSpecs({
             schema: z.object({
               text: z.string().max(220).describe("What to say, one or two short spoken sentences"),
             }),
-            run: traced("speak", "Speak reply", async ({ text }) => {
-              if (replySent) {
-                return {
-                  spoken: false,
-                  already_replied: true,
-                  error:
-                    "You have already sent your one reply for this turn. Do not send another. " +
-                    "Stop calling tools and end your turn now.",
-                };
-              }
-              replySent = true;
-              outcome.reply = text;
-              // Hand the text to the call right now (see runAgent's onSpeak);
-              // a listener failure must not turn into a tool error.
-              if (!demo && onSpeak) {
-                try { onSpeak(text); } catch (err) { console.error("speak_reply onSpeak", err.message); }
-              }
-              return { spoken: !demo, simulated: demo, text };
-            }),
+            run: (() => {
+              const speak = traced("speak", "Speak reply", async ({ text }) => {
+                if (replySent) {
+                  return {
+                    spoken: false,
+                    already_replied: true,
+                    error:
+                      "You have already sent your one reply for this turn. Do not send another. " +
+                      "Stop calling tools and end your turn now.",
+                  };
+                }
+                replySent = true;
+                outcome.reply = text;
+                return { spoken: !demo, simulated: demo, text };
+              });
+              // The caller gets the text before the trace row is even opened
+              // (see runAgent's onSpeak); a listener failure must not become a
+              // tool error, and a second call in one turn is refused above.
+              return async (input) => {
+                if (!replySent && !demo && onSpeak) {
+                  try { onSpeak(input.text); } catch (err) { console.error("speak_reply onSpeak", err.message); }
+                }
+                return speak(input);
+              };
+            })(),
           },
           {
             name: "send_whatsapp_message",

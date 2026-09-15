@@ -109,6 +109,10 @@ export async function runAgent({
       conversationId: convId,
       input: { text, contact_name: contactName },
       demo,
+      // Supabase is ~200 ms from the VPS and a traced tool costs two writes;
+      // on a phone call that was ~2 s of silence per turn. Deferred writes
+      // still land, in order, just not between the caller and the answer.
+      defer: channel === "voice",
     });
   } catch (err) {
     console.error(`${channel} agent: could not open run:`, err.message);

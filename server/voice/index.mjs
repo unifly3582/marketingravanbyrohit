@@ -15,7 +15,8 @@ import { randomUUID } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { sb, recordCall, upsertLead, completeCall } from "../db.mjs";
 import * as vobiz from "./vobiz.mjs";
-import { CallSession } from "./session.mjs";
+import { CallSession, greeting } from "./session.mjs";
+import { synthesize } from "./sarvam-speech.mjs";
 import { WebVoiceSession, WEB_STREAM_PATH, INPUT_SAMPLE_RATE, OUTPUT_SAMPLE_RATE } from "./web-session.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
@@ -50,6 +51,23 @@ async function callInfo(attemptId) {
 }
 
 const STREAM_PATH_RE = /^\/api\/voice\/stream\/([^/]+)$/;
+
+/**
+ * Vobiz takes several seconds between fetching the answer XML and opening the
+ * media stream. The opener is synthesised in that gap, so the first thing the
+ * caller hears is not preceded by a Sarvam round trip. Keyed by call id;
+ * entries are consumed by the session or dropped after a minute.
+ */
+const pending = new Map(); // attemptId -> { answeredAt, greetingAudio }
+function prepareOpener(attemptId, contactName) {
+  if (pending.has(attemptId)) return;
+  const greetingAudio = synthesize(greeting(contactName), { sampleRate: 8000 }).catch((err) => {
+    console.error("voice opener TTS", attemptId, err.message);
+    return null;
+  });
+  pending.set(attemptId, { answeredAt: Date.now(), greetingAudio });
+  setTimeout(() => pending.delete(attemptId), 60_000).unref();
+}
 
 // ---------------- website voice agent ----------------
 //
@@ -129,6 +147,7 @@ export function attach(httpServer, app) {
       console.error("voice answer: unknown call id", attemptId);
       return res.status(404).end();
     }
+    prepareOpener(attemptId, info.contactName);
     const streamUrl = `${wsBase()}/api/voice/stream/${attemptId}`;
     res.type("text/xml").send(vobiz.answerXml(streamUrl));
   });
@@ -164,8 +183,16 @@ export function attach(httpServer, app) {
             socket.destroy();
             return;
           }
+          const prepared = pending.get(attemptId) ?? null;
+          pending.delete(attemptId);
+          if (prepared) console.log("voice stream open", attemptId.slice(0, 8), `${Date.now() - prepared.answeredAt} ms after answer`);
           wss.handleUpgrade(req, socket, head, (ws) => {
-            new CallSession(ws, { attemptId, phone10: info.phone10, contactName: info.contactName });
+            new CallSession(ws, {
+              attemptId,
+              phone10: info.phone10,
+              contactName: info.contactName,
+              greetingAudio: prepared?.greetingAudio ?? null,
+            });
           });
         });
       return;

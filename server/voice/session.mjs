@@ -25,20 +25,27 @@ export function renderGreeting(template, contactName) {
   return out.replace(/\s{2,}/g, " ").trim();
 }
 
-const greeting = (contactName) => renderGreeting(process.env.VOICE_GREETING || DEFAULT_GREETING, contactName);
+export const greeting = (contactName) => renderGreeting(process.env.VOICE_GREETING || DEFAULT_GREETING, contactName);
 const MAX_CALL_MS = 10 * 60 * 1000; // safety cap if hangup detection ever fails
 const OUT_FRAME_MS = 20;
 const SAMPLE_RATE = 8000;
 
 export class CallSession {
-  constructor(ws, { attemptId, phone10, contactName = null }) {
+  /**
+   * @param {object} opts
+   * @param {Promise<Buffer>|null} [opts.greetingAudio]  opener already synthesised
+   *   while Vobiz was still connecting the stream (see voice/index.mjs)
+   */
+  constructor(ws, { attemptId, phone10, contactName = null, greetingAudio = null }) {
     this.ws = ws;
     this.attemptId = attemptId;
     this.phone10 = phone10;
     this.contactName = contactName;
+    this.greetingAudio = greetingAudio;
+    this.connectedAt = Date.now();
 
     this.streamId = null;
-    this.vad = new VoiceActivityDetector({ sampleRate: SAMPLE_RATE });
+    this.vad = new VoiceActivityDetector({ sampleRate: SAMPLE_RATE, endOfTurnSilenceMs: 500 });
     this.turns = [];
     this.startedAt = Date.now();
     this.agentSpeaking = false;
@@ -96,7 +103,7 @@ export class CallSession {
     this.greeted = true;
     this.greetingPlaying = true;
     try {
-      await this._speak(greeting(this.contactName), { log: true });
+      await this._speak(greeting(this.contactName), { log: true, audio: this.greetingAudio });
     } finally {
       this.greetingPlaying = false;
       this.vad.reset();
@@ -120,16 +127,20 @@ export class CallSession {
 
   async _handleUtterance(pcm16) {
     this.turnInFlight = true;
+    const t0 = Date.now();
+    const marks = {};
     try {
       const transcript = await transcribe(pcm16, { sampleRate: SAMPLE_RATE }).catch((err) => {
         console.error("voice STT", this.attemptId, err.message);
         return "";
       });
+      marks.stt = Date.now() - t0;
       if (!transcript) return;
 
-      // The call so far, before this utterance is added to it.
+      // The call so far, before this utterance is added to it. Logging the
+      // utterance is two Supabase writes; nothing here waits for them.
       const turns = this.turns.slice();
-      await this._log("in", transcript);
+      this._log("in", transcript);
 
       // Start speaking the moment the model calls speak_reply, not when the
       // whole run returns: the engine keeps reasoning for a couple of seconds
@@ -154,9 +165,13 @@ export class CallSession {
       });
 
       const text = await firstReply;
-      const speech = text ? this._speak(text, { log: true }) : Promise.resolve();
+      marks.brain = Date.now() - t0 - marks.stt;
+      const speech = text ? this._speak(text, { log: true, onAudio: () => { marks.tts = Date.now() - t0 - marks.stt - marks.brain; } }) : Promise.resolve();
       this.lastSpeech = speech;
       await speech;
+      // stt / brain / tts are the three waits between the caller going quiet
+      // and hearing the first sound of the answer.
+      console.log("voice turn", this.attemptId.slice(0, 8), JSON.stringify(marks), `"${transcript.slice(0, 40)}"`);
 
       run
         .then(async (result) => {
@@ -184,20 +199,19 @@ export class CallSession {
     }).catch((err) => console.error("voice touchConversation", err.message));
   }
 
-  async _speak(text, { log = false } = {}) {
-    // Logging is two Supabase writes; they run alongside synthesis rather
-    // than in front of it. _log() already swallows its own failures.
-    const logged = log ? this._log("out", text) : null;
+  async _speak(text, { log = false, audio = null, onAudio = null } = {}) {
+    // Logging is two Supabase writes; nothing waits for them. _log() already
+    // swallows its own failures.
+    if (log) this._log("out", text);
 
     let pcm16;
     try {
-      pcm16 = await synthesize(text, { sampleRate: SAMPLE_RATE });
+      pcm16 = audio ? await audio : await synthesize(text, { sampleRate: SAMPLE_RATE });
     } catch (err) {
       console.error("voice TTS", this.attemptId, err.message);
-      if (logged) await logged;
       return;
     }
-    if (logged) await logged;
+    onAudio?.();
 
     this.agentSpeaking = true;
     await this._streamAudioOut(pcm16);
