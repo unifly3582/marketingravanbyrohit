@@ -161,17 +161,6 @@
 .hs-card.has-visual .hs-eyebrow { text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35); }
 .hs-card.has-visual.is-light .hs-eyebrow { text-shadow: none; }
 
-/* Meta skin: bright, airy, blue */
-.hs-card.is-meta { background: #eef3fb; color: #1c2b4a; border-color: rgba(28, 43, 74, 0.12); }
-.hs-card.is-meta .hs-eyebrow { color: #4a5b7d; text-shadow: none; }
-.hs-card.is-meta .hs-eyebrow b { color: #0a6cff; }
-.hs-card.is-meta::after {
-  background: linear-gradient(to top, rgba(238, 243, 251, 0.96) 0%, rgba(238, 243, 251, 0.7) 45%, rgba(238, 243, 251, 0) 100%);
-}
-.hs-card.is-meta .hs-metric { background: rgba(10, 108, 255, 0.12); color: #0a55c8; }
-.hs-meta { position: absolute; inset: 0; background: #eef3fb; }
-.hs-meta canvas { display: block; width: 100%; height: 100%; }
-
 /* ---------- dots + pill ---------- */
 .hs-dots {
   position: absolute; right: 0.9rem; top: 50%;

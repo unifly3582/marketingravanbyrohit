@@ -1,0 +1,55 @@
+.hs-card.is-website.is-light { container-type: inline-size; background: #141416; color: #fff8eb; border-color: #c6ad7e65; box-shadow: 0 25px 60px -15px #000c, 0 0 30px -12px #edb46750; }
+.hs-card.is-website.has-visual::after { display: none; }
+.hs-card.is-website.has-visual .hs-eyebrow { padding: 3cqw 4cqw 0; color: #d4c7b7; font-size: 2.4cqw; text-shadow: none; }
+.hs-card.is-website .hs-eyebrow b { color: #ffd292; font-size: 3cqw; }
+.hs-card.is-website .hs-service-heading {
+  background: #e9dfcf;
+  color: #201e1b;
+  border-bottom-color: #fff3df;
+  box-shadow: 0 3px 14px #0004;
+}
+.hs-card.is-website .hs-service-heading > b {
+  background: #292724;
+  color: #f4eadb;
+}
+/* Retain the service heading for assistive technology; the visual tells its story. */
+.hs-card.is-website.has-visual h3, .hs-card.is-website.has-visual .hs-foot { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.ws-story { position: absolute; inset: 0; font-family: var(--font-body); isolation: isolate; }
+.ws-aura { position: absolute; inset: 0; z-index: -1; background: radial-gradient(ellipse at 85% 44%, color-mix(in srgb, var(--story-accent) 19%, transparent), transparent 70%); }
+.ws-headline { position: absolute; top: 12cqw; left: 4cqw; right: 3cqw; letter-spacing: -.045em; line-height: 1.02; }
+.ws-headline strong { display: block; font-family: var(--font-display); font-size: 6.8cqw; font-weight: 800; }
+.ws-headline em { display: block; margin-top: .9cqw; font: italic 5cqw/1.05 Georgia, serif; color: var(--story-accent); }
+.ws-gallery { position: absolute; left: 0; right: 0; top: 26cqw; height: 34cqw; perspective: 900px; }
+.ws-screen { position: absolute; left: 6%; top: 0; width: 88%; height: 32cqw; overflow: hidden; border: 1px solid #ffffff70; border-radius: 1.6cqw; background: #e6e1d9; box-shadow: 0 2cqw 5cqw #0007; transform-origin: center; transition: transform .75s cubic-bezier(.2,.8,.2,1), opacity .6s, filter .6s; }
+.ws-screen.slot-0 { z-index: 3; transform: translateY(0) rotate(-3deg); opacity: 1; }
+.ws-screen.slot-1 { z-index: 2; transform: translate(5cqw, 1cqw) rotate(7deg) scale(.95); opacity: .8; filter: brightness(.8); }
+.ws-screen.slot-2 { z-index: 1; transform: translate(-4cqw, 1cqw) rotate(-10deg) scale(.96); opacity: .65; filter: brightness(.7); }
+.ws-browserbar { height: 3cqw; padding: 0 2cqw; display: flex; justify-content: space-between; align-items: center; color: #3d3a35; background: #f2ece4; font-size: 1.6cqw; letter-spacing: .05em; }
+.ws-browserbar > span:first-child { font-size: 1.3cqw; color: #a58a70; }
+.ws-screen img { display: block; width: 100%; height: calc(100% - 3cqw); object-fit: cover; object-position: center 35%; }
+.ws-seal { position: absolute; z-index: 4; right: 4cqw; bottom: -.3cqw; display: flex; align-items: center; gap: 1.2cqw; padding: 1.5cqw 2.1cqw; background: #171716; border: 1px solid color-mix(in srgb, var(--story-accent) 65%, transparent); border-radius: 2cqw; color: var(--story-accent); box-shadow: 0 1cqw 4cqw #0007; font-size: 2.6cqw; font-weight: 600; }
+.ws-seal svg { width: 4.4cqw; height: 4.4cqw; }
+.ws-story-footer { position: absolute; left: 4cqw; right: 4cqw; top: 62cqw; }
+.ws-story-footer p { margin: 0 0 1.3cqw; font-size: 2.7cqw; color: #e1d8cb; }
+.ws-controls { display: flex; align-items: center; gap: 2cqw; }
+.ws-scenes { display: flex; flex: 1; gap: 2cqw; }
+.ws-scenes button { position: relative; flex: 1; padding: 0 0 1.8cqw; color: #bdb6aa; background: transparent; border: 0; text-align: left; cursor: pointer; font-family: inherit; font-size: 2.1cqw; min-height: 5cqw; }
+.ws-scenes button::after, .ws-scenes i { content: ''; position: absolute; left: 0; right: 0; bottom: .4cqw; height: .5cqw; background: #ffffff30; border-radius: 1cqw; }
+.ws-scenes button[aria-pressed=true] { color: var(--story-accent); }
+.ws-scenes i { z-index: 1; background: var(--story-accent); transform: scaleX(0); transform-origin: left; }
+.ws-scenes button[aria-pressed=true] i { transform: scaleX(1); }
+.ws-pause { display: grid; place-items: center; width: 6cqw; height: 6cqw; flex: none; padding: 0; border-radius: 50%; border: 1px solid #ffffff50; color: #f4ecdd; background: #ffffff0c; cursor: pointer; font-size: 2.8cqw; }
+.ws-pause:disabled { opacity: .4; cursor: default; }
+.ws-controls button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.ws-concept-note { display: block; margin-top: .8cqw; font-size: 1.5cqw; letter-spacing: .12em; color: #a9a293; }
+.ws-story.is-playing .ws-headline { animation: ws-headline-in .5s ease-out both; }
+.ws-story.is-playing .ws-gallery { animation: ws-gallery-in .8s cubic-bezier(.16,1,.3,1) both; }
+.ws-story.is-playing .ws-screen.slot-0 img { animation: ws-image-drift var(--story-duration) ease-out both; }
+.ws-story.is-playing .ws-seal { animation: ws-seal-in .65s .4s cubic-bezier(.2,.8,.2,1) both; }
+.ws-story.is-playing .ws-scenes button[aria-pressed=true] i { animation: ws-progress var(--story-duration) linear both; }
+@keyframes ws-headline-in { from { opacity: .4; transform: translateY(2cqw); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ws-gallery-in { from { transform: translateY(5cqw) scale(.88) rotate(4deg); } to { transform: translateY(0) scale(1) rotate(0); } }
+@keyframes ws-image-drift { from { transform: scale(1.08); } to { transform: scale(1); } }
+@keyframes ws-seal-in { from { opacity: 0; transform: translateY(3cqw) scale(.92); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes ws-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .ws-story *, .ws-story.is-playing * { animation: none !important; transition: none !important; } }

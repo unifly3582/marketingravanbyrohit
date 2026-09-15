@@ -7,8 +7,8 @@ export const HEADS = [
   {
     n: 1,
     short: 'WEBSITE DESIGN',
-    title: 'Websites That Turn Visitors Into Customers',
-    metric: '3.2x More Enquiries',
+    title: 'Premium Websites. Trusted Brands.',
+    metric: 'Make an impression. Earn their confidence.',
     icon: 'uiux',
     href: '/heads/uiux',
     desc: 'Fast, interactive websites in the Linear, Apple and Stripe school — designed to convert, built to load instantly, and kept fresh every month.',

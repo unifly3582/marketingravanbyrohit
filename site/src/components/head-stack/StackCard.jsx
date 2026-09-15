@@ -1,4 +1,6 @@
 import { forwardRef } from 'react'
+import { HeadIcons } from '../icons.jsx'
+import './service-heading.css'
 
 /*
  * One card in the pile: a service (one head). Position, tilt and z-index are
@@ -15,8 +17,8 @@ const StackCard = forwardRef(function StackCard({ head, light, hidden, visual, s
       className={`hs-card${light ? ' is-light' : ''}${visual ? ' has-visual' : ''}${skin ? ` ${skin}` : ''}`}
       aria-hidden={hidden || undefined}
     >
-      <div className="hs-eyebrow">
-        <span>{head.short}</span>
+      <div className="hs-service-heading">
+        <span><svg viewBox="0 0 24 24" aria-hidden="true">{HeadIcons[head.icon]}</svg>{head.short}</span>
         <b>{String(head.n).padStart(2, '0')}</b>
       </div>
       {visual ? <div className="hs-visual">{visual}</div> : null}

@@ -32,6 +32,19 @@
         "PORT": "8790",
         "ADMIN_PASSWORD": "preview-only"
       }
+    },
+    {
+      "name": "marketing-ravan-dist",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "site",
+        "--port",
+        "4173",
+        "--strictPort"
+      ],
+      "port": 4173
     }
   ]
 }
