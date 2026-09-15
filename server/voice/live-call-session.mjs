@@ -30,6 +30,7 @@ import { startRun } from "../agent/trace.mjs";
 import { liveModel } from "../agent/models.mjs";
 import { insertMessage, touchConversation, completeCall } from "../db.mjs";
 import { greeting } from "./session.mjs";
+import { VoiceActivityDetector } from "./audio.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 
@@ -44,6 +45,20 @@ const HANGUP_GRACE_MS = 5000;
 /** Caller silent for this long after the agent finished: check once, then hang up. */
 const IDLE_MS = Number(env("VOICE_IDLE_MS", 10_000));
 const IDLE_GRACE_MS = Number(env("VOICE_IDLE_GRACE_MS", 6_000));
+/**
+ * How a call opens. People answer a phone and say "hello?" — an agent that
+ * starts its script the instant the line connects talks over that, and the
+ * caller's first words never reach the model. The practice on outbound
+ * voice agents is to wait for the callee to speak, then open; if nobody
+ * speaks, open anyway after a short pause. The opener audio is already made
+ * (the model spoke it while the phone rang), so it starts within a frame of
+ * the caller's "hello" — and that hello is dropped rather than sent to the
+ * model, which would otherwise answer it on top of the opener.
+ */
+const OPEN_ON_HELLO_MS = Number(env("VOICE_HELLO_SPEECH_MS", 250));
+const OPEN_AFTER_SILENCE_MS = Number(env("VOICE_OPEN_AFTER_MS", 2500));
+/** Never play anything in the first moments of the stream; the media path is still settling. */
+const MIN_SETTLE_MS = 400;
 
 /** Vobiz's L16 is little-endian on the way out (proven on live calls); flip this if the way in turns out otherwise. */
 const SWAP_INPUT_BYTES = env("VOICE_LIVE_SWAP_IN", "0") === "1";
@@ -80,6 +95,10 @@ export class LiveCallSession {
     this.hangupTimer = null;
     this.idleTimer = null;
     this.idleNudged = false;
+    /** Until the caller has said hello (or the pause runs out), audio is held both ways. */
+    this.gateOpen = false;
+    this.gateTimer = null;
+    this.helloVad = new VoiceActivityDetector({ sampleRate: INPUT_SAMPLE_RATE, sustainedMs: OPEN_ON_HELLO_MS });
 
     this.ringTimer = setTimeout(() => {
       if (!this.ws) this._end("no_answer");
@@ -213,6 +232,7 @@ export class LiveCallSession {
     ws.on("close", () => this._end("caller_hangup"));
     ws.on("error", (err) => console.error("live-call ws error", this.attemptId, err.message));
     this._touchIdle();
+    this.gateTimer = setTimeout(() => this._openGate("silence"), OPEN_AFTER_SILENCE_MS);
     console.log(
       "live-call",
       this.attemptId.slice(0, 8),
@@ -231,17 +251,19 @@ export class LiveCallSession {
     switch (msg.event) {
       case "start":
         this.streamId = msg.start?.streamId ?? msg.streamId ?? null;
-        this._flushOut();
         break;
       case "media": {
-        if (!this.streamId && msg.streamId) {
-          this.streamId = msg.streamId;
-          this._flushOut();
-        }
+        if (!this.streamId && msg.streamId) this.streamId = msg.streamId;
         const b64 = msg.media?.payload;
         if (!b64) return;
         let pcm = Buffer.from(b64, "base64");
         if (SWAP_INPUT_BYTES) pcm = pcm.swap16();
+        if (!this.gateOpen) {
+          // Listening for the pickup "hello". Not forwarded: the model has
+          // already said the opener and must not answer the hello as well.
+          if (this.helloVad.push(pcm).sustainedSpeech) this._openGate("hello");
+          return;
+        }
         this.live?.sendAudio(pcm);
         break;
       }
@@ -257,10 +279,25 @@ export class LiveCallSession {
     }
   }
 
+  /** The caller spoke, or the pause ran out: play the opener, start listening. */
+  _openGate(why) {
+    if (this.gateOpen || this.ended || !this.ws) return;
+    clearTimeout(this.gateTimer);
+    const sinceAttach = Date.now() - (this.attachedAt ?? this.createdAt);
+    const settle = Math.max(0, MIN_SETTLE_MS - sinceAttach);
+    setTimeout(() => {
+      if (this.ended) return;
+      this.gateOpen = true;
+      console.log("live-call", this.attemptId.slice(0, 8), `opening on ${why} ${sinceAttach + settle} ms after stream open`);
+      this._flushOut();
+      this._touchIdle();
+    }, settle);
+  }
+
   // ---------------- model -> Vobiz ----------------
 
   _play(pcm24k) {
-    if (!this.ws || !this.streamId) {
+    if (!this.ws || !this.streamId || !this.gateOpen) {
       this.outQueue.push(pcm24k);
       return;
     }
@@ -269,7 +306,7 @@ export class LiveCallSession {
 
   /** The stream just became playable: send whatever the model said meanwhile. */
   _flushOut() {
-    if (!this.ws || !this.streamId) return;
+    if (!this.ws || !this.streamId || !this.gateOpen) return;
     const queued = this.outQueue;
     this.outQueue = [];
     for (const chunk of queued) this._sendAudio(chunk);
@@ -407,6 +444,7 @@ export class LiveCallSession {
     clearTimeout(this.maxTimer);
     clearTimeout(this.hangupTimer);
     clearTimeout(this.idleTimer);
+    clearTimeout(this.gateTimer);
     this._flush();
     this.onEnd?.(this.attemptId);
 
