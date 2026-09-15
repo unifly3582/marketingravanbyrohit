@@ -258,6 +258,7 @@ export class LiveCallSession {
         if (!b64) return;
         let pcm = Buffer.from(b64, "base64");
         if (SWAP_INPUT_BYTES) pcm = pcm.swap16();
+        this._inboundStats(pcm, msg);
         if (!this.gateOpen) {
           // Listening for the pickup "hello". Not forwarded: the model has
           // already said the opener and must not answer the hello as well.
@@ -276,6 +277,34 @@ export class LiveCallSession {
         break;
       default:
         break; // clearedAudio and friends
+    }
+  }
+
+  /**
+   * Diagnostic: what is actually arriving from Vobiz in the first seconds —
+   * bytes per second (16 kHz L16 should be 32,000), peak and RMS level, and
+   * when the first frame came. Three live calls in a row lost the caller's
+   * first 10-15 s; this is how that gets pinned down.
+   */
+  _inboundStats(pcm, msg) {
+    const now = Date.now();
+    if (!this._in) {
+      this._in = { firstAt: now, windowAt: now, bytes: 0, peak: 0, sumSq: 0, n: 0, logged: 0 };
+      console.log("live-call", this.attemptId.slice(0, 8), `first inbound frame ${now - (this.attachedAt ?? this.createdAt)} ms after stream open, ${pcm.length} bytes, track=${msg.media?.track ?? "?"}`);
+    }
+    const st = this._in;
+    st.bytes += pcm.length;
+    for (let i = 0; i + 1 < pcm.length; i += 2) {
+      const v = pcm.readInt16LE(i);
+      const a = v < 0 ? -v : v;
+      if (a > st.peak) st.peak = a;
+      st.sumSq += v * v;
+      st.n++;
+    }
+    if (now - st.windowAt >= 1000 && st.logged < 12) {
+      const rms = st.n ? Math.round(Math.sqrt(st.sumSq / st.n)) : 0;
+      console.log("live-call", this.attemptId.slice(0, 8), `inbound ${st.bytes} B/s peak=${st.peak} rms=${rms} gate=${this.gateOpen ? "open" : "closed"}`);
+      st.windowAt = now; st.bytes = 0; st.peak = 0; st.sumSq = 0; st.n = 0; st.logged++;
     }
   }
 
