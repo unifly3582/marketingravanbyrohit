@@ -169,7 +169,11 @@ export class LiveCallSession {
 
   async _boot() {
     const model = liveModel();
-    const [offer, playbook] = await Promise.all([currentOffer(), activePlaybook()]);
+    const [offer, allRules] = await Promise.all([currentOffer(), activePlaybook()]);
+    // Prices are not discussed on the phone (2026-09-17): the pricing rules
+    // are kept out of the model's context entirely, so it cannot quote what
+    // it does not know, rather than relying on it to hold back.
+    const playbook = env("VOICE_NO_PRICING", "1") === "1" ? allRules.filter((r) => r.category !== "pricing") : allRules;
     const inlinePlaybook = playbookFitsInline(playbook);
 
     this.tracer = await startRun({
