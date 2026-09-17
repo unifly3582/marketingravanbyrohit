@@ -283,10 +283,15 @@ export default function Hero() {
             transition={{ duration: 0.7, delay: 0.16 }}
             className="mt-3 max-w-lg text-[0.82rem] leading-relaxed text-muted md:mt-4 md:max-w-none md:whitespace-nowrap md:text-[0.95rem]"
           >
-            Website, ads, social, campaigns and search to get you seen.
-            WhatsApp, call, store, ERP and automation agents to run the work.
-            <br className="hidden md:block" />
-            Ten heads, one monthly retainer.
+            <span className="md:hidden">
+              Five heads to get you seen. Five AI agents to run the work. One monthly retainer.
+            </span>
+            <span className="hidden md:inline">
+              Website, ads, social, campaigns and search to get you seen.
+              WhatsApp, call, store, ERP and automation agents to run the work.
+              <br />
+              Ten heads, one monthly retainer.
+            </span>
           </motion.p>
         </div>
 
