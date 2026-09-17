@@ -1,5 +1,10 @@
 /* ---------- the pile's heading: three beats that ride the scroll ---------- */
 
+/* the wordmark behind the pile steps back while the heading is up */
+.hs-section .hs-backdrop {
+  opacity: var(--hs-bd-fade, 1);
+}
+
 .hs-heading {
   position: absolute;
   inset: 0 0 auto 0;
