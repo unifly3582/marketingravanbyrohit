@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { HEADS } from '../../data/heads.js'
 import { openRavan } from '../../lib/ravan.js'
 import Statement from '../Statement.jsx'
+import AlienTicker from './AlienTicker.jsx'
 import CardStack, { INTRO_VH, STEP_VH, TAIL_VH } from './CardStack.jsx'
 import './head-stack.css'
 
@@ -18,6 +19,15 @@ export default function HeadStack() {
   const stmtRef = useRef(null)
   const hudRef = useRef(null)
   const [front, setFront] = useState(0)
+  // phones swap the statement line for the alien-tech readout (below the
+  // md breakpoint, 768px, matching the Tailwind classes around it)
+  const [phone, setPhone] = useState(() => matchMedia('(max-width: 767px)').matches)
+  useEffect(() => {
+    const m = matchMedia('(max-width: 767px)')
+    const onChange = () => setPhone(m.matches)
+    m.addEventListener('change', onChange)
+    return () => m.removeEventListener('change', onChange)
+  }, [])
   const onFront = useCallback((f) => setFront(f), [])
   const onIntro = useCallback((e) => {
     // statement lifts, blurs and fades; the pill only exists once the pile is in place
@@ -39,7 +49,7 @@ export default function HeadStack() {
     <section id="heads" ref={wrapRef} className="hs-wrap" style={{ height }}>
       <div className="hs-section">
         <div ref={stmtRef} className="hs-statement">
-          <Statement trigger={wrapRef} />
+          {phone ? <AlienTicker /> : <Statement trigger={wrapRef} />}
         </div>
         <CardStack heads={HEADS} wrapRef={wrapRef} onFront={onFront} onIntro={onIntro} />
         <div ref={hudRef} className="hs-hud" style={{ opacity: 0, pointerEvents: 'none' }}>
