@@ -33,7 +33,12 @@ export function splitForSpeech(text) {
 
 export function renderGreeting(template, contactName) {
   const first = (contactName ?? "").trim().split(/\s+/)[0];
-  const out = first ? template.replace(/\{name\}/g, `${first} ji`) : template.replace(/\s*\{name\}/g, "");
+  let out;
+  if (first) out = template.replace(/\{name\}/g, `${first} ji`);
+  // No name: a line that opens with the name ("{name}? Priya bol rahi hoon")
+  // becomes "Hello? Priya bol rahi hoon"; elsewhere the slot just disappears.
+  else if (/^\s*\{name\}/.test(template)) out = template.replace(/^\s*\{name\}/, "Hello");
+  else out = template.replace(/\s*\{name\}/g, "");
   return out.replace(/\s{2,}/g, " ").trim();
 }
 

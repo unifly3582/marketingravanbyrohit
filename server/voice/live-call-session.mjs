@@ -31,6 +31,7 @@ import { liveModel } from "../agent/models.mjs";
 import { insertMessage, touchConversation, completeCall } from "../db.mjs";
 import { greeting } from "./session.mjs";
 import { VoiceActivityDetector } from "./audio.mjs";
+import { TimeStretcher } from "./stretch.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 
@@ -99,6 +100,8 @@ const OPENER_BARGE_IN_MS = Number(env("VOICE_OPENER_BARGE_MS", 700));
 
 /** Vobiz's L16 is little-endian on the way out (proven on live calls); flip this if the way in turns out otherwise. */
 const SWAP_INPUT_BYTES = env("VOICE_LIVE_SWAP_IN", "0") === "1";
+/** Playback speed of her voice; pitch is preserved (see stretch.mjs). Requested 1.35 on 2026-09-17. */
+const VOICE_SPEED = Number(env("VOICE_LIVE_SPEED", "1.35"));
 
 export class LiveCallSession {
   /**
@@ -145,6 +148,7 @@ export class LiveCallSession {
     this.gateTimer = null;
     this.helloVad = new VoiceActivityDetector({ sampleRate: INPUT_SAMPLE_RATE, sustainedMs: OPEN_ON_HELLO_MS, speechRms: HELLO_RMS });
     this.openerVad = new VoiceActivityDetector({ sampleRate: INPUT_SAMPLE_RATE, sustainedMs: OPENER_BARGE_IN_MS });
+    this.stretcher = new TimeStretcher({ rate: VOICE_SPEED, sampleRate: OUTPUT_SAMPLE_RATE });
     /** Turn-taking watch: when the caller last went quiet, to time the reply. */
     this.turnVad = new VoiceActivityDetector({ sampleRate: INPUT_SAMPLE_RATE, endOfTurnSilenceMs: 300 });
     this.callerQuietAt = null;
@@ -235,11 +239,14 @@ export class LiveCallSession {
       onInterrupted: () => {
         this._flush();
         this.outQueue = [];
+        this.stretcher.reset();
         this.playheadAt = Date.now();
         this._send({ event: "clearAudio", streamId: this.streamId });
       },
       onTurnComplete: () => {
         this._flush();
+        const tail = this.stretcher.flush();
+        if (tail.length) this._enqueue(tail);
         if (!this.openerTurnDone) {
           this.openerTurnDone = true;
           this._maybeOpenerDone();
@@ -435,6 +442,11 @@ export class LiveCallSession {
       this.callerQuietAt = null;
       console.log("live-call", this.attemptId.slice(0, 8), `turn ${++this.turnNo}: reply audio ${wait} ms after caller went quiet`);
     }
+    const sped = this.stretcher.push(pcm24k);
+    if (sped.length) this._enqueue(sped);
+  }
+
+  _enqueue(pcm24k) {
     this.outQueue.push(pcm24k);
     this._pump();
   }
