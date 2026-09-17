@@ -152,9 +152,6 @@ function Lineup({ face, k, onAdvance }) {
           blend into the next section never washes it out. */}
       <div className="absolute bottom-[calc(var(--section-overlap,0px)+0.5rem)] left-1/2 z-10 w-[84vw] max-w-[360px] -translate-x-1/2 md:hidden">
         <div className="lineup-alien">
-          <p className="lineup-alien-kicker" aria-hidden="true">
-            head {String(onScreen.n).padStart(2, '0')} // what we do
-          </p>
           <p className="lineup-alien-word" aria-hidden="true">{readout}</p>
           <p className="sr-only">
             Ten heads: {STAGE.map((h) => h.short.toLowerCase()).join(', ')}.

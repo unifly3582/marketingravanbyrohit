@@ -196,17 +196,7 @@ button:focus-visible {
   text-align: center;
   pointer-events: none;
 }
-.lineup-alien-kicker {
-  font-family: ui-monospace, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
-  font-size: 0.56rem;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: #F0A32F;
-  text-shadow: 0 1px 6px rgba(28, 17, 9, 0.7);
-}
 .lineup-alien-word {
-  margin-top: 0.15rem;
   font-family: "Orbitron", var(--font-display);
   font-weight: 900;
   font-size: clamp(1rem, 5vw, 1.35rem); /* DIGITAL CAMPAIGNS, the longest, still fits one line */
