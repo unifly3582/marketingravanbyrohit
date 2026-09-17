@@ -21,7 +21,7 @@ import { PERSONA, portraitFor } from '../lib/portraits.js'
 const STAGE_ORDER = HEADS.map((h) => h.icon)
 const STAGE = STAGE_ORDER.map((icon) => HEADS.find((h) => h.icon === icon)).filter(Boolean)
 
-const FACE_MS = 200 // the face flickers to the next head every FACE_MS (fast)
+const FACE_MS = 400 // the face flickers to the next head every FACE_MS (fast)
 const TEXT_MS = 3000 // the text moves to the next head every TEXT_MS (slow)
 
 /*
