@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { HEADS } from '../data/heads.js'
 import { HeadIcon } from './icons.jsx'
@@ -45,27 +45,12 @@ const sayFor = (head) => RAVAN_MESSAGE[head.icon] ?? head.title
 
 const mod = (i, n) => ((i % n) + n) % n
 
-/* phones: the readout under his chin names the face on screen in the same
- * beat as the flicker, with a couple of letters still "decoding" so it reads
- * like alien tech rather than a caption */
-const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&<>/|=+*'
-const garble = (text) => {
-  const chars = [...text]
-  const slots = chars.map((c, j) => (c === ' ' || c === '&' ? -1 : j)).filter((j) => j >= 0)
-  const hits = Math.max(1, Math.round(slots.length * 0.22))
-  for (let h = 0; h < hits; h += 1) {
-    const j = slots[Math.floor(Math.random() * slots.length)]
-    chars[j] = GLYPHS[Math.floor(Math.random() * GLYPHS.length)]
-  }
-  return chars.join('')
-}
 
 function Lineup({ face, k, onAdvance }) {
   const n = STAGE.length
   const shown = mod(face, n) // the face on screen (fast clock)
   const head = STAGE[mod(k, n)] // the head the text is about (slow clock)
-  const onScreen = STAGE[shown]
-  const readout = useMemo(() => garble(onScreen.short), [shown, onScreen.short]) // one garble per face
+  const onScreen = STAGE[shown] // the phone readout names this one, same beat
 
   return (
     <div
@@ -146,13 +131,13 @@ function Lineup({ face, k, onAdvance }) {
         ))}
       </div>
 
-      {/* phones: the alien-tech readout along the foot of the panel, over his
-          chest, naming the face on screen in the same beat as the flicker. It
-          sits just above the panel's bottom fade (--section-overlap) so the
-          blend into the next section never washes it out. */}
+      {/* phones: the readout along the foot of the panel, over his chest,
+          naming the face on screen in the same beat as the flicker. It sits
+          just above the panel's bottom fade (--section-overlap) so the blend
+          into the next section never washes it out. */}
       <div className="absolute bottom-[calc(var(--section-overlap,0px)+0.5rem)] left-1/2 z-10 w-[84vw] max-w-[360px] -translate-x-1/2 md:hidden">
         <div className="lineup-alien">
-          <p className="lineup-alien-word" aria-hidden="true">{readout}</p>
+          <p className="lineup-alien-word" aria-hidden="true">{onScreen.short}</p>
           <p className="sr-only">
             Ten heads: {STAGE.map((h) => h.short.toLowerCase()).join(', ')}.
           </p>
