@@ -130,7 +130,11 @@ export function buildToolSpecs({
   channel = "whatsapp",
   onSpeak = null,
   contactName = null,
+  notify = null,
 }) {
+  // On a live call a WhatsApp send is not repeated within the call: the
+  // caller saying "nahi aaya" once cost a duplicate template (2026-09-17).
+  let lastWhatsApp = null; // { at, mode, text }
   /** The customer's number right now — see the ctx.phone10 note above. */
   const who = () => (typeof phone10 === "function" ? phone10() : phone10);
   // One reply per turn, enforced here rather than in the prompt.
@@ -272,25 +276,55 @@ export function buildToolSpecs({
             }),
             run: traced("whatsapp", "Send WhatsApp message", async ({ text, reason }) => {
               if (demo) return { sent: false, simulated: true, phone10: who(), text, reason };
+              if (lastWhatsApp && Date.now() - lastWhatsApp.at < 10 * 60 * 1000) {
+                return {
+                  sent: false,
+                  already_sent: true,
+                  seconds_ago: Math.round((Date.now() - lastWhatsApp.at) / 1000),
+                  mode: lastWhatsApp.mode,
+                  note:
+                    "A WhatsApp message was already sent to them on this call. Do not send another. " +
+                    "If they say it has not arrived, tell them it can take a minute to show up, ask them " +
+                    "to check WhatsApp once, and carry on with the conversation.",
+                };
+              }
+              const noteFor = (mode) =>
+                mode === "template"
+                  ? "They have not messaged us on WhatsApp in the last 24 hours, so WhatsApp only " +
+                    "allowed a short template that says the details are ready. Your full message is " +
+                    "saved and will be sent automatically the moment they reply to that template — " +
+                    "even if they reply days later. Tell them: reply to the WhatsApp message and the " +
+                    "details will come right away."
+                  : "Sent as a normal message.";
               // Free text only inside WhatsApp's 24-hour window; otherwise the
               // text rides inside the approved handoff template, which asks
               // them to reply — and the reply opens the window for the rest.
+              //
+              // On a live call the send (1.5-2.6 s through the provider) runs
+              // in the background: the caller hears "bhej rahi hoon" at once
+              // and the delivery result reaches the model as a note.
+              if (notify) {
+                lastWhatsApp = { at: Date.now(), mode: "pending", text };
+                sendMessage(who(), text, { name: contactName, source: "voice-agent" })
+                  .then((r) => {
+                    lastWhatsApp.mode = r.mode;
+                    notify(`[WhatsApp delivered (${r.mode}). ${noteFor(r.mode)} Confirm to them in your next sentence.]`);
+                  })
+                  .catch((err) => {
+                    lastWhatsApp = null;
+                    notify(`[WhatsApp send FAILED: ${String(err.message).slice(0, 120)}. Tell them honestly it did not go through and that the team will send it.]`);
+                  });
+                return {
+                  sending: true,
+                  note:
+                    "Sending now in the background. Say it is on its way and keep talking; you will get a " +
+                    "note here when it is delivered, then confirm it. Do not call this tool again on this call.",
+                  reason,
+                };
+              }
               const r = await sendMessage(who(), text, { name: contactName, source: "voice-agent" });
-              return {
-                sent: true,
-                message_id: r.messageId,
-                mode: r.mode,
-                delivered_as: r.text,
-                note:
-                  r.mode === "template"
-                    ? "They have not messaged us on WhatsApp in the last 24 hours, so WhatsApp only " +
-                      "allowed a short template that says the details are ready. Your full message is " +
-                      "saved and will be sent automatically the moment they reply to that template — " +
-                      "even if they reply days later. Tell them: reply to the WhatsApp message and the " +
-                      "details will come right away."
-                    : undefined,
-                reason,
-              };
+              lastWhatsApp = { at: Date.now(), mode: r.mode, text };
+              return { sent: true, message_id: r.messageId, mode: r.mode, delivered_as: r.text, note: noteFor(r.mode), reason };
             }),
           },
           {

@@ -195,6 +195,9 @@ export class LiveCallSession {
       outcome: this.outcome,
       channel: "voice",
       contactName: this.contactName,
+      // Slow side effects report back through the conversation instead of
+      // holding the reply (see send_whatsapp_message in tools.mjs).
+      notify: (text) => this.live?.sendText(text, { turnComplete: false }),
     })
       .filter((s) => s.name !== "speak_reply" && !(inlinePlaybook && s.name === "search_playbook"))
       .map((s) =>
