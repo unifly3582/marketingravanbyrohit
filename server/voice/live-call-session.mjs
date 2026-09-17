@@ -79,6 +79,15 @@ const MIN_SETTLE_MS = Number(env("VOICE_SETTLE_MS", 150));
  * milliseconds rather than seconds.
  */
 const PLAYOUT_LEAD_MS = 350;
+/**
+ * The opener always plays to the end, and the caller is heard only after it.
+ * Requested 2026-09-17: callers say "hello", "haan" or "kaun" over the first
+ * sentence, which either cut it short (barge-in) or got answered on top of
+ * it. Until the opener has finished playing, caller audio is not forwarded
+ * to the model at all; whatever they said during it is simply not heard —
+ * the same as a human caller who launches into their line at pickup.
+ */
+const OPENER_MAX_MS = Number(env("VOICE_OPENER_MAX_MS", 15_000));
 
 /** Vobiz's L16 is little-endian on the way out (proven on live calls); flip this if the way in turns out otherwise. */
 const SWAP_INPUT_BYTES = env("VOICE_LIVE_SWAP_IN", "0") === "1";
@@ -111,6 +120,11 @@ export class LiveCallSession {
     /** Wall-clock time up to which audio has been handed to Vobiz for playback. */
     this.playheadAt = 0;
     this.greeted = false;
+    /** The model has finished generating the opener turn. */
+    this.openerTurnDone = false;
+    /** The opener has finished *playing* at the caller's end; listening starts. */
+    this.openerDone = false;
+    this.openerTimer = null;
     this.ended = false;
     this.createdAt = Date.now();
     this.attachedAt = null;
@@ -210,6 +224,10 @@ export class LiveCallSession {
       },
       onTurnComplete: () => {
         this._flush();
+        if (!this.openerTurnDone) {
+          this.openerTurnDone = true;
+          this._maybeOpenerDone();
+        }
         if (this.outcome.endCall) this._hangupAfterAudio();
       },
       onToolCall: (calls) => this._runTools(calls),
@@ -257,6 +275,8 @@ export class LiveCallSession {
     ws.on("error", (err) => console.error("live-call ws error", this.attemptId, err.message));
     this._touchIdle();
     this.gateTimer = setTimeout(() => this._openGate("silence"), OPEN_AFTER_SILENCE_MS);
+    // Whatever happens, start listening after this long.
+    this.openerTimer = setTimeout(() => this._openerFinished("timeout"), OPENER_MAX_MS);
     console.log(
       "live-call",
       this.attemptId.slice(0, 8),
@@ -289,6 +309,8 @@ export class LiveCallSession {
           if (this.helloVad.push(pcm).sustainedSpeech) this._openGate("hello");
           return;
         }
+        // The opener is still playing: the caller is not heard until it ends.
+        if (!this.openerDone) return;
         this.live?.sendAudio(pcm);
         break;
       }
@@ -330,6 +352,25 @@ export class LiveCallSession {
       console.log("live-call", this.attemptId.slice(0, 8), `inbound ${st.bytes} B/s peak=${st.peak} rms=${rms} gate=${this.gateOpen ? "open" : "closed"}`);
       st.windowAt = now; st.bytes = 0; st.peak = 0; st.sumSq = 0; st.n = 0; st.logged++;
     }
+  }
+
+  /**
+   * The opener counts as finished when the model has completed its turn and
+   * every chunk of it has been handed to Vobiz and played out.
+   */
+  _maybeOpenerDone() {
+    if (this.openerDone || !this.openerTurnDone || !this.gateOpen) return;
+    if (this.pumping || this.outQueue.length) return;
+    const remaining = Math.max(0, this.playheadAt - Date.now());
+    setTimeout(() => this._openerFinished("played"), remaining + 100);
+  }
+
+  _openerFinished(why) {
+    if (this.openerDone || this.ended) return;
+    this.openerDone = true;
+    clearTimeout(this.openerTimer);
+    console.log("live-call", this.attemptId.slice(0, 8), `opener finished (${why}) ${Date.now() - (this.attachedAt ?? this.createdAt)} ms after stream open; listening`);
+    this._touchIdle();
   }
 
   /** The caller spoke, or the pause ran out: play the opener, start listening. */
@@ -379,6 +420,7 @@ export class LiveCallSession {
       if (!chunk) {
         this.pumping = false;
         this._touchIdle(); // playback drains: the caller's silence clock starts here
+        this._maybeOpenerDone();
         return;
       }
       this._sendAudio(chunk);
@@ -526,6 +568,7 @@ export class LiveCallSession {
     clearTimeout(this.hangupTimer);
     clearTimeout(this.idleTimer);
     clearTimeout(this.gateTimer);
+    clearTimeout(this.openerTimer);
     this._flush();
     this.onEnd?.(this.attemptId);
 
