@@ -189,19 +189,19 @@ button:focus-visible {
   .lineup-float { animation: none; }
 }
 
-/* phones: the alien-tech readout under his chin: no box, just the type.
-   Orbitron in molten gold with a dark drop shadow so it reads on the light
-   stage and on his suit alike. */
+/* phones: the readout under his chin: no box, just the type. The site's
+   display face in extrabold, molten gold, with a dark drop shadow so it
+   reads on the light stage and on his suit alike. */
 .lineup-alien {
   text-align: center;
   pointer-events: none;
 }
 .lineup-alien-word {
-  font-family: "Orbitron", var(--font-display);
-  font-weight: 900;
-  font-size: clamp(1rem, 5vw, 1.35rem); /* DIGITAL CAMPAIGNS, the longest, still fits one line */
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(1.2rem, 6.2vw, 1.6rem); /* DIGITAL CAMPAIGNS, the longest, still fits one line */
   line-height: 1.15;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.01em;
   text-transform: uppercase;
   white-space: nowrap;
   background: linear-gradient(180deg, #FFE7B0 0%, #F0A32F 48%, #E2571E 100%);
