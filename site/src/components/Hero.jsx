@@ -329,8 +329,11 @@ export default function Hero() {
 
         {/* Ravan, in the middle, taking whatever height is left (the copy
             block ends at the subline: no buttons, the header carries the CTA) */}
-        <div className="hero-connected-mascot relative z-[5] mt-1 min-h-[300px] flex-1 md:mt-2">
-          <div className="absolute bottom-0 left-1/2 h-[115%] w-[min(100%,140vh)] max-w-[1100px] -translate-x-1/2 md:h-[125%] md:max-w-[1375px]">
+        <div className="hero-connected-mascot relative z-[5] mt-0 min-h-[300px] flex-1 md:mt-2">
+          {/* phones: the box is sized by height (square, like the portraits)
+              so the head grows into all the room under the copy instead of
+              being capped by the screen width; the panel clips the shoulders */}
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 max-md:aspect-square max-md:h-full max-md:w-auto md:h-[125%] md:w-[min(100%,140vh)] md:max-w-[1375px]">
             <Lineup face={reduced ? k : face} k={k} onAdvance={advance} />
           </div>
         </div>
