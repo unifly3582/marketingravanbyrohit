@@ -196,11 +196,47 @@ export async function messagesSince(phone10, sinceIso, limit = 60) {
   );
 }
 
-export async function updateMessageStatus(waMessageId, status) {
-  unwrap(
-    await sb.from("messages").update({ status }).eq("wa_message_id", waMessageId),
+/**
+ * Apply a delivery status from the webhook. Matched by WhatsApp message id
+ * first; when that finds nothing — the provider hands back its own queue id
+ * on send, while statuses carry Meta's wamid, so for text and template sends
+ * they never match — the most recent outbound message to that recipient in
+ * the last 15 minutes is taken instead. A failure keeps Meta's error code
+ * and title in metadata, so "sent" in the dashboard means it actually was.
+ */
+export async function updateMessageStatus(waMessageId, status, { recipient = null, errors = null } = {}) {
+  const patch = { status };
+  if (errors?.length) {
+    const e = errors[0];
+    patch.metadata = { error: { code: e.code ?? null, title: e.title ?? e.message ?? null, detail: e.error_data?.details ?? null } };
+  }
+  const byId = unwrap(
+    await sb.from("messages").update(patch).eq("wa_message_id", waMessageId).select("id"),
     "updateMessageStatus"
   );
+  if (byId?.length || !recipient) return;
+
+  const p10 = String(recipient).replace(/\D/g, "").slice(-10);
+  const conv = unwrap(await sb.from("conversations").select("id").eq("phone10", p10).maybeSingle(), "updateMessageStatus");
+  if (!conv) return;
+  const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const latest = unwrap(
+    await sb
+      .from("messages")
+      .select("id, status")
+      .eq("conversation_id", conv.id)
+      .eq("direction", "out")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1),
+    "updateMessageStatus"
+  );
+  const row = latest?.[0];
+  if (!row) return;
+  // Never let a late "sent" overwrite a "failed" or "read".
+  const rank = { failed: 4, read: 3, delivered: 2, sent: 1 };
+  if ((rank[row.status] ?? 0) > (rank[status] ?? 0)) return;
+  unwrap(await sb.from("messages").update({ ...patch, wa_message_id: waMessageId }).eq("id", row.id), "updateMessageStatus");
 }
 
 export async function recentMessages(phone10, limit = 20) {

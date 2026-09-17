@@ -306,7 +306,9 @@ export async function ingest(payload) {
   if (kind === "status") {
     const statuses = deepFindObj(payload, ["statuses"]);
     for (const s of Array.isArray(statuses) ? statuses : []) {
-      if (s?.id && s?.status) await updateMessageStatus(s.id, s.status);
+      if (!s?.id || !s?.status) continue;
+      await updateMessageStatus(s.id, s.status, { recipient: s.recipient_id ?? null, errors: s.errors ?? null });
+      if (s.status === "failed") console.error("wa send failed", s.recipient_id ?? "?", s.errors?.[0]?.code ?? "", s.errors?.[0]?.title ?? "");
     }
     return { kind, inbound: [] };
   }
