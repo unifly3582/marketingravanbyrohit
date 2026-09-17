@@ -178,20 +178,6 @@ button:focus-visible {
 .lineup-head img[data-on] {
   opacity: 1;
 }
-/* the typing caret in his speech bubble */
-@keyframes lineup-caret {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-.lineup-caret {
-  display: inline-block;
-  width: 2px;
-  height: 0.9em;
-  margin-left: 2px;
-  vertical-align: -0.1em;
-  background: currentColor;
-  animation: lineup-caret 0.8s steps(2) infinite;
-}
 @keyframes lineup-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-7px); }

@@ -10,37 +10,37 @@ import { openRavan } from '../lib/ravan.js'
  * The hero: RAVAN IN THE MIDDLE, TEN FACES. A giant MARKETING RAVAN wordmark
  * runs along the foot of the panel; a Pixar-style Ravan cut out of his
  * background stands in front of it, anchored to the bottom edge like a
- * mascot leaning into frame. He has ten heads and he shuffles them: the
- * faces snap through in a flipbook burst (hard cuts, no fades) and land on
- * the next head, which holds for a beat and says its line in the speech
- * bubble at his shoulder. The copy above says what we do, with the rotating
- * "We run your <thing>" line. Tap or click him to shuffle to the next head.
+ * mascot leaning into frame. He has ten heads and they never stop turning:
+ * the face flickers through all ten on a fast clock (hard cuts, no fade),
+ * while the text beside him moves on a slow clock, naming one head and what
+ * it does for a few seconds at a time. The copy above says what we do, with
+ * the rotating "We run your <thing>" line. Tap or click him to move the text
+ * on to the next head right away.
  */
 
 /* the order heads take the stage: the site order from heads.js */
 const STAGE_ORDER = HEADS.map((h) => h.icon)
 const STAGE = STAGE_ORDER.map((icon) => HEADS.find((h) => h.icon === icon)).filter(Boolean)
 
-const FLIP_MS = 80 // one face per FLIP_MS during the shuffle, each a hard cut
-const HOLD_MS = 2600 // the landed head holds this long before the next shuffle
-const TYPE_MS = 18 // per character: the head's line types out once it lands
+const FACE_MS = 100 // the face flickers to the next head every FACE_MS (fast)
+const TEXT_MS = 3000 // the text moves to the next head every TEXT_MS (slow)
 
 /*
- * THE TEN-HEAD RAVAN MESSAGE. One line per head, keyed by the heads.js icon.
- * When a head lands it says its line in the bubble; edit the text here. A
- * head without a line falls back to its title from heads.js.
+ * THE TEN-HEAD RAVAN MESSAGE. One line per head, keyed by the heads.js icon:
+ * what that head does, shown beside him for the beat his face is up. Edit
+ * the text here. A head without a line falls back to its title from heads.js.
  */
 export const RAVAN_MESSAGE = {
-  uiux: 'Your website should win their trust in five seconds.',
-  ads: 'Your Meta ads should bring enquiries, not just likes.',
-  sdr: 'Your WhatsApp should answer in five seconds, day and night.',
-  voice: 'Your phone should never ring unanswered.',
-  social: 'Your social pages should post every day without you.',
-  campaign: 'Google, YouTube and email should work as one funnel.',
-  ecom: 'Your online store should sell while you sleep.',
-  erp: 'Your ERP should run the business, not just record it.',
-  agent: 'Your daily busywork should run itself.',
-  geo: 'When people search, and when AI answers, you should show up.',
+  uiux: 'Builds the website people trust.',
+  ads: 'Runs Meta ads that bring enquiries.',
+  sdr: 'Answers WhatsApp in seconds, 24/7.',
+  voice: 'Picks up every call, in Indian languages.',
+  social: 'Posts on your social pages every day.',
+  campaign: 'Runs Google, YouTube and email as one funnel.',
+  ecom: 'Runs and grows your online store.',
+  erp: 'Runs your ERP and keeps the data clean.',
+  agent: 'Automates the daily busywork.',
+  geo: 'Gets you found on Google and in AI answers.',
 }
 const sayFor = (head) => RAVAN_MESSAGE[head.icon] ?? head.title
 
@@ -61,42 +61,11 @@ const WORDS = [
 const WORD_MS = 2000
 
 const mod = (i, n) => ((i % n) + n) % n
-const LABEL_SPRING = { type: 'spring', stiffness: 260, damping: 24 }
-const LABEL_EXIT = { opacity: 0, scale: 0.97, transition: { duration: 0.12 } }
 
-/* types a line out character by character; screen readers get the whole line */
-function Typed({ text, instant }) {
-  const [n, setN] = useState(instant ? text.length : 0)
-  useEffect(() => {
-    if (instant) {
-      setN(text.length)
-      return
-    }
-    setN(0)
-    let i = 0
-    const id = setInterval(() => {
-      i += 1
-      setN(i)
-      if (i >= text.length) clearInterval(id)
-    }, TYPE_MS)
-    return () => clearInterval(id)
-  }, [text, instant])
-  return (
-    <>
-      <span className="sr-only">{text}</span>
-      <span aria-hidden="true">
-        {text.slice(0, n)}
-        {n < text.length && <span className="lineup-caret" />}
-      </span>
-    </>
-  )
-}
-
-function Lineup({ face, landed, onAdvance, reduced }) {
+function Lineup({ face, k, onAdvance }) {
   const n = STAGE.length
-  const settled = landed !== null
-  const head = STAGE[mod(settled ? landed : face, n)]
-  const shown = mod(face, n)
+  const shown = mod(face, n) // the face on screen (fast clock)
+  const head = STAGE[mod(k, n)] // the head the text is about (slow clock)
 
   return (
     <div
@@ -117,7 +86,7 @@ function Lineup({ face, landed, onAdvance, reduced }) {
       {/* the ten faces, all in the DOM and decoded so a swap is a single
           frame: only the one with data-on is visible, no transition */}
       <div className="lineup-float absolute inset-0">
-        <div className="lineup-head" data-shuffling={settled ? undefined : 'true'}>
+        <div className="lineup-head">
           {STAGE.map((h, i) => (
             <img
               key={h.icon}
@@ -131,109 +100,66 @@ function Lineup({ face, landed, onAdvance, reduced }) {
         </div>
       </div>
 
-      {/* what this head says: a speech bubble at his left shoulder on wide
-          screens. It pops in when a head lands and is gone while he shuffles. */}
+      {/* what this head does: a speech bubble at his left shoulder on wide
+          screens, on the slow clock */}
       <div className="absolute left-[1%] top-[24%] z-10 hidden w-[30%] max-w-[320px] md:block">
-        <AnimatePresence initial={false}>
-          {settled && (
-            <motion.div
-              key={landed}
-              initial={{ opacity: 0, y: 10, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={LABEL_EXIT}
-              transition={reduced ? { duration: 0.2 } : LABEL_SPRING}
-              className="relative rounded-2xl border border-gold/30 bg-ground/70 p-4 shadow-[0_18px_50px_rgba(28,17,9,0.18)] backdrop-blur-md"
-            >
-              <span
-                aria-hidden="true"
-                className="absolute -right-2 top-[42%] h-4 w-4 rotate-45 border-r border-t border-gold/30 bg-ground/70"
-              />
-              <p className="font-display text-[0.62rem] font-extrabold uppercase tracking-[0.18em] text-gold">
-                Ravan says · head {String(head.n).padStart(2, '0')}
-              </p>
-              <p className="mt-2 font-display text-[1.05rem] font-bold leading-snug">
-                <Typed text={sayFor(head)} instant={reduced} />
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div className="relative rounded-2xl border border-gold/30 bg-ground/70 p-4 shadow-[0_18px_50px_rgba(28,17,9,0.18)] backdrop-blur-md">
+          <span
+            aria-hidden="true"
+            className="absolute -right-2 top-[42%] h-4 w-4 rotate-45 border-r border-t border-gold/30 bg-ground/70"
+          />
+          <p className="font-display text-[0.62rem] font-extrabold uppercase tracking-[0.18em] text-gold">
+            Head {String(head.n).padStart(2, '0')} · {PERSONA[head.icon]}
+          </p>
+          <p className="mt-1.5 font-display text-[1.15rem] font-extrabold uppercase leading-tight tracking-wide">{head.short}</p>
+          <p className="mt-1 text-[0.85rem] font-semibold leading-snug text-muted">{sayFor(head)}</p>
+        </div>
       </div>
 
-      {/* the label: which head is up. Wide screens: a glass card beside his
-          right shoulder. */}
+      {/* the promise: a glass card beside his right shoulder */}
       <div className="absolute right-[1%] top-[30%] z-10 hidden w-[30%] max-w-[300px] md:block">
-        <AnimatePresence initial={false}>
-          {settled && (
-            <motion.div
-              key={landed}
-              initial={{ opacity: 0, y: 14, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={LABEL_EXIT}
-              transition={reduced ? { duration: 0.2 } : { ...LABEL_SPRING, delay: 0.08 }}
-              className="rounded-2xl border border-gold/30 bg-ground/70 p-4 shadow-[0_18px_50px_rgba(28,17,9,0.18)] backdrop-blur-md"
-            >
-              <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-card text-gold">
-                  <HeadIcon name={head.icon} className="h-3.5 w-3.5" />
-                </span>
-                <span className="font-display text-[0.62rem] font-extrabold uppercase tracking-[0.18em] text-gold">
-                  Head {String(head.n).padStart(2, '0')} · {PERSONA[head.icon]}
-                </span>
-              </div>
-              <p className="mt-2 font-display text-[0.95rem] font-bold leading-snug">{head.title}</p>
-              <p className="mt-0.5 text-[0.7rem] font-extrabold tracking-wide">
-                <span className="bg-gradient-to-r from-gold to-ember bg-clip-text text-transparent">
-                  {head.metric}
-                </span>
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div className="rounded-2xl border border-gold/30 bg-ground/70 p-4 shadow-[0_18px_50px_rgba(28,17,9,0.18)] backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-card text-gold">
+              <HeadIcon name={head.icon} className="h-3.5 w-3.5" />
+            </span>
+            <span className="font-display text-[0.62rem] font-extrabold uppercase tracking-[0.18em] text-gold">
+              {head.short}
+            </span>
+          </div>
+          <p className="mt-2 font-display text-[0.95rem] font-bold leading-snug">{head.title}</p>
+          <p className="mt-0.5 text-[0.7rem] font-extrabold tracking-wide">
+            <span className="bg-gradient-to-r from-gold to-ember bg-clip-text text-transparent">{head.metric}</span>
+          </p>
+        </div>
       </div>
 
-      {/* the ten-head counter follows the face on screen, even mid-shuffle,
-          so the burst reads as ten heads going past */}
-      <div
-        className="absolute bottom-[3%] right-[3%] z-10 hidden items-center gap-1 md:flex"
-        aria-hidden="true"
-      >
+      {/* the ten-head counter follows the text, not the flicker */}
+      <div className="absolute bottom-[3%] right-[3%] z-10 hidden items-center gap-1 md:flex" aria-hidden="true">
         {STAGE.map((h, i) => (
           <span
             key={h.n}
             className={`h-1 rounded-full ${
-              i === shown ? 'w-4 bg-gradient-to-r from-gold to-ember' : 'w-1 bg-ground/30'
+              h.n === head.n ? 'w-4 bg-gradient-to-r from-gold to-ember' : 'w-1 bg-ground/30'
             }`}
           />
         ))}
       </div>
 
       {/* phones: one block along the foot of the panel, over his chest, so
-          it never covers his face: who is up, and what he says */}
-      <div className="absolute bottom-2 left-1/2 z-10 w-[62%] -translate-x-1/2 md:hidden">
-        <AnimatePresence initial={false}>
-          {settled && (
-            <motion.div
-              key={landed}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6, transition: { duration: 0.12 } }}
-              transition={reduced ? { duration: 0.2 } : LABEL_SPRING}
-              className="rounded-2xl border border-gold/30 bg-ground/75 px-3 py-2 backdrop-blur-md"
-            >
-              <div className="flex items-center gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-card text-gold">
-                  <HeadIcon name={head.icon} className="h-2.5 w-2.5" />
-                </span>
-                <span className="min-w-0 flex-1 truncate font-display text-[0.56rem] font-extrabold uppercase leading-none tracking-[0.14em] text-gold">
-                  {String(head.n).padStart(2, '0')} · {PERSONA[head.icon]}
-                </span>
-              </div>
-              <p className="mt-1.5 font-display text-[0.7rem] font-bold leading-snug">
-                <Typed text={sayFor(head)} instant={reduced} />
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          it never covers his face: which head, and what it does */}
+      <div className="absolute bottom-2 left-1/2 z-10 w-[64%] -translate-x-1/2 md:hidden">
+        <div className="rounded-2xl border border-gold/30 bg-ground/75 px-3 py-2 backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-card text-gold">
+              <HeadIcon name={head.icon} className="h-2.5 w-2.5" />
+            </span>
+            <span className="min-w-0 flex-1 truncate font-display text-[0.62rem] font-extrabold uppercase leading-none tracking-[0.14em] text-gold">
+              {String(head.n).padStart(2, '0')} · {head.short}
+            </span>
+          </div>
+          <p className="mt-1.5 font-display text-[0.72rem] font-bold leading-snug">{sayFor(head)}</p>
+        </div>
       </div>
     </div>
   )
@@ -243,10 +169,8 @@ export default function Hero() {
   const heroRef = useRef(null)
   const [reduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [word, setWord] = useState(0) // index into WORDS
-  const [k, setK] = useState(0) // absolute index of the head being shuffled to / on hold
-  const [face, setFace] = useState(0) // absolute index of the face on screen right now
-  const [landed, setLanded] = useState(null) // k once the shuffle ends, null mid-shuffle
-  const [ready, setReady] = useState(false) // every portrait decoded
+  const [k, setK] = useState(0) // absolute index of the head the text is about
+  const [face, setFace] = useState(0) // absolute index of the face on screen
   const [paused, setPaused] = useState(() => document.hidden) // a tab opened in the background waits
 
   // Fade the light stage into the statement as the visitor leaves the hero.
@@ -282,54 +206,30 @@ export default function Hero() {
     return () => clearInterval(id)
   }, [reduced])
 
-  // wait for all ten portraits so the first shuffle shows every face, not a
-  // run of blanks; give up after a moment on a slow network and start anyway
+  // decode every portrait up front so no beat ever shows a blank face
   useEffect(() => {
-    let done = false
-    const finish = () => {
-      if (done) return
-      done = true
-      setReady(true)
-    }
-    const imgs = STAGE.map((h) => {
+    STAGE.forEach((h) => {
       const im = new Image()
       im.src = portraitFor(h.icon)
-      return im
+      im.decode().catch(() => {})
     })
-    Promise.all(imgs.map((im) => im.decode().catch(() => {}))).then(finish)
-    const id = setTimeout(finish, 2500)
-    return () => clearTimeout(id)
   }, [])
 
-  // the shuffle: every time k changes, snap through all ten faces (hard cuts,
-  // FLIP_MS each) ending on head k, hold for HOLD_MS, then move to k + 1. A
-  // manual advance restarts the run so the head the visitor asked for gets
-  // its full hold. Reduced motion: no burst, just a longer hold per head.
+  // the faces never stop: a fast flicker through all ten. Reduced motion
+  // drops the flicker and shows the face the text is about instead.
   useEffect(() => {
-    if (!ready || paused) return
-    const n = STAGE.length
-    let t
-    if (reduced) {
-      setFace(k)
-      setLanded(k)
-      t = setTimeout(() => setK((v) => v + 1), HOLD_MS + 1400)
-      return () => clearTimeout(t)
-    }
-    setLanded(null)
-    let step = 0
-    const tick = () => {
-      step += 1
-      setFace(k - n + step) // step n lands on k, after every other face went past
-      if (step < n) {
-        t = setTimeout(tick, FLIP_MS)
-      } else {
-        setLanded(k)
-        t = setTimeout(() => setK((v) => v + 1), HOLD_MS)
-      }
-    }
-    t = setTimeout(tick, FLIP_MS)
-    return () => clearTimeout(t)
-  }, [k, ready, paused, reduced])
+    if (paused || reduced) return
+    const id = setInterval(() => setFace((v) => v + 1), FACE_MS)
+    return () => clearInterval(id)
+  }, [paused, reduced])
+
+  // the text moves on its own slow clock. A manual advance restarts it so the
+  // head the visitor asked for gets its full time.
+  useEffect(() => {
+    if (paused) return
+    const id = setInterval(() => setK((v) => v + 1), TEXT_MS)
+    return () => clearInterval(id)
+  }, [k, paused])
 
   // pause while the tab is hidden so heads do not pile up on return
   useEffect(() => {
@@ -444,7 +344,7 @@ export default function Hero() {
         {/* Ravan, in the middle, taking whatever height is left */}
         <div className="hero-connected-mascot relative z-[5] mt-1 min-h-[280px] flex-1 md:mt-2">
           <div className="absolute bottom-0 left-1/2 h-[115%] w-[min(100%,140vh)] max-w-[1100px] -translate-x-1/2 md:h-[125%] md:max-w-[1375px]">
-            <Lineup face={face} landed={landed} onAdvance={advance} reduced={reduced} />
+            <Lineup face={reduced ? k : face} k={k} onAdvance={advance} />
           </div>
         </div>
       </div>
