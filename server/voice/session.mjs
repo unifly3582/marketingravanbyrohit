@@ -206,7 +206,10 @@ export class CallSession {
       text,
       direction,
       contactName: this.contactName,
-      openWindow: direction === "in", // a call is as good a reason as a WhatsApp message to reopen the 24h window
+      // A phone call does NOT open WhatsApp's 24-hour window — only a WhatsApp
+      // message from the customer does. Setting it here made sendMessage()
+      // pick free-form text, which Meta rejects outside a real window.
+      openWindow: false,
       bumpUnread: direction === "in",
     }).catch((err) => console.error("voice touchConversation", err.message));
   }

@@ -547,7 +547,9 @@ export class LiveCallSession {
         text,
         direction,
         contactName: this.contactName,
-        openWindow: direction === "in",
+        // A phone call does NOT open WhatsApp's 24-hour window (Meta rule);
+        // claiming it did made sendMessage() send free text that Meta rejected.
+        openWindow: false,
         bumpUnread: direction === "in",
       }).catch((err) => console.error("live-call touchConversation", err.message));
     }
