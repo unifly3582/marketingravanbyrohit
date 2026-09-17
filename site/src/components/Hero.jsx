@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion } from 'motion/react'
 import { HEADS } from '../data/heads.js'
 import { HeadIcon } from './icons.jsx'
 import ShaderGrain from './ShaderGrain.jsx'
@@ -12,9 +12,9 @@ import { PERSONA, portraitFor } from '../lib/portraits.js'
  * mascot leaning into frame. He has ten heads and they never stop turning:
  * the face flickers through all ten on a fast clock (hard cuts, no fade),
  * while the text beside him moves on a slow clock, naming one head and what
- * it does for a few seconds at a time. The copy above says what we do, with
- * the rotating "We run your <thing>" line. Tap or click him to move the text
- * on to the next head right away.
+ * it does for a few seconds at a time. The copy above says what we do in the
+ * site's two words, grow and automate. Tap or click him to move the text on
+ * to the next head right away.
  */
 
 /* the order heads take the stage: the site order from heads.js */
@@ -42,22 +42,6 @@ export const RAVAN_MESSAGE = {
   geo: 'Gets you found on Google and in AI answers.',
 }
 const sayFor = (head) => RAVAN_MESSAGE[head.icon] ?? head.title
-
-/* the rotating word in the headline. Runs on its own clock, independent of
- * which head is on the deck, so the breadth reads quickly. Marketing first. */
-const WORDS = [
-  'website',
-  'Meta ads',
-  'social media',
-  'Google ads',
-  'WhatsApp',
-  'customer calls',
-  'online store',
-  'ERP',
-  'daily busywork',
-  'SEO',
-]
-const WORD_MS = 2000
 
 const mod = (i, n) => ((i % n) + n) % n
 
@@ -167,7 +151,6 @@ function Lineup({ face, k, onAdvance }) {
 export default function Hero() {
   const heroRef = useRef(null)
   const [reduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
-  const [word, setWord] = useState(0) // index into WORDS
   const [k, setK] = useState(0) // absolute index of the head the text is about
   const [face, setFace] = useState(0) // absolute index of the face on screen
   const [paused, setPaused] = useState(() => document.hidden) // a tab opened in the background waits
@@ -198,12 +181,6 @@ export default function Hero() {
       media.removeEventListener('change', schedule)
     }
   }, [])
-
-  useEffect(() => {
-    if (reduced) return
-    const id = setInterval(() => setWord((w) => (w + 1) % WORDS.length), WORD_MS)
-    return () => clearInterval(id)
-  }, [reduced])
 
   // decode every portrait up front so no beat ever shows a blank face
   useEffect(() => {
@@ -294,26 +271,10 @@ export default function Hero() {
             transition={{ duration: 0.7, delay: 0.08 }}
             className="mt-2 max-w-4xl text-[1.9rem] font-bold leading-[1.1] md:mt-4 md:text-[3.3rem] md:leading-[1.05]"
           >
-            We run your{' '}
-            <br className="md:hidden" />
-            <span className="inline-block whitespace-nowrap border-b-4 border-gold/50 leading-[1]">
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.span
-                  key={word}
-                  initial={{ opacity: 0, y: '0.35em' }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: '-0.35em' }}
-                  transition={{ duration: 0.3, ease: 'easeOut' }}
-                  className="inline-block"
-                >
-                  {WORDS[word]}
-                </motion.span>
-              </AnimatePresence>
-            </span>
-            .
+            We grow your business
             <br />
             <span className="bg-gradient-to-r from-gold to-ember bg-clip-text text-transparent">
-              One team for everything digital.
+              and let AI do the daily work.
             </span>
           </motion.h1>
           <motion.p
@@ -322,8 +283,10 @@ export default function Hero() {
             transition={{ duration: 0.7, delay: 0.16 }}
             className="mt-3 max-w-lg text-[0.82rem] leading-relaxed text-muted md:mt-4 md:max-w-none md:whitespace-nowrap md:text-[0.95rem]"
           >
-            Websites. Meta ads. Social media. WhatsApp and call agents. ERP.
-            Ten expert heads, one monthly retainer.
+            Website, ads, social, campaigns and search to get you seen.
+            WhatsApp, call, store, ERP and automation agents to run the work.
+            <br className="hidden md:block" />
+            Ten heads, one monthly retainer.
           </motion.p>
         </div>
 
