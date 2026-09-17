@@ -255,6 +255,7 @@ export async function updateMessageStatus(waMessageId, status, { recipient = nul
       .select("id, status")
       .eq("conversation_id", conv.id)
       .eq("direction", "out")
+      .neq("type", "voice") // transcript lines are not WhatsApp messages
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(1),

@@ -75,8 +75,27 @@ export const DEMO_TEMPLATE = {
   example: ["Priya"],
 };
 
+/**
+ * The after-call follow-up. Meta filed web_handoff as MARKETING despite the
+ * UTILITY submission, and marketing templates are throttled per recipient
+ * ("not delivered to maintain healthy ecosystem engagement", error 131049 —
+ * both sends on a 2026-09-17 call). This one is worded as what it is: a
+ * transactional follow-up to a call the person asked for, which is what
+ * the UTILITY category is for. Submit with `node wa-templates.mjs create
+ * call_followup`; until approved, sends fall back to web_handoff.
+ */
+export const CALL_FOLLOWUP_TEMPLATE = {
+  name: process.env.WA_CALL_FOLLOWUP_TEMPLATE ?? "call_followup",
+  language: "en",
+  category: "UTILITY",
+  body:
+    "Hi {{1}}, this is Priya from Marketing Ravan, following up on the call you requested. " +
+    "{{2}} Reply to this message and I will send you the details right here.",
+  example: ["Rohit", "You asked for our WhatsApp agent pricing and timelines in writing."],
+};
+
 /** Templates this code knows the text of, whether or not Meta has approved them yet. */
-export const LOCAL_TEMPLATES = [HANDOFF_TEMPLATE, DEMO_TEMPLATE];
+export const LOCAL_TEMPLATES = [HANDOFF_TEMPLATE, DEMO_TEMPLATE, CALL_FOLLOWUP_TEMPLATE];
 
 /** Is this template approved on the WABA right now? False on any API trouble. */
 export async function templateApproved(name, language = "en") {
@@ -201,12 +220,23 @@ export async function sendMessage(p10, text, { name = null, source = "agent" } =
   // free text the moment their reply arrives — minutes or days later
   // (see the inbound webhook in index.mjs).
   await setPendingFollowup(p10, text);
+  const who = (name ?? "").trim().split(/\s+/)[0] || "there";
+  if (await templateApproved(CALL_FOLLOWUP_TEMPLATE.name, CALL_FOLLOWUP_TEMPLATE.language)) {
+    const r = await sendTemplate(
+      p10,
+      CALL_FOLLOWUP_TEMPLATE.name,
+      CALL_FOLLOWUP_TEMPLATE.language,
+      [who, "I have the details you asked for ready to send."],
+      source
+    );
+    return { ...r, mode: "template", template: CALL_FOLLOWUP_TEMPLATE.name, parked: true };
+  }
   const r = await sendHandoff(p10, {
     name,
     summary: "I have the details you asked for ready to send you here.",
     source,
   });
-  return { ...r, mode: "template", parked: true };
+  return { ...r, mode: "template", template: HANDOFF_TEMPLATE.name, parked: true };
 }
 
 // ---------- inbound webhook parsing (ported from the OMS) ----------
