@@ -145,6 +145,10 @@ export class LiveCallSession {
     this.gateTimer = null;
     this.helloVad = new VoiceActivityDetector({ sampleRate: INPUT_SAMPLE_RATE, sustainedMs: OPEN_ON_HELLO_MS, speechRms: HELLO_RMS });
     this.openerVad = new VoiceActivityDetector({ sampleRate: INPUT_SAMPLE_RATE, sustainedMs: OPENER_BARGE_IN_MS });
+    /** Turn-taking watch: when the caller last went quiet, to time the reply. */
+    this.turnVad = new VoiceActivityDetector({ sampleRate: INPUT_SAMPLE_RATE, endOfTurnSilenceMs: 300 });
+    this.callerQuietAt = null;
+    this.turnNo = 0;
 
     this.ringTimer = setTimeout(() => {
       if (!this.ws) this._end("no_answer");
@@ -324,6 +328,11 @@ export class LiveCallSession {
           if (this.openerVad.push(pcm).sustainedSpeech) this._openerInterrupted();
           else return;
         }
+        // Response-time bookkeeping only: our own end-of-turn estimate, so the
+        // log can say how long the caller waited after they stopped talking.
+        const tv = this.turnVad.push(pcm);
+        if (tv.utteranceEnded) this.callerQuietAt = Date.now();
+        else if (tv.speechStarted) this.callerQuietAt = null;
         this.live?.sendAudio(pcm);
         break;
       }
@@ -418,6 +427,11 @@ export class LiveCallSession {
   // ---------------- model -> Vobiz ----------------
 
   _play(pcm24k) {
+    if (this.openerDone && this.callerQuietAt) {
+      const wait = Date.now() - this.callerQuietAt;
+      this.callerQuietAt = null;
+      console.log("live-call", this.attemptId.slice(0, 8), `turn ${++this.turnNo}: reply audio ${wait} ms after caller went quiet`);
+    }
     this.outQueue.push(pcm24k);
     this._pump();
   }
