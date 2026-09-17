@@ -88,6 +88,14 @@ const PLAYOUT_LEAD_MS = 350;
  * the same as a human caller who launches into their line at pickup.
  */
 const OPENER_MAX_MS = Number(env("VOICE_OPENER_MAX_MS", 15_000));
+/**
+ * ...unless they really talk. A website lead (2026-09-17 07:41) spoke for
+ * ten straight seconds over the opener, was ignored, went quiet and was
+ * hung up on for silence. A "hello" or "haan" is under half a second; this
+ * much sustained speech is a person saying something, and the opener yields
+ * to it: playback is cut, the model starts hearing them, and is told why.
+ */
+const OPENER_BARGE_IN_MS = Number(env("VOICE_OPENER_BARGE_MS", 700));
 
 /** Vobiz's L16 is little-endian on the way out (proven on live calls); flip this if the way in turns out otherwise. */
 const SWAP_INPUT_BYTES = env("VOICE_LIVE_SWAP_IN", "0") === "1";
@@ -136,6 +144,7 @@ export class LiveCallSession {
     this.gateOpen = false;
     this.gateTimer = null;
     this.helloVad = new VoiceActivityDetector({ sampleRate: INPUT_SAMPLE_RATE, sustainedMs: OPEN_ON_HELLO_MS, speechRms: HELLO_RMS });
+    this.openerVad = new VoiceActivityDetector({ sampleRate: INPUT_SAMPLE_RATE, sustainedMs: OPENER_BARGE_IN_MS });
 
     this.ringTimer = setTimeout(() => {
       if (!this.ws) this._end("no_answer");
@@ -309,8 +318,12 @@ export class LiveCallSession {
           if (this.helloVad.push(pcm).sustainedSpeech) this._openGate("hello");
           return;
         }
-        // The opener is still playing: the caller is not heard until it ends.
-        if (!this.openerDone) return;
+        // The opener is still playing: a short "hello" over it is not heard,
+        // but sustained speech cuts it and hands the line to the caller.
+        if (!this.openerDone) {
+          if (this.openerVad.push(pcm).sustainedSpeech) this._openerInterrupted();
+          else return;
+        }
         this.live?.sendAudio(pcm);
         break;
       }
@@ -371,6 +384,20 @@ export class LiveCallSession {
     clearTimeout(this.openerTimer);
     console.log("live-call", this.attemptId.slice(0, 8), `opener finished (${why}) ${Date.now() - (this.attachedAt ?? this.createdAt)} ms after stream open; listening`);
     this._touchIdle();
+  }
+
+  /** The caller talked over the opener for real: stop it and listen. */
+  _openerInterrupted() {
+    if (this.openerDone || this.ended) return;
+    this.outQueue = [];
+    this.playheadAt = Date.now();
+    this._send({ event: "clearAudio", streamId: this.streamId });
+    this._openerFinished("caller spoke over it");
+    this.live?.sendText(
+      "[The caller started talking over your opening line, so it was cut short. Listen to what they are " +
+        "saying now and respond to that. Do not repeat the opening line.]",
+      { turnComplete: false }
+    );
   }
 
   /** The caller spoke, or the pause ran out: play the opener, start listening. */
