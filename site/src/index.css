@@ -189,6 +189,72 @@ button:focus-visible {
   .lineup-float { animation: none; }
 }
 
+/* phones: the alien-tech readout under his chin. Dark glass on the light
+   stage, Orbitron in molten gold, a blinking dot and a scan line. */
+.lineup-alien {
+  position: relative;
+  padding: 0.55rem 0.75rem 0.7rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(240, 163, 47, 0.35);
+  background: rgba(13, 9, 7, 0.82);
+  backdrop-filter: blur(12px);
+  text-align: center;
+  overflow: hidden;
+}
+.lineup-alien::after {
+  content: "";
+  position: absolute;
+  left: -40%;
+  bottom: 0;
+  width: 40%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #F0A32F, transparent);
+  animation: lineup-alien-scan 2.4s linear infinite;
+}
+@keyframes lineup-alien-scan {
+  to { transform: translateX(350%); }
+}
+.lineup-alien-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(240, 163, 47, 0.85);
+}
+.lineup-alien-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #F0A32F;
+  box-shadow: 0 0 8px rgba(240, 163, 47, 0.9);
+  animation: lineup-alien-blink 1.1s steps(2) infinite;
+}
+@keyframes lineup-alien-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.lineup-alien-word {
+  margin-top: 0.2rem;
+  font-family: "Orbitron", var(--font-display);
+  font-weight: 900;
+  font-size: clamp(0.9rem, 4.2vw, 1.15rem); /* DIGITAL CAMPAIGNS must fit one line */
+  line-height: 1.15;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #FFE7B0 0%, #F0A32F 48%, #E2571E 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 12px rgba(240, 163, 47, 0.45));
+}
+@media (prefers-reduced-motion: reduce) {
+  .lineup-alien::after, .lineup-alien-dot { animation: none; }
+}
+
 /* ---------- marquee ---------- */
 
 @keyframes marquee-x {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { HEADS } from '../data/heads.js'
 import { HeadIcon } from './icons.jsx'
@@ -45,10 +45,27 @@ const sayFor = (head) => RAVAN_MESSAGE[head.icon] ?? head.title
 
 const mod = (i, n) => ((i % n) + n) % n
 
+/* phones: the readout under his chin names the face on screen in the same
+ * beat as the flicker, with a couple of letters still "decoding" so it reads
+ * like alien tech rather than a caption */
+const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&<>/|=+*'
+const garble = (text) => {
+  const chars = [...text]
+  const slots = chars.map((c, j) => (c === ' ' || c === '&' ? -1 : j)).filter((j) => j >= 0)
+  const hits = Math.max(1, Math.round(slots.length * 0.22))
+  for (let h = 0; h < hits; h += 1) {
+    const j = slots[Math.floor(Math.random() * slots.length)]
+    chars[j] = GLYPHS[Math.floor(Math.random() * GLYPHS.length)]
+  }
+  return chars.join('')
+}
+
 function Lineup({ face, k, onAdvance }) {
   const n = STAGE.length
   const shown = mod(face, n) // the face on screen (fast clock)
   const head = STAGE[mod(k, n)] // the head the text is about (slow clock)
+  const onScreen = STAGE[shown]
+  const readout = useMemo(() => garble(onScreen.short), [shown, onScreen.short]) // one garble per face
 
   return (
     <div
@@ -129,19 +146,17 @@ function Lineup({ face, k, onAdvance }) {
         ))}
       </div>
 
-      {/* phones: one block along the foot of the panel, over his chest, so
-          it never covers his face: which head, and what it does */}
-      <div className="absolute bottom-2 left-1/2 z-10 w-[64%] -translate-x-1/2 md:hidden">
-        <div className="rounded-2xl border border-gold/30 bg-ground/75 px-3 py-2 backdrop-blur-md">
-          <div className="flex items-center gap-2">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-card text-gold">
-              <HeadIcon name={head.icon} className="h-2.5 w-2.5" />
-            </span>
-            <span className="min-w-0 flex-1 truncate font-display text-[0.62rem] font-extrabold uppercase leading-none tracking-[0.14em] text-gold">
-              {String(head.n).padStart(2, '0')} · {head.short}
-            </span>
-          </div>
-          <p className="mt-1.5 font-display text-[0.72rem] font-bold leading-snug">{sayFor(head)}</p>
+      {/* phones: the alien-tech readout along the foot of the panel, over his
+          chest, naming the face on screen in the same beat as the flicker */}
+      <div className="absolute bottom-2 left-1/2 z-10 w-[84vw] max-w-[360px] -translate-x-1/2 md:hidden">
+        <div className="lineup-alien">
+          <p className="lineup-alien-kicker" aria-hidden="true">
+            <span className="lineup-alien-dot" /> head {String(onScreen.n).padStart(2, '0')} // what we do
+          </p>
+          <p className="lineup-alien-word" aria-hidden="true">{readout}</p>
+          <p className="sr-only">
+            Ten heads: {STAGE.map((h) => h.short.toLowerCase()).join(', ')}.
+          </p>
         </div>
       </div>
     </div>
