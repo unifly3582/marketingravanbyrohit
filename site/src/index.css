@@ -240,7 +240,7 @@ button:focus-visible {
   margin-top: 0.2rem;
   font-family: "Orbitron", var(--font-display);
   font-weight: 900;
-  font-size: clamp(0.9rem, 4.2vw, 1.15rem); /* DIGITAL CAMPAIGNS must fit one line */
+  font-size: clamp(1rem, 5vw, 1.35rem); /* DIGITAL CAMPAIGNS, the longest, still fits one line */
   line-height: 1.15;
   letter-spacing: 0.03em;
   text-transform: uppercase;
