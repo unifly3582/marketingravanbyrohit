@@ -21,7 +21,7 @@ import { PERSONA, portraitFor } from '../lib/portraits.js'
 const STAGE_ORDER = HEADS.map((h) => h.icon)
 const STAGE = STAGE_ORDER.map((icon) => HEADS.find((h) => h.icon === icon)).filter(Boolean)
 
-const FACE_MS = 100 // the face flickers to the next head every FACE_MS (fast)
+const FACE_MS = 200 // the face flickers to the next head every FACE_MS (fast)
 const TEXT_MS = 3000 // the text moves to the next head every TEXT_MS (slow)
 
 /*
@@ -153,7 +153,7 @@ function Lineup({ face, k, onAdvance }) {
       <div className="absolute bottom-[calc(var(--section-overlap,0px)+0.5rem)] left-1/2 z-10 w-[84vw] max-w-[360px] -translate-x-1/2 md:hidden">
         <div className="lineup-alien">
           <p className="lineup-alien-kicker" aria-hidden="true">
-            <span className="lineup-alien-dot" /> head {String(onScreen.n).padStart(2, '0')} // what we do
+            head {String(onScreen.n).padStart(2, '0')} // what we do
           </p>
           <p className="lineup-alien-word" aria-hidden="true">{readout}</p>
           <p className="sr-only">
