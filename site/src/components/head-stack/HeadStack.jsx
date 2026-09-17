@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { HEADS } from '../../data/heads.js'
 import { openRavan } from '../../lib/ravan.js'
 import Statement from '../Statement.jsx'
+import StackHeading from './StackHeading.jsx'
 import CardStack, { INTRO_VH, STEP_VH, TAIL_VH } from './CardStack.jsx'
 import './head-stack.css'
 
@@ -41,6 +42,7 @@ export default function HeadStack() {
         <div ref={stmtRef} className="hs-statement">
           <Statement trigger={wrapRef} />
         </div>
+        <StackHeading wrapRef={wrapRef} />
         <CardStack heads={HEADS} wrapRef={wrapRef} onFront={onFront} onIntro={onIntro} />
         <div ref={hudRef} className="hs-hud" style={{ opacity: 0, pointerEvents: 'none' }}>
           <button type="button" className="hs-pill" onClick={openRavan}>

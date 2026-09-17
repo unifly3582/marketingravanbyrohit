@@ -1,0 +1,37 @@
+/* ---------- the pile's heading: three beats that ride the scroll ---------- */
+
+.hs-heading {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 44; /* under the statement (45), over the pile and backdrop */
+  padding: clamp(56px, 12svh, 100px) 1.25rem 0;
+  text-align: center;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(2rem, 8.5vw, 3.4rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--color-cream);
+}
+
+/* phones: one beat per line; wide screens: one line */
+.hs-heading-beat {
+  display: block;
+  opacity: 0;
+  will-change: transform, opacity, filter;
+}
+.hs-heading-beat.is-gold {
+  background: linear-gradient(90deg, var(--color-gold), var(--color-ember));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (min-width: 768px) {
+  .hs-heading { padding-top: 6rem; }
+  .hs-heading-beat {
+    display: inline-block;
+    margin: 0 0.18em;
+  }
+}
