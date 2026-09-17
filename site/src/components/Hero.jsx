@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { HEADS } from '../data/heads.js'
-import { HeadIcon, Arrow } from './icons.jsx'
+import { HeadIcon } from './icons.jsx'
 import ShaderGrain from './ShaderGrain.jsx'
 import { PERSONA, portraitFor } from '../lib/portraits.js'
-import { openRavan } from '../lib/ravan.js'
 
 /*
  * The hero: RAVAN IN THE MIDDLE, TEN FACES. A giant MARKETING RAVAN wordmark
@@ -326,23 +325,11 @@ export default function Hero() {
             Websites. Meta ads. Social media. WhatsApp and call agents. ERP.
             Ten expert heads, one monthly retainer.
           </motion.p>
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.24 }}
-            className="mt-4 flex w-full max-w-[760px] justify-between gap-3 md:mt-4"
-          >
-            <button type="button" onClick={openRavan} className="btn-primary">
-              Book a call <Arrow className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={openRavan} className="btn-ghost">
-              Talk to Ravan
-            </button>
-          </motion.div>
         </div>
 
-        {/* Ravan, in the middle, taking whatever height is left */}
-        <div className="hero-connected-mascot relative z-[5] mt-1 min-h-[280px] flex-1 md:mt-2">
+        {/* Ravan, in the middle, taking whatever height is left (the copy
+            block ends at the subline: no buttons, the header carries the CTA) */}
+        <div className="hero-connected-mascot relative z-[5] mt-1 min-h-[300px] flex-1 md:mt-2">
           <div className="absolute bottom-0 left-1/2 h-[115%] w-[min(100%,140vh)] max-w-[1100px] -translate-x-1/2 md:h-[125%] md:max-w-[1375px]">
             <Lineup face={reduced ? k : face} k={k} onAdvance={advance} />
           </div>
