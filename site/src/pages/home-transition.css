@@ -1,5 +1,10 @@
 /* One continuous light-to-dark scene, with a small shared transition zone. */
 .home-connected { --section-overlap: clamp(64px, 14svh, 120px); --bridge-ground: var(--color-ground); }
+/* phones: a shorter blend, so the hero's foot (the readout under his chin)
+   stays on the one-screen hero instead of fading into the statement */
+@media (max-width: 767px) {
+  .home-connected { --section-overlap: clamp(40px, 6svh, 56px); }
+}
 .hero-connected { position: relative; z-index: 1; }
 .hero-connected-panel {
   border-bottom: 0;

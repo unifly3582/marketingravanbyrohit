@@ -147,8 +147,10 @@ function Lineup({ face, k, onAdvance }) {
       </div>
 
       {/* phones: the alien-tech readout along the foot of the panel, over his
-          chest, naming the face on screen in the same beat as the flicker */}
-      <div className="absolute bottom-2 left-1/2 z-10 w-[84vw] max-w-[360px] -translate-x-1/2 md:hidden">
+          chest, naming the face on screen in the same beat as the flicker. It
+          sits just above the panel's bottom fade (--section-overlap) so the
+          blend into the next section never washes it out. */}
+      <div className="absolute bottom-[calc(var(--section-overlap,0px)+0.5rem)] left-1/2 z-10 w-[84vw] max-w-[360px] -translate-x-1/2 md:hidden">
         <div className="lineup-alien">
           <p className="lineup-alien-kicker" aria-hidden="true">
             <span className="lineup-alien-dot" /> head {String(onScreen.n).padStart(2, '0')} // what we do
@@ -233,8 +235,10 @@ export default function Hero() {
 
   return (
     <section ref={heroRef} id="top" className="hero-connected container-x pt-10 pb-0 max-md:!px-0 md:pt-24 md:pb-2">
-      {/* full-width hero panel */}
-      <div className="hero-connected-panel theme-light relative flex min-h-[660px] flex-col overflow-hidden rounded-3xl border border-line max-md:rounded-none max-md:border-x-0 md:min-h-[580px] lg:min-h-[min(78vh,780px)]">
+      {/* full-width hero panel. Phones: exactly one screen (the small
+          viewport, so browser chrome never hides the foot) minus the header
+          padding, so copy, head and readout all sit above the fold. */}
+      <div className="hero-connected-panel theme-light relative flex min-h-[660px] flex-col overflow-hidden rounded-3xl border border-line max-md:h-[calc(100svh-2.5rem)] max-md:min-h-0 max-md:rounded-none max-md:border-x-0 md:min-h-[580px] lg:min-h-[min(78vh,780px)]">
         {/* the grain field glides through a 30s window of shader time every
             16s: visible motion (the default 60-over-50 reads as a still
             image) without the scintillation a faster sweep causes */}
