@@ -12,6 +12,7 @@ import {
   setConversationSource, messagesSince,
 } from "./db.mjs";
 import { phone10, sendTemplate, sendText, ingest, listTemplates, sendHandoff, sendDemoIntro, HANDOFF_TEMPLATE } from "./wa.mjs";
+import { takePendingFollowup } from "./db.mjs";
 import { sessionsByRun } from "./voice/web-session.mjs";
 import { workflowList, workflow } from "./agent/graph.mjs";
 import { runWhatsAppAgent } from "./agent/whatsapp-agent.mjs";
@@ -239,6 +240,18 @@ app.post(WA_WEBHOOK_PATH, ...webhookBody, (req, res) => {
     console.log("wa webhook", out.kind, out.count ?? "");
     if (!AGENT_AUTOREPLY) return;
     for (const m of out.inbound) {
+      // Their reply just opened the 24-hour window. Anything parked for them
+      // (a summary promised on a call, sent as a template because the window
+      // was closed) goes out now as free text, before the agent answers.
+      try {
+        const parked = await takePendingFollowup(m.phone10);
+        if (parked) {
+          await sendText(m.phone10, parked, "followup");
+          console.log("wa parked follow-up delivered", m.phone10);
+        }
+      } catch (e) {
+        console.error("wa parked follow-up", m.phone10, e.message);
+      }
       // A person who took the thread over from the dashboard owns it until
       // they hand it back; the agent must not talk over them.
       const conv = await conversationByPhone(m.phone10).catch(() => null);

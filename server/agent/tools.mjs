@@ -283,8 +283,11 @@ export function buildToolSpecs({
                 delivered_as: r.text,
                 note:
                   r.mode === "template"
-                    ? "They have not messaged us on WhatsApp yet, so it went inside our approved " +
-                      "template and asks them to reply. Tell them to reply to it to continue there."
+                    ? "They have not messaged us on WhatsApp in the last 24 hours, so WhatsApp only " +
+                      "allowed a short template that says the details are ready. Your full message is " +
+                      "saved and will be sent automatically the moment they reply to that template — " +
+                      "even if they reply days later. Tell them: reply to the WhatsApp message and the " +
+                      "details will come right away."
                     : undefined,
                 reason,
               };

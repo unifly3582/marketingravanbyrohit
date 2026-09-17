@@ -71,6 +71,35 @@ export async function conversationId(phone10, contactName = null) {
   return created.id;
 }
 
+/**
+ * A message that could not go as free text (window closed) waits here until
+ * the customer replies to the template that announced it. Only the latest
+ * one is kept; a newer promise replaces an older, unsent one.
+ */
+export async function setPendingFollowup(phone10, text) {
+  unwrap(
+    await sb
+      .from("conversations")
+      .update({ pending_followup: text, pending_followup_at: new Date().toISOString() })
+      .eq("phone10", phone10),
+    "setPendingFollowup"
+  );
+}
+
+/** Take (and clear) the parked message for a number, or null. */
+export async function takePendingFollowup(phone10) {
+  const row = unwrap(
+    await sb.from("conversations").select("id, pending_followup").eq("phone10", phone10).maybeSingle(),
+    "takePendingFollowup"
+  );
+  if (!row?.pending_followup) return null;
+  unwrap(
+    await sb.from("conversations").update({ pending_followup: null, pending_followup_at: null }).eq("id", row.id),
+    "takePendingFollowup"
+  );
+  return row.pending_followup;
+}
+
 export async function windowOpen(phone10) {
   const row = unwrap(
     await sb.from("conversations").select("window_open_until").eq("phone10", phone10).maybeSingle(),

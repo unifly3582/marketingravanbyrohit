@@ -1,6 +1,6 @@
 // WhatsApp send/receive via the crm.marketingravan.com BSP panel (Meta-proxy).
 // Patterns ported from the battle-tested Buggly Farms OMS integration.
-import { insertMessage, touchConversation, updateMessageStatus, logRawEvent, windowOpen } from "./db.mjs";
+import { insertMessage, touchConversation, updateMessageStatus, logRawEvent, windowOpen, setPendingFollowup } from "./db.mjs";
 
 const env = (k) => process.env[k];
 const base = () => `${env("WA_API_URL")}/${env("WA_API_VERSION")}`;
@@ -196,8 +196,17 @@ export async function sendMessage(p10, text, { name = null, source = "agent" } =
     const r = await sendText(p10, text, source);
     return { ...r, mode: "text" };
   }
-  const r = await sendHandoff(p10, { name, summary: text, source });
-  return { ...r, mode: "template" };
+  // Window closed: the template can only carry a short line, so it announces
+  // the message and asks for a reply; the full text is parked and goes out as
+  // free text the moment their reply arrives — minutes or days later
+  // (see the inbound webhook in index.mjs).
+  await setPendingFollowup(p10, text);
+  const r = await sendHandoff(p10, {
+    name,
+    summary: "I have the details you asked for ready to send you here.",
+    source,
+  });
+  return { ...r, mode: "template", parked: true };
 }
 
 // ---------- inbound webhook parsing (ported from the OMS) ----------
