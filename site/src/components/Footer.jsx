@@ -10,7 +10,7 @@ export default function Footer() {
         <div className="container-x grid gap-10 py-16 md:grid-cols-[1.4fr_0.7fr]">
           <div>
             <div className="flex items-center gap-3">
-              <img src={logo} alt="" className="h-12 w-12 rounded-full object-cover object-top" />
+              <img src={logo} alt="" className="h-14 w-auto" />
               <span className="font-display text-sm font-bold tracking-wide">
                 MARKETING <span className="text-gold">RAVAN</span>
               </span>
@@ -20,7 +20,7 @@ export default function Footer() {
               next-generation digital marketing under one retainer.
             </p>
             <p className="mt-6 text-xs text-muted">
-              hello@marketingravan.com
+              info@marketingravan.com
             </p>
             <div className="mt-4 flex flex-wrap gap-4">
               {SOCIALS.map((s) => (

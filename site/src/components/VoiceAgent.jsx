@@ -40,8 +40,8 @@ function ProjectContactFallback({ onClose }) {
     <p className="eyebrow mb-5">A conversation starts here</p>
     <h2 id="project-contact-title" className="mb-4 text-3xl font-bold leading-tight">Tell us what you have in mind.</h2>
     <p className="mb-6 text-sm leading-relaxed text-muted">Ravan is unavailable right now. Email us your business, what you’d like to improve, and any timing you have in mind.</p>
-    <a href="mailto:hello@marketingravan.com?subject=Let%27s%20discuss%20my%20project" className="btn-primary">Email your project brief ↗</a>
-    <p className="mt-4 text-xs text-muted">hello@marketingravan.com</p>
+    <a href="mailto:info@marketingravan.com?subject=Let%27s%20discuss%20my%20project" className="btn-primary">Email your project brief ↗</a>
+    <p className="mt-4 text-xs text-muted">info@marketingravan.com</p>
   </dialog>
 }
 

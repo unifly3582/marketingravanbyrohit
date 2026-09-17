@@ -59,7 +59,7 @@ Deploy `dist/` to any static host (Vercel / Netlify / Cloudflare Pages).
 
 1. **Testimonials** — sample quotes, placeholder names.
 2. **Pricing** — tier structure final; amounts ($1,900 / $4,500 / Custom) are samples.
-3. **Contact email** `hello@marketingravan.com` and the WhatsApp link (`#` in
+3. **Contact email** `info@marketingravan.com` and the WhatsApp link (`#` in
    `Contact.jsx`) — set real ones.
 4. **Blog posts** — three draft cards; articles not written yet, links point to #contact.
 5. **Social links** in the footer are `#`.

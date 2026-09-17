@@ -52,7 +52,7 @@ export default function Nav() {
     >
       <nav className="container-x flex items-center justify-between py-1 md:py-3">
         <Link to="/" className="flex items-center gap-2 md:gap-3">
-          <img src={logo} alt="Marketing Ravan" className="h-7 w-7 rounded-full object-cover object-top md:h-11 md:w-11" />
+          <img src={logo} alt="Marketing Ravan" className="h-8 w-auto md:h-12" />
           <span className="font-display text-xs font-bold tracking-wide md:text-sm">
             MARKETING <span className="text-gold">RAVAN</span>
           </span>
