@@ -7,20 +7,42 @@ import { PERSONA, portraitFor } from '../lib/portraits.js'
 import { openRavan } from '../lib/ravan.js'
 
 /*
- * The hero: RAVAN IN THE MIDDLE. A giant MARKETING RAVAN wordmark runs along
- * the foot of the panel; one of the ten heads (a Pixar-style Ravan cut out of
- * his background, props matching the work he does) stands in front of it,
- * anchored to the bottom edge like a mascot leaning into frame. The copy above
- * says what we do, with the rotating "We run your <thing>" line. A small glass
- * label at his shoulder names the head on stage; every few seconds he drops
- * away and the next one rises. Tap or click him to advance.
+ * The hero: RAVAN IN THE MIDDLE, TEN FACES. A giant MARKETING RAVAN wordmark
+ * runs along the foot of the panel; a Pixar-style Ravan cut out of his
+ * background stands in front of it, anchored to the bottom edge like a
+ * mascot leaning into frame. He has ten heads and he shuffles them: the
+ * faces snap through in a flipbook burst (hard cuts, no fades) and land on
+ * the next head, which holds for a beat and says its line in the speech
+ * bubble at his shoulder. The copy above says what we do, with the rotating
+ * "We run your <thing>" line. Tap or click him to shuffle to the next head.
  */
 
-/* the order heads take the front of the deck: the site order from heads.js
- * (website, ads, calling, social, campaigns, then the other AI agents, search last). */
+/* the order heads take the stage: the site order from heads.js */
 const STAGE_ORDER = HEADS.map((h) => h.icon)
 const STAGE = STAGE_ORDER.map((icon) => HEADS.find((h) => h.icon === icon)).filter(Boolean)
-const DECK_MS = 4200 // a new head steps up every DECK_MS
+
+const FLIP_MS = 80 // one face per FLIP_MS during the shuffle, each a hard cut
+const HOLD_MS = 2600 // the landed head holds this long before the next shuffle
+const TYPE_MS = 18 // per character: the head's line types out once it lands
+
+/*
+ * THE TEN-HEAD RAVAN MESSAGE. One line per head, keyed by the heads.js icon.
+ * When a head lands it says its line in the bubble; edit the text here. A
+ * head without a line falls back to its title from heads.js.
+ */
+export const RAVAN_MESSAGE = {
+  uiux: 'Your website should win their trust in five seconds.',
+  ads: 'Your Meta ads should bring enquiries, not just likes.',
+  sdr: 'Your WhatsApp should answer in five seconds, day and night.',
+  voice: 'Your phone should never ring unanswered.',
+  social: 'Your social pages should post every day without you.',
+  campaign: 'Google, YouTube and email should work as one funnel.',
+  ecom: 'Your online store should sell while you sleep.',
+  erp: 'Your ERP should run the business, not just record it.',
+  agent: 'Your daily busywork should run itself.',
+  geo: 'When people search, and when AI answers, you should show up.',
+}
+const sayFor = (head) => RAVAN_MESSAGE[head.icon] ?? head.title
 
 /* the rotating word in the headline. Runs on its own clock, independent of
  * which head is on the deck, so the breadth reads quickly. Marketing first. */
@@ -38,18 +60,43 @@ const WORDS = [
 ]
 const WORD_MS = 2000
 
-/* the swap: the outgoing head sinks back into the panel edge while the next
- * one rises up through it */
-const ENTER = { y: 90, opacity: 0, scale: 0.94 }
-const STAND = { y: 0, opacity: 1, scale: 1 }
-const EXIT = { y: 70, opacity: 0, scale: 0.96 }
-const SPRING = { type: 'spring', stiffness: 150, damping: 20, mass: 0.9 }
-const LABEL_SPRING = { type: 'spring', stiffness: 220, damping: 24, delay: 0.12 }
+const mod = (i, n) => ((i % n) + n) % n
+const LABEL_SPRING = { type: 'spring', stiffness: 260, damping: 24 }
+const LABEL_EXIT = { opacity: 0, scale: 0.97, transition: { duration: 0.12 } }
 
-function Lineup({ k, onAdvance, reduced }) {
+/* types a line out character by character; screen readers get the whole line */
+function Typed({ text, instant }) {
+  const [n, setN] = useState(instant ? text.length : 0)
+  useEffect(() => {
+    if (instant) {
+      setN(text.length)
+      return
+    }
+    setN(0)
+    let i = 0
+    const id = setInterval(() => {
+      i += 1
+      setN(i)
+      if (i >= text.length) clearInterval(id)
+    }, TYPE_MS)
+    return () => clearInterval(id)
+  }, [text, instant])
+  return (
+    <>
+      <span className="sr-only">{text}</span>
+      <span aria-hidden="true">
+        {text.slice(0, n)}
+        {n < text.length && <span className="lineup-caret" />}
+      </span>
+    </>
+  )
+}
+
+function Lineup({ face, landed, onAdvance, reduced }) {
   const n = STAGE.length
-  const head = STAGE[k % n]
-  const swap = reduced ? { duration: 0.25 } : SPRING
+  const settled = landed !== null
+  const head = STAGE[mod(settled ? landed : face, n)]
+  const shown = mod(face, n)
 
   return (
     <div
@@ -67,84 +114,125 @@ function Lineup({ k, onAdvance, reduced }) {
     >
       <div className="lineup-glow" aria-hidden="true" />
 
-      {/* the head */}
+      {/* the ten faces, all in the DOM and decoded so a swap is a single
+          frame: only the one with data-on is visible, no transition */}
       <div className="lineup-float absolute inset-0">
-        <AnimatePresence initial={false}>
-          <motion.div
-            key={k}
-            className="lineup-head"
-            initial={reduced ? { opacity: 0 } : ENTER}
-            animate={STAND}
-            exit={reduced ? { opacity: 0 } : EXIT}
-            transition={swap}
-          >
+        <div className="lineup-head" data-shuffling={settled ? undefined : 'true'}>
+          {STAGE.map((h, i) => (
             <img
-              src={portraitFor(head.icon)}
-              alt={`${PERSONA[head.icon]} — ${head.title}`}
+              key={h.icon}
+              src={portraitFor(h.icon)}
+              alt={i === shown ? `${PERSONA[h.icon]} — ${h.title}` : ''}
+              data-on={i === shown || undefined}
               draggable="false"
+              decoding="sync" /* the swap must paint in the same frame: no blank while a bitmap re-decodes */
             />
-          </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* what this head says: a speech bubble at his left shoulder on wide
+          screens. It pops in when a head lands and is gone while he shuffles. */}
+      <div className="absolute left-[1%] top-[24%] z-10 hidden w-[30%] max-w-[320px] md:block">
+        <AnimatePresence initial={false}>
+          {settled && (
+            <motion.div
+              key={landed}
+              initial={{ opacity: 0, y: 10, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={LABEL_EXIT}
+              transition={reduced ? { duration: 0.2 } : LABEL_SPRING}
+              className="relative rounded-2xl border border-gold/30 bg-ground/70 p-4 shadow-[0_18px_50px_rgba(28,17,9,0.18)] backdrop-blur-md"
+            >
+              <span
+                aria-hidden="true"
+                className="absolute -right-2 top-[42%] h-4 w-4 rotate-45 border-r border-t border-gold/30 bg-ground/70"
+              />
+              <p className="font-display text-[0.62rem] font-extrabold uppercase tracking-[0.18em] text-gold">
+                Ravan says · head {String(head.n).padStart(2, '0')}
+              </p>
+              <p className="mt-2 font-display text-[1.05rem] font-bold leading-snug">
+                <Typed text={sayFor(head)} instant={reduced} />
+              </p>
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
-      {/* the label. Wide screens: a glass card beside his shoulder. Phones:
-          a slim one-line pill along the foot of the panel, over his chest,
-          so it never covers his face. */}
+      {/* the label: which head is up. Wide screens: a glass card beside his
+          right shoulder. */}
       <div className="absolute right-[1%] top-[30%] z-10 hidden w-[30%] max-w-[300px] md:block">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={k}
-            initial={{ opacity: 0, y: 14, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.98, transition: { duration: 0.18 } }}
-            transition={reduced ? { duration: 0.2 } : LABEL_SPRING}
-            className="rounded-2xl border border-gold/30 bg-ground/70 p-4 shadow-[0_18px_50px_rgba(28,17,9,0.18)] backdrop-blur-md"
-          >
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-card text-gold">
-                <HeadIcon name={head.icon} className="h-3.5 w-3.5" />
-              </span>
-              <span className="font-display text-[0.62rem] font-extrabold uppercase tracking-[0.18em] text-gold">
-                Head {String(head.n).padStart(2, '0')} · {PERSONA[head.icon]}
-              </span>
-            </div>
-            <p className="mt-2 font-display text-[0.95rem] font-bold leading-snug">{head.title}</p>
-            <p className="mt-0.5 text-[0.7rem] font-extrabold tracking-wide">
-              <span className="bg-gradient-to-r from-gold to-ember bg-clip-text text-transparent">
-                {head.metric}
-              </span>
-            </p>
-            {/* which head is up */}
-            <div className="mt-2.5 flex items-center gap-1" aria-hidden="true">
-              {STAGE.map((h) => (
-                <span
-                  key={h.n}
-                  className={`h-1 rounded-full transition-all duration-300 ${
-                    h.n === head.n ? 'w-4 bg-gradient-to-r from-gold to-ember' : 'w-1 bg-cream/25'
-                  }`}
-                />
-              ))}
-            </div>
-          </motion.div>
+        <AnimatePresence initial={false}>
+          {settled && (
+            <motion.div
+              key={landed}
+              initial={{ opacity: 0, y: 14, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={LABEL_EXIT}
+              transition={reduced ? { duration: 0.2 } : { ...LABEL_SPRING, delay: 0.08 }}
+              className="rounded-2xl border border-gold/30 bg-ground/70 p-4 shadow-[0_18px_50px_rgba(28,17,9,0.18)] backdrop-blur-md"
+            >
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-card text-gold">
+                  <HeadIcon name={head.icon} className="h-3.5 w-3.5" />
+                </span>
+                <span className="font-display text-[0.62rem] font-extrabold uppercase tracking-[0.18em] text-gold">
+                  Head {String(head.n).padStart(2, '0')} · {PERSONA[head.icon]}
+                </span>
+              </div>
+              <p className="mt-2 font-display text-[0.95rem] font-bold leading-snug">{head.title}</p>
+              <p className="mt-0.5 text-[0.7rem] font-extrabold tracking-wide">
+                <span className="bg-gradient-to-r from-gold to-ember bg-clip-text text-transparent">
+                  {head.metric}
+                </span>
+              </p>
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
-      <div className="absolute bottom-2 left-1/2 z-10 w-[56%] -translate-x-1/2 md:hidden">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={k}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6, transition: { duration: 0.15 } }}
-            transition={reduced ? { duration: 0.2 } : LABEL_SPRING}
-            className="flex items-center gap-2 rounded-full border border-gold/30 bg-ground/75 py-1.5 pl-1.5 pr-3 backdrop-blur-md"
-          >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-card text-gold">
-              <HeadIcon name={head.icon} className="h-3 w-3" />
-            </span>
-            <span className="min-w-0 flex-1 truncate font-display text-[0.58rem] font-extrabold uppercase leading-none tracking-[0.14em] text-gold">
-              {String(head.n).padStart(2, '0')} · {PERSONA[head.icon]}
-            </span>
-          </motion.div>
+
+      {/* the ten-head counter follows the face on screen, even mid-shuffle,
+          so the burst reads as ten heads going past */}
+      <div
+        className="absolute bottom-[3%] right-[3%] z-10 hidden items-center gap-1 md:flex"
+        aria-hidden="true"
+      >
+        {STAGE.map((h, i) => (
+          <span
+            key={h.n}
+            className={`h-1 rounded-full ${
+              i === shown ? 'w-4 bg-gradient-to-r from-gold to-ember' : 'w-1 bg-ground/30'
+            }`}
+          />
+        ))}
+      </div>
+
+      {/* phones: one block along the foot of the panel, over his chest, so
+          it never covers his face: who is up, and what he says */}
+      <div className="absolute bottom-2 left-1/2 z-10 w-[62%] -translate-x-1/2 md:hidden">
+        <AnimatePresence initial={false}>
+          {settled && (
+            <motion.div
+              key={landed}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6, transition: { duration: 0.12 } }}
+              transition={reduced ? { duration: 0.2 } : LABEL_SPRING}
+              className="rounded-2xl border border-gold/30 bg-ground/75 px-3 py-2 backdrop-blur-md"
+            >
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gold/50 bg-card text-gold">
+                  <HeadIcon name={head.icon} className="h-2.5 w-2.5" />
+                </span>
+                <span className="min-w-0 flex-1 truncate font-display text-[0.56rem] font-extrabold uppercase leading-none tracking-[0.14em] text-gold">
+                  {String(head.n).padStart(2, '0')} · {PERSONA[head.icon]}
+                </span>
+              </div>
+              <p className="mt-1.5 font-display text-[0.7rem] font-bold leading-snug">
+                <Typed text={sayFor(head)} instant={reduced} />
+              </p>
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
     </div>
@@ -155,8 +243,11 @@ export default function Hero() {
   const heroRef = useRef(null)
   const [reduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [word, setWord] = useState(0) // index into WORDS
-  const [k, setK] = useState(0) // absolute index of the head at the front
-  const [paused, setPaused] = useState(false)
+  const [k, setK] = useState(0) // absolute index of the head being shuffled to / on hold
+  const [face, setFace] = useState(0) // absolute index of the face on screen right now
+  const [landed, setLanded] = useState(null) // k once the shuffle ends, null mid-shuffle
+  const [ready, setReady] = useState(false) // every portrait decoded
+  const [paused, setPaused] = useState(() => document.hidden) // a tab opened in the background waits
 
   // Fade the light stage into the statement as the visitor leaves the hero.
   // Write to a wrapper so the portrait's own animation keeps its transforms.
@@ -191,13 +282,54 @@ export default function Hero() {
     return () => clearInterval(id)
   }, [reduced])
 
-  // the lineup auto-plays; a manual advance restarts the timer so the head
-  // the visitor asked for gets its full hold
+  // wait for all ten portraits so the first shuffle shows every face, not a
+  // run of blanks; give up after a moment on a slow network and start anyway
   useEffect(() => {
-    if (reduced || paused) return
-    const id = setInterval(() => setK((v) => v + 1), DECK_MS)
-    return () => clearInterval(id)
-  }, [reduced, paused, k])
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      setReady(true)
+    }
+    const imgs = STAGE.map((h) => {
+      const im = new Image()
+      im.src = portraitFor(h.icon)
+      return im
+    })
+    Promise.all(imgs.map((im) => im.decode().catch(() => {}))).then(finish)
+    const id = setTimeout(finish, 2500)
+    return () => clearTimeout(id)
+  }, [])
+
+  // the shuffle: every time k changes, snap through all ten faces (hard cuts,
+  // FLIP_MS each) ending on head k, hold for HOLD_MS, then move to k + 1. A
+  // manual advance restarts the run so the head the visitor asked for gets
+  // its full hold. Reduced motion: no burst, just a longer hold per head.
+  useEffect(() => {
+    if (!ready || paused) return
+    const n = STAGE.length
+    let t
+    if (reduced) {
+      setFace(k)
+      setLanded(k)
+      t = setTimeout(() => setK((v) => v + 1), HOLD_MS + 1400)
+      return () => clearTimeout(t)
+    }
+    setLanded(null)
+    let step = 0
+    const tick = () => {
+      step += 1
+      setFace(k - n + step) // step n lands on k, after every other face went past
+      if (step < n) {
+        t = setTimeout(tick, FLIP_MS)
+      } else {
+        setLanded(k)
+        t = setTimeout(() => setK((v) => v + 1), HOLD_MS)
+      }
+    }
+    t = setTimeout(tick, FLIP_MS)
+    return () => clearTimeout(t)
+  }, [k, ready, paused, reduced])
 
   // pause while the tab is hidden so heads do not pile up on return
   useEffect(() => {
@@ -312,7 +444,7 @@ export default function Hero() {
         {/* Ravan, in the middle, taking whatever height is left */}
         <div className="hero-connected-mascot relative z-[5] mt-1 min-h-[280px] flex-1 md:mt-2">
           <div className="absolute bottom-0 left-1/2 h-[115%] w-[min(100%,140vh)] max-w-[1100px] -translate-x-1/2 md:h-[125%] md:max-w-[1375px]">
-            <Lineup k={k} onAdvance={advance} reduced={reduced} />
+            <Lineup face={face} landed={landed} onAdvance={advance} reduced={reduced} />
           </div>
         </div>
       </div>

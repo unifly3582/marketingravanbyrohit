@@ -163,11 +163,34 @@ button:focus-visible {
   will-change: transform, opacity;
 }
 .lineup-head img {
+  /* all ten faces sit in the DOM, decoded; only one shows at a time and the
+     swap is a single frame: no transition, on purpose */
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
   object-position: 50% 100%;
   filter: drop-shadow(0 26px 40px rgba(28, 17, 9, 0.35));
+  opacity: 0;
+  pointer-events: none;
+}
+.lineup-head img[data-on] {
+  opacity: 1;
+}
+/* the typing caret in his speech bubble */
+@keyframes lineup-caret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.lineup-caret {
+  display: inline-block;
+  width: 2px;
+  height: 0.9em;
+  margin-left: 2px;
+  vertical-align: -0.1em;
+  background: currentColor;
+  animation: lineup-caret 0.8s steps(2) infinite;
 }
 @keyframes lineup-float {
   0%, 100% { transform: translateY(0); }
