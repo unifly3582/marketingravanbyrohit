@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { INTRO_VH, STEP_VH } from './CardStack.jsx'
+import { INTRO_VH, STEP_VH } from './stackBudget.js'
 import './stack-heading.css'
 
 /*
@@ -61,7 +61,7 @@ export default function StackHeading({ wrapRef }) {
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(paint)
     }
-    paint()
+    schedule() // through a frame: reading layout right here would force one mid-commit
     window.addEventListener('scroll', schedule, { passive: true })
     window.addEventListener('resize', schedule)
     return () => {

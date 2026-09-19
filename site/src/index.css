@@ -17,6 +17,76 @@
   --font-deva: "Yatra One", "Segoe UI", system-ui, sans-serif;
 }
 
+/* ---------- fonts: self-hosted (public/fonts), latin + latin-ext subsets ----------
+   Same files Google Fonts serves, minus the render-blocking stylesheet and
+   the two extra origins. The variable axes cover every weight the site uses. */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url(/fonts/BricolageGrotesque-normal-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url(/fonts/BricolageGrotesque-normal-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(/fonts/InstrumentSans-normal-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(/fonts/InstrumentSans-normal-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: italic;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(/fonts/InstrumentSans-italic-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: italic;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(/fonts/InstrumentSans-italic-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---------- older phone browsers ----------
+   Tailwind v4 writes its gradients as `linear-gradient(to right in oklab, …)`.
+   Browsers without colour-space interpolation (Chrome < 111, Safari < 16.2,
+   Samsung Internet < 22) drop the whole declaration, and text painted
+   through `bg-clip-text` then simply vanishes: the second headline line and
+   the MARKETING RAVAN wordmarks were missing on those phones. Hand them a
+   plain sRGB gradient instead. */
+@supports not (background-image: linear-gradient(in oklab, red, red)) {
+  .bg-gradient-to-t { --tw-gradient-position: to top; }
+  .bg-gradient-to-r { --tw-gradient-position: to right; }
+  .bg-gradient-to-b { --tw-gradient-position: to bottom; }
+  .bg-gradient-to-l { --tw-gradient-position: to left; }
+  .bg-gradient-to-br { --tw-gradient-position: to bottom right; }
+  .bg-gradient-to-bl { --tw-gradient-position: to bottom left; }
+  .bg-gradient-to-tr { --tw-gradient-position: to top right; }
+  .bg-gradient-to-tl { --tw-gradient-position: to top left; }
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -36,6 +106,10 @@ body {
 
 h1, h2, h3 {
   font-family: var(--font-display);
+}
+/* balance only the hero headline: on the other headings the extra layout
+   passes cost more than they look (the statement breaks its own lines) */
+h1 {
   text-wrap: balance;
 }
 
@@ -143,6 +217,19 @@ button:focus-visible {
   white-space: nowrap;
 }
 
+/* ---------- hero copy: rises in on load (CSS, so it cannot get stuck
+   invisible if a script fails on an old browser) ---------- */
+@keyframes hero-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+.hero-rise { animation: hero-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.hero-rise-2 { animation-delay: 0.08s; }
+.hero-rise-3 { animation-delay: 0.16s; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-rise { animation: none; }
+}
+
 /* ---------- hero lineup (cutout heads) ---------- */
 
 /* warm pool of light behind the presenting head, on the silver grain */
@@ -164,23 +251,27 @@ button:focus-visible {
 }
 .lineup-head img {
   /* all ten faces sit in the DOM, decoded; only one shows at a time and the
-     swap is a single frame: no transition, on purpose */
+     swap is a single frame: no transition, on purpose. The hidden nine are
+     visibility:hidden rather than opacity:0: a transparent image is still
+     painted and uploaded to the GPU (nine 720px textures before the first
+     frame), an invisible one is not. */
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
   object-position: 50% 100%;
-  filter: drop-shadow(0 26px 40px rgba(28, 17, 9, 0.35));
-  opacity: 0;
+  /* the soft shadow is baked into the portrait files (scripts/bake-portrait-shadows.py);
+     a CSS drop-shadow was re-blurred on every face swap, ten times a second */
+  visibility: hidden;
   pointer-events: none;
 }
 .lineup-head img[data-on] {
-  opacity: 1;
+  visibility: visible;
 }
 @keyframes lineup-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-7px); }
+  0%, 100% { transform: translateY(-7px); }
+  50% { transform: translateY(0); }
 }
 .lineup-float {
   animation: lineup-float 5.2s ease-in-out infinite;

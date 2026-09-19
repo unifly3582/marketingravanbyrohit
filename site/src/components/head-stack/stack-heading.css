@@ -9,7 +9,8 @@
   position: absolute;
   inset: 0 0 auto 0;
   z-index: 44; /* under the statement (45), over the pile and backdrop */
-  padding: clamp(56px, 12svh, 100px) 1.25rem 0;
+  padding: clamp(56px, 12vh, 100px) 1.25rem 0;
+  padding: clamp(56px, 12svh, 100px) 1.25rem 0; /* vh above is the fallback for browsers without svh */
   text-align: center;
   pointer-events: none;
   font-family: var(--font-display);

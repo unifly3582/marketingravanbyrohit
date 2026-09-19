@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Suspense, lazy, startTransition, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import StackCard from './StackCard.jsx'
 import StackBackdrop from './StackBackdrop.jsx'
 import StackDots from './StackDots.jsx'
@@ -51,10 +51,9 @@ const SKIN = {
   geo: 'is-poster tone-geo is-light',
 }
 
-/* scroll budget, in viewport heights. The owner sizes its wrapper with these. */
-export const INTRO_VH = 60 // statement lifts away, pile rises into place
-export const STEP_VH = 48 // scroll distance per card
-export const TAIL_VH = 40 // rest on the last card before the block scrolls away
+/* scroll budget, in viewport heights (stackBudget.js). The owner sizes its wrapper with these. */
+import { INTRO_VH, STEP_VH, TAIL_VH } from './stackBudget.js'
+export { INTRO_VH, STEP_VH, TAIL_VH }
 const PEEK_VH = 44 // where the pile waits during the intro (below centre)
 
 const easeInOut = (u) => -(Math.cos(Math.PI * u) - 1) / 2
@@ -82,33 +81,71 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
   const cardRefs = useRef([])
   const engineRef = useRef(null)
   const geom = useRef({ cw: 0, pitch: 0, vh: 800 })
+  const dirty = useRef(true) // layout changed: re-measure where the wrapper sits
   const [front, setFront] = useState(0)
+  // The live pieces (the two story cards and the two showcases) are the
+  // heaviest DOM on the page and sit below the fold, behind a scroll. They
+  // mount in a transition on the visitor's first scroll, touch or key (long
+  // before a card can be in view), so the first screen never waits on them.
+  const [withVisuals, setWithVisuals] = useState(false)
+  useEffect(() => {
+    let done = false
+    const go = () => {
+      if (done) return
+      done = true
+      startTransition(() => setWithVisuals(true))
+    }
+    const opts = { passive: true, once: true }
+    window.addEventListener('scroll', go, opts)
+    window.addEventListener('pointerdown', go, opts)
+    window.addEventListener('touchstart', go, opts)
+    window.addEventListener('keydown', go, opts)
+    const timer = setTimeout(go, 12000)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('scroll', go)
+      window.removeEventListener('pointerdown', go)
+      window.removeEventListener('touchstart', go)
+      window.removeEventListener('keydown', go)
+    }
+  }, [])
   const N = heads.length
 
+  // Geometry is computed from the viewport rather than read back from the
+  // DOM: this runs inside React's commit, and reading a size there forces a
+  // full page layout in the middle of the commit task. The stage is the
+  // viewport width on phones and 480px from md up (head-stack.css); the
+  // backdrop row is its line-height times its font-size.
   const measure = () => {
     const stage = stageRef.current
     if (!stage) return
-    const cw = Math.min(maxCardWidth, Math.round(stage.clientWidth * cardShare))
+    const vw = window.innerWidth
+    const wide = vw >= 768
+    const stageW = wide ? 480 : vw
+    const cw = Math.min(maxCardWidth, Math.round(stageW * cardShare))
     const ch = Math.round(cw / 1.32)
     const pitch = Math.round(ch * 1.09)
     const vh = window.innerHeight
     stage.style.setProperty('--hs-cw', `${cw}px`)
     stage.style.setProperty('--hs-ch', `${ch}px`)
+    // the visuals are drawn at a fixed stage size and scaled to the card's
+    // inner width (cw minus the 1px borders); one write here instead of a
+    // measuring layout effect in every visual
+    for (const w of [320, 408, 420]) stage.style.setProperty(`--hs-s${w}`, ((cw - 2) / w).toFixed(4))
     geom.current = { cw, pitch, vh }
-    const rowEl = bdRef.current?.firstElementChild
-    const row = rowEl ? rowEl.getBoundingClientRect().height : 80
+    dirty.current = true
+    const row = 0.86 * (wide ? 96 : Math.min(0.19 * vw, 128))
     if (bdRef.current) {
       const total = row * bdRef.current.childElementCount
-      bdRef.current.style.marginTop = `${-(total - stage.clientHeight) / 2}px`
+      bdRef.current.style.marginTop = `${-(total - vh) / 2}px`
     }
     engineRef.current?.setGeometry({ row })
   }
 
   useLayoutEffect(() => {
     measure()
-    const ro = new ResizeObserver(measure)
-    if (stageRef.current) ro.observe(stageRef.current)
-    return () => ro.disconnect()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardShare, maxCardWidth])
 
@@ -118,7 +155,7 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
 
     // ---- landing: ease the page to the nearest card once the scroll is quiet
     let touching = false
-    let lastY = window.scrollY
+    let lastY = -1 // read in the first frame, not here (that would force a layout mid-commit)
     let lastChange = performance.now()
     let landing = null // { from, to, t0, dur }
     const cancelLanding = () => {
@@ -144,9 +181,7 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
 
     const land = (now) => {
       const { vh } = geom.current
-      const wrap = wrapRef?.current
-      if (!wrap) return
-      const y = -wrap.getBoundingClientRect().top
+      const y = cachedY
       const introPx = (INTRO_VH / 100) * vh
       const stepPx = (STEP_VH / 100) * vh
       const lastPx = introPx + (N - 1) * stepPx
@@ -158,9 +193,21 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
       landing = { from: window.scrollY, to: window.scrollY + dy, t0: now, dur: Math.min(650, 260 + Math.abs(dy) * 0.7) }
     }
 
+    // Where the wrapper sits is read from layout only when the scroll
+    // position or the layout has changed. Reading it every frame forced a
+    // full page layout per frame (the frame before had just written ten
+    // transforms), which kept the main thread busy while nothing moved.
+    let cachedY = 0
+    const onResize = () => { dirty.current = true }
+    window.addEventListener('resize', onResize)
     const readScroll = () => {
       const now = performance.now()
       const sy = window.scrollY
+      if (sy !== lastY || dirty.current) {
+        const wrap = wrapRef?.current
+        cachedY = wrap ? Math.max(0, -wrap.getBoundingClientRect().top) : 0
+        dirty.current = false
+      }
       if (landing) {
         const u = Math.min(1, (now - landing.t0) / landing.dur)
         window.scrollTo({ top: landing.from + (landing.to - landing.from) * easeOutCubic(u), behavior: 'instant' })
@@ -176,8 +223,7 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
       }
 
       const { vh } = geom.current
-      const wrap = wrapRef?.current
-      const y = wrap ? Math.max(0, -wrap.getBoundingClientRect().top) : 0
+      const y = cachedY
       const introPx = (INTRO_VH / 100) * vh
       const stepPx = (STEP_VH / 100) * vh
       const intro = easeInOut(Math.min(1, y / introPx))
@@ -190,6 +236,7 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
       return Math.max(0, y - introPx) / stepPx
     }
 
+    let lastFrame = { p: -1, lean: 0, front: -1, dirty: true }
     const engine = createStackMotion({
       count: N,
       reduced,
@@ -199,6 +246,10 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
         onFront?.(f)
       },
       onFrame: (s) => {
+        // nothing moved since the last frame: write nothing (the loop idles
+        // at almost zero cost between scrolls)
+        if (Math.abs(s.p - lastFrame.p) < 1e-4 && Math.abs(s.lean - lastFrame.lean) < 1e-3 && s.front === lastFrame.front && !lastFrame.dirty) return
+        lastFrame = { p: s.p, lean: s.lean, front: s.front, dirty: false }
         const { cw, pitch } = geom.current
         cardRefs.current.forEach((el, i) => {
           if (!el) return
@@ -217,9 +268,23 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
     })
     engineRef.current = engine
     if (import.meta.env.DEV) window.__hsEngine = engine
-    engine.start()
+    // the loop runs only while the block is anywhere near the viewport
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          dirty.current = true
+          lastFrame.dirty = true
+          engine.start()
+        } else engine.stop()
+      },
+      { rootMargin: '25% 0px' },
+    )
+    if (wrapRef?.current) io.observe(wrapRef.current)
+    else engine.start()
     return () => {
+      io.disconnect()
       engine.stop()
+      window.removeEventListener('resize', onResize)
       window.removeEventListener('touchstart', onTouchStart)
       window.removeEventListener('touchend', onTouchEnd)
       window.removeEventListener('touchcancel', onTouchEnd)
@@ -242,7 +307,11 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
             light={!!LIGHT[i % LIGHT.length] && !SKIN[h.icon]}
             skin={SKIN[h.icon]}
             hidden={i !== front}
-            visual={VISUAL[h.icon] ? (() => { const V = VISUAL[h.icon]; return <V active={i === front} /> })() : null}
+            lite={Math.abs(i - front) > 3}
+            /* the live piece is built only for cards within two of the front
+               (the others keep their skin and an empty stage): the two story
+               cards and the showcases are the heaviest DOM on the page */
+            visual={VISUAL[h.icon] ? (withVisuals && Math.abs(i - front) <= 2 ? (() => { const V = VISUAL[h.icon]; return <V active={i === front} /> })() : <div />) : null}
           />
         ))}
       </div>

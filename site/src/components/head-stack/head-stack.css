@@ -5,12 +5,17 @@
 .hs-wrap {
   position: relative;
   background: var(--color-ground);
+  /* one viewport plus the scroll budget HeadStack sets in --hs-budget; the
+     vh line is the fallback for browsers without svh */
+  height: calc(100vh + var(--hs-budget, 0vh));
+  height: calc(100svh + var(--hs-budget, 0vh));
 }
 
 /* the pinned, viewport-high stage */
 .hs-section {
   position: sticky;
   top: 0;
+  height: 100vh; /* fallback for browsers without svh (Chrome < 108, Safari < 15.4) */
   height: 100svh;
   overflow: hidden;
   background: var(--color-ground);
@@ -104,7 +109,6 @@
   font-size: clamp(1.15rem, 5.4vw, 1.5rem);
   line-height: 1.08;
   letter-spacing: -0.02em;
-  text-wrap: balance;
 }
 .hs-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .hs-metric {
@@ -183,6 +187,7 @@
   display: inline-flex; align-items: center; gap: 0.4rem;
   padding: 0.65rem 0.95rem; border-radius: 999px;
   background: rgba(13, 9, 7, 0.75);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border: 1.5px solid var(--color-gold);
   color: var(--color-cream);
@@ -253,7 +258,7 @@
 .hs-wa-stage {
   position: absolute; left: 0; top: 0;
   width: 420px; height: 318px;
-  transform: scale(var(--s, 1));
+  transform: scale(var(--hs-s420, 1)); /* set by CardStack from the card width */
   transform-origin: 0 0;
 }
 /* the camera: pushes in on the backend while the agent thinks, on the phone
@@ -273,6 +278,7 @@
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 30px -16px rgba(0, 0, 0, 0.8);
+  -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   transition: border-color 0.45s ease, box-shadow 0.45s ease;
 }
@@ -493,6 +499,7 @@
   padding: 6px 8px;
   border-radius: 14px;
   background: rgba(38, 46, 52, 0.92);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transform: translateY(-64px) scale(0.96);

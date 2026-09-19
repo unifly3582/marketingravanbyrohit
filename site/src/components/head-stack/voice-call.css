@@ -28,7 +28,7 @@
 .vc-stage {
   position: absolute; left: 0; top: 0;
   width: 408px; height: 309px;
-  transform: scale(var(--s, 1));
+  transform: scale(var(--hs-s408, 1)); /* set by CardStack from the card width */
   transform-origin: 0 0;
 }
 .vc-glow {

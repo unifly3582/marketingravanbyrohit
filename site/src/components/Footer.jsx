@@ -1,4 +1,5 @@
-import logo from '../assets/logo-mark.png'
+import logo from '../assets/logo-mark.webp'
+import logo112 from '../assets/logo-mark-112.webp'
 
 const SOCIALS = ['X.COM', 'LINKEDIN', 'INSTAGRAM', 'YOUTUBE'] // TODO: real URLs
 
@@ -10,7 +11,7 @@ export default function Footer() {
         <div className="container-x grid gap-10 py-16 md:grid-cols-[1.4fr_0.7fr]">
           <div>
             <div className="flex items-center gap-3">
-              <img src={logo} alt="" className="h-14 w-auto" />
+              <img src={logo} srcSet={`${logo112} 99w, ${logo} 149w`} sizes="50px" alt="" width="149" height="168" loading="lazy" className="h-14 w-auto" />
               <span className="font-display text-sm font-bold tracking-wide">
                 MARKETING <span className="text-gold">RAVAN</span>
               </span>
@@ -51,7 +52,10 @@ export default function Footer() {
         <div className="border-t border-line">
           <div className="container-x flex flex-wrap items-center justify-between gap-3 py-6 text-xs text-muted">
             <span>© 2026 Marketing Ravan. All ten heads reserved.</span>
-            <span>Crafted by humans. Scaled by agents. 🔥</span>
+            <span>
+              Crafted by humans. Scaled by agents.
+              <svg aria-hidden="true" width="1em" height="1em" viewBox="0 0 24 24" fill="currentColor" className="ml-1 inline-block align-[-0.15em] text-ember"><path d="M12 22c-4.4 0-7.5-3-7.5-7.2 0-3.1 1.9-5.2 3.2-7.1.2 1.9 1 3.1 2.3 3.6-.3-3.3 1-6.6 3.8-8.8.3 4.3 5.7 6.2 5.7 12.3 0 4.2-3.1 7.2-7.5 7.2z" /></svg>
+            </span>
           </div>
         </div>
 

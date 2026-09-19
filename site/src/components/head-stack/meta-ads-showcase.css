@@ -15,7 +15,7 @@
 .ma-platform svg { width: 3cqw; height: 3cqw; }
 .ma-network i { font-style: normal; color: #7593c2; margin: 0 .6cqw; }
 .ma-network > small { margin-left: auto; color: #a4b9dd; font-size: 1.6cqw; letter-spacing: .03em; }
-.ma-feed { position: absolute; left: 0; right: 0; top: 29cqw; height: 34cqw; overflow: hidden; mask-image: linear-gradient(to right, transparent, #000 3%, #000 97%, transparent); }
+.ma-feed { position: absolute; left: 0; right: 0; top: 29cqw; height: 34cqw; overflow: hidden; -webkit-mask-image: linear-gradient(to right, transparent, #000 3%, #000 97%, transparent); mask-image: linear-gradient(to right, transparent, #000 3%, #000 97%, transparent); }
 .ma-track { display: flex; gap: 3cqw; width: max-content; padding-right: 3cqw; animation: ma-scroll 10.2s linear infinite; animation-play-state: paused; }
 .ma-ad { width: 27cqw; flex: none; border-radius: 1.4cqw; overflow: hidden; background: #fff; color: #182544; box-shadow: 0 1cqw 4cqw #0005; border: 1px solid #a0bbef; }
 .ma-ad-head { height: 4cqw; display: flex; align-items: center; gap: .8cqw; padding: .4cqw 1cqw; }

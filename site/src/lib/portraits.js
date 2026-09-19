@@ -6,7 +6,9 @@
  * reference in scripts/gen-agents.mjs); takes 1 and 2 of the original seven
  * are the earlier free-framed looks, still on disk if a swap is wanted.
  */
-const PORTRAITS = import.meta.glob('../assets/agents/*.webp', { eager: true, import: 'default' })
+/* The picked take of each head lives in public/agents under a stable name,
+   so index.html can preload the first face before any script runs (the
+   hashed names Vite gives imported assets cannot be preloaded from HTML). */
 
 export const PICK = {
   uiux: 'uiux-3',
@@ -35,4 +37,4 @@ export const PERSONA = {
   geo: 'The Sage',
 }
 
-export const portraitFor = (icon) => PORTRAITS[`../assets/agents/${PICK[icon] ?? icon + '-1'}.webp`]
+export const portraitFor = (icon) => `/agents/${PICK[icon] ?? icon + '-1'}.webp`

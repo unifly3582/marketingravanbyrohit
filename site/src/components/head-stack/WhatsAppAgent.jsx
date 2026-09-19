@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /*
  * The WhatsApp AI card's visual: a phone on the right receiving a customer's
@@ -202,16 +202,7 @@ export default function WhatsAppAgent({ active }) {
   const viewRef = useRef(null)
   const [st, setSt] = useState(reduced ? STILL : INIT)
 
-  // scale the fixed-size stage to the card
-  useLayoutEffect(() => {
-    const host = hostRef.current
-    if (!host) return
-    const fit = () => host.style.setProperty('--s', (host.clientWidth / BASE_W).toFixed(4))
-    fit()
-    const ro = new ResizeObserver(fit)
-    ro.observe(host)
-    return () => ro.disconnect()
-  }, [])
+  // the fixed-size stage is scaled to the card by --hs-s420, set once by CardStack
 
   // run the script while the card is in front; restart from the top when it comes back
   useEffect(() => {
@@ -228,8 +219,10 @@ export default function WhatsAppAgent({ active }) {
     return () => clearTimeout(timer)
   }, [active])
 
-  // keep the newest message at the foot of the chat, sliding older ones up
-  useLayoutEffect(() => {
+  // keep the newest message at the foot of the chat, sliding older ones up.
+  // After paint (the list eases into place over half a second anyway), so
+  // measuring it never forces a page layout inside React's commit.
+  useEffect(() => {
     const list = listRef.current
     const view = viewRef.current
     if (!list || !view) return

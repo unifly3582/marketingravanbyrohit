@@ -1,26 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import './poster.css'
 
 /*
  * Small animated illustrations for the cards that have no story of their
  * own (social, campaigns, ecommerce, ERP, automation, search). Each is drawn on a 320 x 242
- * stage and scaled to the card with `--s`, so it is crisp at any width.
+ * stage and scaled to the card with `--hs-s320` (set once by CardStack from
+ * the card width), so it is crisp at any width.
  * Every animation is CSS or SMIL; the card only plays while it is at the
  * front of the pile (`active`), other cards hold their first frame.
  */
 const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
-
-function useStageScale(ref) {
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const fit = () => el.style.setProperty('--s', (el.clientWidth / 320).toFixed(4))
-    fit()
-    const ro = new ResizeObserver(fit)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [ref])
-}
 
 /* ---- social: a grid of posts, each taking its turn to go live ---- */
 const POSTS = ['a', 'b', 'c', 'd', 'e', 'f']
@@ -140,7 +129,7 @@ const FIELDS = [
   ['Vendor', 'Sharma Traders'],
   ['GST 18%', '₹7,352'],
   ['Total', '₹48,200'],
-  ['Tally', 'posted ✓'],
+  ['Tally', 'posted'],
 ]
 function Erp() {
   return (
@@ -252,12 +241,10 @@ function Geo() {
 const ART = { social: Social, campaign: Campaign, ecom: Ecom, erp: Erp, agent: Agent, geo: Geo }
 
 export default function PosterArt({ kind, active }) {
-  const ref = useRef(null)
-  useStageScale(ref)
   const Art = ART[kind]
   const live = !!active && !reduced
   return (
-    <div ref={ref} className={`hs-art is-${kind}${live ? ' is-live' : ''}`} aria-hidden="true">
+    <div className={`hs-art is-${kind}${live ? ' is-live' : ''}`} aria-hidden="true">
       <div className="hs-art-stage">{Art ? <Art live={live} /> : null}</div>
     </div>
   )

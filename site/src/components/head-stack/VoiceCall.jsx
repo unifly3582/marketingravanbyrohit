@@ -127,16 +127,7 @@ export default function VoiceCall({ active }) {
   // frozen mid-story for reduced motion and for cards behind the front one
   const [t, setT] = useState(reduced ? 9.9 : 0);
 
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    const fit = () =>
-      host.style.setProperty("--s", (host.clientWidth / STAGE_W).toFixed(4));
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(host);
-    return () => ro.disconnect();
-  }, []);
+  // the stage is scaled to the card by --hs-s408, set once by CardStack
 
   useEffect(() => {
     if (!active || reduced) return;
@@ -212,7 +203,7 @@ export default function VoiceCall({ active }) {
               </span>
               <div className="vc-who">
                 <b>Priya Sharma</b>
-                <span>+91 98••• ••210 · Incoming</span>
+                <span>+91 98··· ··210 · Incoming</span>
               </div>
               <span className="vc-accept">
                 <Phone />

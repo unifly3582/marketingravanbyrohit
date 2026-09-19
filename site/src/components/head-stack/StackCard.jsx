@@ -8,9 +8,20 @@ import './service-heading.css'
  * plain presentational component. `head.hl`, when set, is the opening words
  * of the title the skin may colour as the accent line. `visual`, when given, fills the card and
  * the text rides on top of it; `skin` is an extra class for cards whose
- * visual sets the whole look (the Meta card's bright blue field).
+ * visual sets the whole look (the Meta card's bright blue field). `lite`
+ * cards are far from the front and out of sight: an empty shell of the
+ * right size, filled in once they come near.
  */
-const StackCard = forwardRef(function StackCard({ head, light, hidden, visual, skin }, ref) {
+const StackCard = forwardRef(function StackCard({ head, light, hidden, visual, skin, lite }, ref) {
+  if (lite) {
+    return (
+      <article
+        ref={ref}
+        className={`hs-card${light ? ' is-light' : ''}${visual ? ' has-visual' : ''}${skin ? ` ${skin}` : ''}`}
+        aria-hidden="true"
+      />
+    )
+  }
   return (
     <article
       ref={ref}

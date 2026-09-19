@@ -3,7 +3,8 @@ import { HEADS } from '../../data/heads.js'
 import { openRavan } from '../../lib/ravan.js'
 import Statement from '../Statement.jsx'
 import StackHeading from './StackHeading.jsx'
-import CardStack, { INTRO_VH, STEP_VH, TAIL_VH } from './CardStack.jsx'
+import CardStack from './CardStack.jsx'
+import { STACK_BUDGET } from './stackBudget.js'
 import './head-stack.css'
 
 /*
@@ -34,10 +35,8 @@ export default function HeadStack() {
     }
   }, [])
   const head = HEADS[front]
-  const height = `calc(100svh + ${INTRO_VH + STEP_VH * (HEADS.length - 1) + TAIL_VH}vh)`
-
   return (
-    <section id="heads" ref={wrapRef} className="hs-wrap" style={{ height }}>
+    <section id="heads" ref={wrapRef} className="hs-wrap" style={{ '--hs-budget': STACK_BUDGET }}>
       <div className="hs-section">
         <div ref={stmtRef} className="hs-statement">
           <Statement trigger={wrapRef} />
@@ -46,7 +45,7 @@ export default function HeadStack() {
         <CardStack heads={HEADS} wrapRef={wrapRef} onFront={onFront} onIntro={onIntro} />
         <div ref={hudRef} className="hs-hud" style={{ opacity: 0, pointerEvents: 'none' }}>
           <button type="button" className="hs-pill" onClick={openRavan}>
-            <span aria-hidden="true">↗</span> Ask about {head.short.toLowerCase()}
+<svg aria-hidden="true" width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: '-0.1em' }}><path d="M3 9 9 3M4 3h5v5" /></svg> Ask about {head.short.toLowerCase()}
           </button>
         </div>
       </div>

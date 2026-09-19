@@ -1,15 +1,28 @@
-/* One continuous light-to-dark scene, with a small shared transition zone. */
-.home-connected { --section-overlap: clamp(64px, 14svh, 120px); --bridge-ground: var(--color-ground); }
+/* One continuous light-to-dark scene, with a small shared transition zone.
+   Viewport units: vh first as the fallback, svh where the browser has it
+   (Chrome < 108 and Safari < 15.4 do not; a custom property holding an svh
+   value they cannot parse would make every rule using it fall apart). */
+.home-connected { --section-overlap: clamp(64px, 14vh, 120px); --bridge-ground: var(--color-ground); }
+@supports (height: 1svh) {
+  .home-connected { --section-overlap: clamp(64px, 14svh, 120px); }
+}
 /* phones: a shorter blend, so the hero's foot (the readout under his chin)
    stays on the one-screen hero instead of fading into the statement */
 @media (max-width: 767px) {
-  .home-connected { --section-overlap: clamp(40px, 6svh, 56px); }
+  .home-connected { --section-overlap: clamp(40px, 6vh, 56px); }
+  @supports (height: 1svh) {
+    .home-connected { --section-overlap: clamp(40px, 6svh, 56px); }
+  }
+  /* the hero panel is exactly one screen (the small viewport, so browser
+     chrome never hides the foot) minus the header padding */
+  .hero-connected-panel { height: calc(100vh - 2.5rem); height: calc(100svh - 2.5rem); }
 }
 .hero-connected { position: relative; z-index: 1; }
 .hero-connected-panel {
   border-bottom: 0;
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--section-overlap)), transparent 100%);
   mask-image: linear-gradient(to bottom, #000 calc(100% - var(--section-overlap)), transparent 100%);
 }
 .hero-connected-panel::after {
@@ -26,11 +39,18 @@
   margin-top: calc(-1 * var(--section-overlap));
   z-index: 2;
   background: transparent;
+  /* the block's height (one viewport plus the scroll budget in --hs-budget),
+     here as well as in head-stack.css: that file arrives with the stack's
+     chunk, and the placeholder Home.jsx shows meanwhile must already be this
+     tall so nothing below it moves when the stack lands */
+  position: relative;
+  height: calc(100vh + var(--hs-budget, 0vh));
+  height: calc(100svh + var(--hs-budget, 0vh));
 }
 .home-connected .hs-section {
   background: linear-gradient(to bottom, transparent, var(--color-ground) var(--section-overlap));
 }
-.home-connected .hs-statement { padding-top: clamp(56px, 12svh, 100px); }
+.home-connected .hs-statement { padding-top: clamp(56px, 12vh, 100px); padding-top: clamp(56px, 12svh, 100px); }
 @media (prefers-reduced-motion: reduce) {
   .hero-connected-mascot { transform: none; }
 }

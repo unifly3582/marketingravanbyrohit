@@ -1,6 +1,6 @@
 import { RAVAN_OPEN } from '../lib/ravan.js'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { usePage } from '../lib/page.js'
 import { AnimatePresence, motion } from 'motion/react'
 import { VoiceAgentClient, STATES, fetchVoiceConfig, originReachable } from '../lib/voiceAgent.js'
 import { Cross } from './icons.jsx'
@@ -61,13 +61,14 @@ const INTENTS = [
   { key: 'question', label: 'Ask a question', sub: 'Type below, in any language', tone: 'plain', glyph: 'ask', focus: true },
 ]
 
-export default function VoiceAgent() {
-  const navigate = useNavigate()
-  const { pathname } = useLocation()
+export default function VoiceAgent({ initialOpen = false }) {
+  const { pathname, navigate } = usePage()
 
   const [available, setAvailable] = useState(null) // null = still checking
   const [wsOrigin, setWsOrigin] = useState(null)
-  const [open, setOpen] = useState(false)
+  // `initialOpen`: the code is lazy-loaded (App.jsx), so a visitor may have
+  // asked for the panel before it arrived
+  const [open, setOpen] = useState(initialOpen)
   useEffect(() => {
     const on = () => setOpen(true)
     window.addEventListener(RAVAN_OPEN, on)

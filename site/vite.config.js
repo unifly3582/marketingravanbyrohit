@@ -26,6 +26,14 @@ const BUILD_ID = Date.now().toString(36)
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
+    // Vite's default target is "baseline widely available" (Chrome 107+,
+    // Safari 16+). Older phone browsers (Samsung Internet, in-app WebViews,
+    // iOS 15) then choke on unsupported syntax and unprefixed CSS and the
+    // whole page, not just its animations, stops working. Lower the floor:
+    // syntax is transpiled to ES2020 and Lightning CSS adds the -webkit-
+    // prefixes (backdrop-filter, mask-image) those browsers still need.
+    target: ['es2020', 'chrome87', 'safari14', 'firefox78', 'edge88'],
+    cssTarget: ['chrome87', 'safari14', 'firefox78', 'edge88'],
     rollupOptions: {
       output: {
         entryFileNames: `assets/[name]-${BUILD_ID}-[hash].js`,

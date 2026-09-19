@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'motion/react'
 import { HEADS } from '../data/heads.js'
 import { HeadIcon } from './icons.jsx'
 import ShaderGrain from './ShaderGrain.jsx'
@@ -46,40 +45,51 @@ const sayFor = (head) => RAVAN_MESSAGE[head.icon] ?? head.title
 const mod = (i, n) => ((i % n) + n) % n
 
 
-function Lineup({ face, k, onAdvance }) {
+function Lineup({ k, warm, headRef, wordRef, onAdvance }) {
   const n = STAGE.length
-  const shown = mod(face, n) // the face on screen (fast clock)
   const head = STAGE[mod(k, n)] // the head the text is about (slow clock)
-  const onScreen = STAGE[shown] // the phone readout names this one, same beat
+  // The face on screen is written straight to the DOM by Hero (showFace):
+  // data-on on the images and the readout's text. React renders them once,
+  // for the first face, and never touches those attributes again because
+  // their props never change between renders.
 
   return (
-    <div
-      className="relative h-full w-full cursor-pointer select-none"
-      onClick={onAdvance}
-      role="button"
-      tabIndex={0}
-      aria-label={`Head ${head.n}: ${head.title}. Show the next head`}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
+    <div className="relative h-full w-full cursor-pointer select-none" onClick={onAdvance}>
+      {/* keyboard and screen-reader users get a real button; pointer users
+          can tap anywhere on him */}
+      <button
+        type="button"
+        className="sr-only"
+        onClick={(e) => {
+          e.stopPropagation()
           onAdvance()
-        }
-      }}
-    >
+        }}
+      >
+        Head {head.n}: {head.title}. Show the next head
+      </button>
       <div className="lineup-glow" aria-hidden="true" />
 
       {/* the ten faces, all in the DOM and decoded so a swap is a single
-          frame: only the one with data-on is visible, no transition */}
+          frame: only the one with data-on is visible, no transition. The
+          first face is preloaded from index.html and fetched at high
+          priority; the other nine get their src only once it has painted
+          (`warm`), so they never compete with it for bandwidth. */}
       <div className="lineup-float absolute inset-0">
-        <div className="lineup-head">
+        <div className="lineup-head" ref={headRef}>
           {STAGE.map((h, i) => (
             <img
               key={h.icon}
-              src={portraitFor(h.icon)}
-              alt={i === shown ? `${PERSONA[h.icon]} — ${h.title}` : ''}
-              data-on={i === shown || undefined}
+              src={i === 0 || warm ? portraitFor(h.icon) : undefined}
+              width="720"
+              height="720"
+              alt={`${PERSONA[h.icon]} — ${h.title}`} /* hidden faces are visibility:hidden: out of the accessibility tree */
+              data-on={i === 0 ? '' : undefined}
               draggable="false"
-              decoding="sync" /* the swap must paint in the same frame: no blank while a bitmap re-decodes */
+              fetchPriority={i === 0 ? 'high' : undefined}
+              /* the first face paints in the first frame; the others decode
+                 off the frame's path, and are all decoded (Image.decode)
+                 before the flicker is allowed to show them */
+              decoding={i === 0 ? 'sync' : 'async'}
             />
           ))}
         </div>
@@ -137,7 +147,7 @@ function Lineup({ face, k, onAdvance }) {
           into the next section never washes it out. */}
       <div className="absolute bottom-[calc(var(--section-overlap,0px)+0.5rem)] left-1/2 z-10 w-[84vw] max-w-[360px] -translate-x-1/2 md:hidden">
         <div className="lineup-alien">
-          <p className="lineup-alien-word" aria-hidden="true">{onScreen.short}</p>
+          <p className="lineup-alien-word" aria-hidden="true" ref={wordRef}>{STAGE[0].short}</p>
           <p className="sr-only">
             Ten heads: {STAGE.map((h) => h.short.toLowerCase()).join(', ')}.
           </p>
@@ -151,8 +161,14 @@ export default function Hero() {
   const heroRef = useRef(null)
   const [reduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [k, setK] = useState(0) // absolute index of the head the text is about
-  const [face, setFace] = useState(0) // absolute index of the face on screen
+  const faceRef = useRef(0) // index of the face on screen (fast clock), kept off React
+  const headRef = useRef(null) // the .lineup-head element (the ten images)
+  const wordRef = useRef(null) // the phone readout
   const [paused, setPaused] = useState(() => document.hidden) // a tab opened in the background waits
+  const [painted, setPainted] = useState(false) // the first face has been presented
+  const [warm, setWarm] = useState(false) // ...and the browser had a quiet moment: the other nine may load
+  const [ready, setReady] = useState(false) // all ten faces decoded
+  const [hold, setHold] = useState(false) // the first face has been on screen a beat: the flicker may run
 
   // Fade the light stage into the statement as the visitor leaves the hero.
   // Write to a wrapper so the portrait's own animation keeps its transforms.
@@ -169,7 +185,7 @@ export default function Hero() {
       el.style.setProperty('--bridge-drift', `${media.matches ? 0 : progress * 65}px`)
     }
     const schedule = () => { if (!frame) frame = requestAnimationFrame(paint) }
-    paint()
+    schedule() // through a frame: reading layout right here would force one mid-commit
     window.addEventListener('scroll', schedule, { passive: true })
     window.addEventListener('resize', schedule)
     media.addEventListener('change', schedule)
@@ -181,22 +197,69 @@ export default function Hero() {
     }
   }, [])
 
-  // decode every portrait up front so no beat ever shows a blank face
+  // The first face first: two animation frames after mount it has been
+  // presented (the largest paint of the page, fetched from index.html's
+  // preload). Only then, in a quiet moment, do the other nine load, so
+  // nothing competes with that first frame; then all ten are decoded so no
+  // beat of the flicker ever shows a blank face.
   useEffect(() => {
-    STAGE.forEach((h) => {
-      const im = new Image()
-      im.src = portraitFor(h.icon)
-      im.decode().catch(() => {})
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => setPainted(true))
     })
+    return () => cancelAnimationFrame(raf)
   }, [])
+  useEffect(() => {
+    if (!painted) return
+    let gone = false
+    const go = () => !gone && setWarm(true)
+    const id = 'requestIdleCallback' in window ? requestIdleCallback(go, { timeout: 1500 }) : setTimeout(go, 300)
+    return () => {
+      gone = true
+      ;('cancelIdleCallback' in window ? cancelIdleCallback : clearTimeout)(id)
+    }
+  }, [painted])
+  useEffect(() => {
+    if (!warm) return
+    let gone = false
+    Promise.all(
+      STAGE.slice(1).map((h) => {
+        const im = new Image()
+        im.src = portraitFor(h.icon)
+        return im.decode().catch(() => {})
+      }),
+    ).then(() => !gone && setReady(true))
+    return () => { gone = true }
+  }, [warm])
+  // the first face holds the stage for a beat before the flicker takes over
+  useEffect(() => {
+    if (!painted) return
+    const timer = setTimeout(() => setHold(true), 1600)
+    return () => clearTimeout(timer)
+  }, [painted])
+
+  // put face i on screen: data-on on the images, the readout's word
+  const showFace = (i) => {
+    const host = headRef.current
+    if (!host) return
+    const imgs = host.children
+    for (let j = 0; j < imgs.length; j++) {
+      if (j === i) imgs[j].setAttribute('data-on', '')
+      else imgs[j].removeAttribute('data-on')
+    }
+    if (wordRef.current) wordRef.current.textContent = STAGE[i].short
+    faceRef.current = i
+  }
 
   // the faces never stop: a fast flicker through all ten. Reduced motion
   // drops the flicker and shows the face the text is about instead.
   useEffect(() => {
-    if (paused || reduced) return
-    const id = setInterval(() => setFace((v) => v + 1), FACE_MS)
+    if (paused || reduced || !ready || !hold) return
+    const id = setInterval(() => showFace(mod(faceRef.current + 1, STAGE.length)), FACE_MS)
     return () => clearInterval(id)
-  }, [paused, reduced])
+  }, [paused, reduced, ready, hold])
+  useEffect(() => {
+    if (reduced) showFace(mod(k, STAGE.length))
+  }, [reduced, k])
 
   // the text moves on its own slow clock. A manual advance restarts it so the
   // head the visitor asked for gets its full time.
@@ -220,7 +283,7 @@ export default function Hero() {
       {/* full-width hero panel. Phones: exactly one screen (the small
           viewport, so browser chrome never hides the foot) minus the header
           padding, so copy, head and readout all sit above the fold. */}
-      <div className="hero-connected-panel theme-light relative flex min-h-[660px] flex-col overflow-hidden rounded-3xl border border-line max-md:h-[calc(100svh-2.5rem)] max-md:min-h-0 max-md:rounded-none max-md:border-x-0 md:min-h-[580px] lg:min-h-[min(78vh,780px)]">
+      <div className="hero-connected-panel theme-light relative flex min-h-[660px] flex-col overflow-hidden rounded-3xl border border-line max-md:min-h-0 max-md:rounded-none max-md:border-x-0 md:min-h-[580px] lg:min-h-[min(78vh,780px)]">
         {/* the grain field glides through a 30s window of shader time every
             16s: visible motion (the default 60-over-50 reads as a still
             image) without the scintillation a faster sweep causes */}
@@ -258,32 +321,17 @@ export default function Hero() {
 
         {/* what we do */}
         <div className="relative z-10 flex flex-col items-center px-6 pt-4 text-center md:px-12 md:pt-9">
-          <motion.p
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="eyebrow !justify-center whitespace-nowrap !text-[0.56rem] !tracking-[0.14em] md:!text-[0.7rem] md:!tracking-[0.18em]"
-          >
+          <p className="hero-rise eyebrow !justify-center whitespace-nowrap !text-[0.56rem] !tracking-[0.14em] md:!text-[0.7rem] md:!tracking-[0.18em]">
             Your complete digital growth team
-          </motion.p>
-          <motion.h1
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.08 }}
-            className="mt-2 max-w-4xl text-[1.9rem] font-bold leading-[1.1] md:mt-4 md:text-[3.3rem] md:leading-[1.05]"
-          >
+          </p>
+          <h1 className="hero-rise hero-rise-2 mt-2 max-w-4xl text-[1.9rem] font-bold leading-[1.1] md:mt-4 md:text-[3.3rem] md:leading-[1.05]">
             We grow your business
             <br />
             <span className="bg-gradient-to-r from-gold to-ember bg-clip-text text-transparent">
               and let AI do the daily work.
             </span>
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.16 }}
-            className="mt-3 max-w-lg text-[0.82rem] leading-relaxed text-muted md:mt-4 md:max-w-none md:whitespace-nowrap md:text-[0.95rem]"
-          >
+          </h1>
+          <p className="hero-rise hero-rise-3 mt-3 max-w-lg text-[0.82rem] leading-relaxed text-muted md:mt-4 md:max-w-none md:whitespace-nowrap md:text-[0.95rem]">
             <span className="md:hidden">
               Five heads to get you seen. Five AI agents to run the work. One monthly retainer.
             </span>
@@ -293,7 +341,7 @@ export default function Hero() {
               <br />
               Ten heads, one monthly retainer.
             </span>
-          </motion.p>
+          </p>
         </div>
 
         {/* Ravan, in the middle, taking whatever height is left (the copy
@@ -303,7 +351,7 @@ export default function Hero() {
               so the head grows into all the room under the copy instead of
               being capped by the screen width; the panel clips the shoulders */}
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 max-md:aspect-square max-md:h-full max-md:w-auto md:h-[125%] md:w-[min(100%,140vh)] md:max-w-[1375px]">
-            <Lineup face={reduced ? k : face} k={k} onAdvance={advance} />
+            <Lineup k={k} warm={warm} headRef={headRef} wordRef={wordRef} onAdvance={advance} />
           </div>
         </div>
       </div>
