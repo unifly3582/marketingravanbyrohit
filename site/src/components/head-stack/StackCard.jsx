@@ -22,14 +22,32 @@ const StackCard = forwardRef(function StackCard({ head, light, hidden, visual, s
       />
     )
   }
+  /* a head with its own story page: the front card opens it. Any click that
+     is not on a control inside the visual (the showcases have their own
+     buttons) goes to the page; the pill in the masthead says so and gives
+     the keyboard a real link. */
+  const page = head.page && !hidden ? head.page : null
+  const open = page
+    ? (e) => {
+        if (e.target.closest('a, button, input, textarea')) return
+        window.location.assign(page)
+      }
+    : undefined
   return (
     <article
       ref={ref}
-      className={`hs-card${light ? ' is-light' : ''}${visual ? ' has-visual' : ''}${skin ? ` ${skin}` : ''}`}
+      className={`hs-card${light ? ' is-light' : ''}${visual ? ' has-visual' : ''}${skin ? ` ${skin}` : ''}${page ? ' has-page' : ''}`}
       aria-hidden={hidden || undefined}
+      onClick={open}
     >
       <div className="hs-service-heading">
         <span><svg viewBox="0 0 24 24" aria-hidden="true">{HeadIcons[head.icon]}</svg>{head.short}</span>
+        {page ? (
+          <a className="hs-open" href={page} aria-label={`Open the ${head.short.toLowerCase()} page`}>
+            Open
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </a>
+        ) : null}
         <b>{String(head.n).padStart(2, '0')}</b>
       </div>
       {visual ? <div className="hs-visual">{visual}</div> : null}
