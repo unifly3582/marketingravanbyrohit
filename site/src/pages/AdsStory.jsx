@@ -34,7 +34,7 @@ const SCENES = [
   { key: 'intent', top: [[s('And that’s')], [b('intentional.')]] },
   { key: 'dice', img: dice, top: [[s('Not every')], [b('business')]], bottom: [[s('wants the')], [b('same thing.')]] },
   { key: 'mega', img: megaphone, top: [[s('Some want'), m('quick')], [b('campaigns.')]] },
-  { key: 'viral', img: phone, tone: 'grey', top: [[s('Some want')], [m('viral')], [b('reels.')]] },
+  { key: 'viral', img: phone, tone: 'maroon', top: [[s('Some want')], [m('viral')], [b('reels.')]] },
   { key: 'wa', kind: 'chat', text: 'Some want ads to magically fix everything' },
   { key: 'circle', kind: 'circle', top: [[s('That’s not')], [b('the work')], [m('we do.')]] },
   { key: 'city', kind: 'cover', img: skyline, top: [[s('We work with')], [b('businesses')]] },

@@ -4,14 +4,18 @@
    it: words come in one after another, the object settles, the whole scene
    blurs away at the end. */
 
+/* the brand palette: cream stage, ground-dark beats, ember and maroon for
+   the accents (gold only ever sits on the dark beats, it fades on cream) */
 .theme-ads {
-  --as-paper: #F6F1E8;
-  --as-ink: #14100C;
-  --as-ink-2: #5E554A;
-  --as-grey: #C9C2B6;
+  --as-paper: #F4EADB;
+  --as-ink: #0D0907;
+  --as-ink-2: #6F6354;
+  --as-grey: #A3937F;
   --as-gold: #F0A32F;
+  --as-ember: #E2571E;
+  --as-maroon: #8E1F1F;
   --color-ground: var(--as-paper);
-  --color-surface: #EEE8DC;
+  --color-surface: #EDE6D8;
   background: var(--as-paper);
 }
 
@@ -51,10 +55,11 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
+  z-index: 4;
 }
 .as-grid line {
-  stroke: var(--as-ink);
-  stroke-opacity: 0.12;
+  stroke: var(--as-ember);
+  stroke-opacity: 0.22;
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
   stroke-dasharray: 5 7;
@@ -64,8 +69,8 @@
   width: clamp(150px, 28vmin, 300px);
   aspect-ratio: 1;
   pointer-events: none;
-  z-index: 1;
-  filter: drop-shadow(0 8px 10px rgba(20, 16, 12, 0.25));
+  z-index: 4;
+  filter: drop-shadow(0 8px 12px rgba(142, 31, 31, 0.35));
   /* the leaves drift a touch with the page */
   --drift: calc(var(--s, 0) * 40px);
 }
@@ -75,7 +80,7 @@
   overflow: visible;
 }
 .as-leaves path {
-  fill: var(--as-ink);
+  fill: var(--as-maroon);
 }
 .as-tl { top: 0; left: 0; transform: translate(calc(-42% - var(--drift) * 0.3), calc(-46% - var(--drift) * 0.5)) rotate(-8deg); }
 .as-tr { top: 0; right: 0; transform: translate(calc(42% + var(--drift) * 0.3), calc(-46% - var(--drift) * 0.5)) rotate(82deg); }
@@ -99,7 +104,7 @@
   color: var(--as-ink-2);
   pointer-events: none;
 }
-.as-head-t { color: var(--as-gold); }
+.as-head-t { color: var(--as-ember); }
 
 /* ---- a scene ---- */
 .as-scene {
@@ -121,7 +126,10 @@
 .as-scene.is-live {
   visibility: visible;
 }
-.as-scene[data-tone='grey'] { background: #BEB7AB; }
+/* the scene paints its own paper: its blur filter makes it a stacking
+   context, so the multiplied photos can only blend with what is inside it */
+.as-scene[data-tone='paper'] { background: var(--as-paper); }
+.as-scene[data-tone='maroon'] { background: var(--as-maroon); color: var(--as-paper); }
 .as-scene[data-tone='dark'] { background: var(--as-ink); color: var(--as-paper); }
 @media (min-width: 768px) {
   .as-scene { padding: 8rem 3rem 4rem; }
@@ -131,7 +139,7 @@
 .as-words {
   text-align: center;
   line-height: 0.98;
-  max-width: 22ch;
+  max-width: min(92vw, 40rem);
 }
 .as-line {
   display: flex;
@@ -164,11 +172,24 @@
   font-size: clamp(2.7rem, 8.4vw, 6rem);
   font-weight: 800;
   letter-spacing: -0.035em;
+  /* the big word carries the brand: ember into maroon on cream */
+  background: linear-gradient(120deg, var(--as-ember) 0%, var(--as-maroon) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding-bottom: 0.08em;
   /* the big word types itself in: a wipe, left to right */
   clip-path: inset(-0.2em calc((1 - var(--t)) * 101%) -0.25em -0.1em);
   transform: translateY(calc((1 - var(--t)) * 0.06em));
 }
-[data-tone='dark'] .as-s { color: var(--as-grey); }
+[data-tone='dark'] .as-s,
+[data-tone='maroon'] .as-s { color: var(--as-grey); }
+/* on the dark beats the big word goes gold into ember, like the wordmark */
+[data-tone='dark'] .as-b,
+[data-tone='maroon'] .as-b,
+.as-band .as-b { background-image: linear-gradient(120deg, var(--as-gold), var(--as-ember)); }
+[data-tone='maroon'] .as-s { color: rgba(244, 234, 219, 0.7); }
+[data-tone='maroon'] .as-m { color: var(--as-paper); }
 .as-bottom { margin-top: 1.2rem; }
 
 /* ---- the object ---- */
@@ -182,6 +203,21 @@
   margin-top: 0.5rem;
   --ent: clamp(0, (var(--p, 0) - 0.02) / 0.16, 1);
 }
+/* a warm pool of light behind every object */
+.as-obj-wrap::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(70vmin, 560px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(240, 163, 47, 0.28), rgba(226, 87, 30, 0.08) 60%, transparent 100%);
+  opacity: var(--ent);
+  pointer-events: none;
+}
+[data-tone='maroon'] .as-obj-wrap::before { background: radial-gradient(closest-side, rgba(240, 163, 47, 0.35), transparent 100%); }
 .as-obj {
   height: 100%;
   max-height: 54vh;
@@ -197,6 +233,55 @@
 /* the dice and the chess pieces overlap the type a little, like the reel */
 [data-key='dice'] .as-obj-wrap,
 [data-key='chess'] .as-obj-wrap { margin: -1.2rem 0; }
+
+/* wide screens: the copy sits left, the object right, both bigger */
+@media (min-width: 1024px) {
+  .as-k-object,
+  .as-k-search {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-rows: 1fr 1fr;
+    grid-template-areas: 'top obj' 'bottom obj';
+    column-gap: 4rem;
+    padding: 7rem 4vw 4rem;
+    max-width: 78rem;
+    margin-inline: auto;
+  }
+  .as-k-object .as-words,
+  .as-k-search .as-words {
+    grid-area: top;
+    align-self: end;
+    justify-self: end;
+    text-align: left;
+    max-width: 30rem;
+    padding-bottom: 0.5rem;
+  }
+  .as-k-object .as-bottom { justify-self: end; }
+  .as-k-object .as-words .as-line,
+  .as-k-search .as-words .as-line { justify-content: flex-start; }
+  .as-k-object .as-bottom {
+    grid-area: bottom;
+    align-self: start;
+    margin-top: 0;
+    padding-top: 0.5rem;
+  }
+  .as-k-object:not(:has(.as-bottom)) .as-words,
+  .as-k-search .as-words {
+    grid-row: 1 / -1;
+    align-self: center;
+  }
+  .as-k-object .as-obj-wrap,
+  .as-k-search .as-obj-wrap {
+    grid-area: obj;
+    margin: 0;
+    height: 100%;
+  }
+  .as-k-object .as-obj { max-height: 68vh; max-width: 100%; }
+  .as-crt { max-height: 68vh; }
+  .as-b { font-size: clamp(2.7rem, 6.4vw, 6.4rem); }
+  .as-m { font-size: clamp(1.9rem, 3.6vw, 3.4rem); }
+  .as-s { font-size: clamp(1.25rem, 2vw, 2rem); }
+}
 
 /* ---- full-bleed photo scenes ---- */
 .as-k-cover { justify-content: flex-start; }
@@ -215,6 +300,9 @@
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 42%, #000 100%);
   mask-image: linear-gradient(to bottom, transparent 0, #000 42%, #000 100%);
   user-select: none;
+}
+@media (max-width: 767px) {
+  [data-key='crowd'] .as-cover { top: 28%; height: 72%; }
 }
 [data-key='crowd'] .as-cover {
   object-position: 50% 85%;
@@ -304,7 +392,7 @@
 }
 .as-ring path {
   fill: none;
-  stroke: var(--as-gold);
+  stroke: var(--as-ember);
   stroke-width: 2.4;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
@@ -336,6 +424,7 @@
   padding: 0 4%;
   font-family: var(--font-body);
   color: var(--as-ink);
+  background: #fff;
   --ent: clamp(0, (var(--p, 0) - 0.16) / 0.1, 1);
   opacity: var(--ent);
 }
@@ -398,6 +487,7 @@
 .as-band .as-words { max-width: none; }
 .as-band .as-s { color: var(--as-grey); }
 .as-band .as-b { font-size: clamp(2.2rem, 7vw, 4.6rem); }
+.as-band-img { filter: sepia(0.4) saturate(1.4) hue-rotate(-20deg); }
 .as-band-top { text-align: right; }
 .as-band-bottom { text-align: left; }
 .as-band-top .as-line { justify-content: flex-end; }
@@ -459,6 +549,7 @@
   padding: clamp(4rem, 10vh, 7rem) 0;
 }
 .as-after-in { max-width: 48rem; }
+.as-after .eyebrow { color: var(--as-ember); }
 .as-after-h {
   font-family: var(--font-display);
   font-weight: 800;
@@ -497,4 +588,12 @@
 
 @media (prefers-reduced-motion: reduce) {
   .as-dots i, .as-caret { animation: none; }
+}
+
+/* phones: the band is shorter and its words smaller so both ends stay in frame */
+@media (max-width: 767px) {
+  .as-band { height: clamp(140px, 26vmin, 420px); gap: 0.8rem; }
+  .as-band .as-b { font-size: 1.6rem; }
+  .as-band .as-s { font-size: 0.95rem; }
+  .as-band-img { height: 80%; }
 }
