@@ -22,10 +22,12 @@ export default function HeadStack() {
   const [front, setFront] = useState(0)
   const onFront = useCallback((f) => setFront(f), [])
   const onIntro = useCallback((e) => {
-    // statement lifts, blurs and fades; the pill only exists once the pile is in place
+    // statement lifts, blurs and fades (gone by the time the heading's beats
+    // rise in, so the two never sit on each other); the pill only exists once
+    // the pile is in place
     if (stmtRef.current) {
       stmtRef.current.style.transform = `translateY(${-e * 28}vh)`
-      stmtRef.current.style.opacity = (1 - e).toFixed(3)
+      stmtRef.current.style.opacity = Math.max(0, 1 - e * 1.8).toFixed(3)
       stmtRef.current.style.filter = e > 0 ? `blur(${(e * 6).toFixed(1)}px)` : 'none'
       stmtRef.current.style.pointerEvents = e > 0.5 ? 'none' : ''
     }

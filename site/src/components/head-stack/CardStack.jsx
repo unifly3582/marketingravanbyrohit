@@ -55,6 +55,10 @@ const SKIN = {
 import { INTRO_VH, STEP_VH, TAIL_VH } from './stackBudget.js'
 export { INTRO_VH, STEP_VH, TAIL_VH }
 const PEEK_VH = 44 // where the pile waits during the intro (below centre)
+/* the fan (1024px up): cards sit on an arc around a pivot far below the
+   stage, FAN_DEG apart, with the pivot FAN_RADIUS card-widths down */
+const FAN_DEG = 12
+const FAN_RADIUS = 3
 
 const easeInOut = (u) => -(Math.cos(Math.PI * u) - 1) / 2
 
@@ -74,7 +78,7 @@ const easeInOut = (u) => -(Math.cos(Math.PI * u) - 1) / 2
  */
 const QUIET_MS = 140 // no scroll change for this long, finger up: land
 const easeOutCubic = (u) => 1 - (1 - u) ** 3
-export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWidth = 420, onFront, onIntro }) {
+export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWidth = 420, fanCardWidth = 440, onFront, onIntro }) {
   const stageRef = useRef(null)
   const pileRef = useRef(null)
   const bdRef = useRef(null)
@@ -120,21 +124,26 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
     const stage = stageRef.current
     if (!stage) return
     const vw = window.innerWidth
+    const vh = window.innerHeight
     const wide = vw >= 768
-    const stageW = wide ? 480 : vw
-    const cw = Math.min(maxCardWidth, Math.round(stageW * cardShare))
+    // 1024 up the cards fan across the full width (head-stack.css), sized
+    // from the height so the heading above and below the fan keeps its room
+    const fan = vw >= 1024
+    const stageW = fan ? vw : wide ? 480 : vw
+    const cw = fan
+      ? Math.min(fanCardWidth, Math.round(vh * 0.6), Math.round(vw * 0.3))
+      : Math.min(maxCardWidth, Math.round(stageW * cardShare))
     const ch = Math.round(cw / 1.32)
     const pitch = Math.round(ch * 1.09)
-    const vh = window.innerHeight
     stage.style.setProperty('--hs-cw', `${cw}px`)
     stage.style.setProperty('--hs-ch', `${ch}px`)
     // the visuals are drawn at a fixed stage size and scaled to the card's
     // inner width (cw minus the 1px borders); one write here instead of a
     // measuring layout effect in every visual
     for (const w of [320, 408, 420]) stage.style.setProperty(`--hs-s${w}`, ((cw - 2) / w).toFixed(4))
-    geom.current = { cw, pitch, vh }
+    geom.current = { cw, pitch, vh, fan }
     dirty.current = true
-    const row = 0.86 * (wide ? 96 : Math.min(0.19 * vw, 128))
+    const row = 0.86 * (fan ? Math.min(0.11 * vw, 160) : wide ? 96 : Math.min(0.19 * vw, 128))
     if (bdRef.current) {
       const total = row * bdRef.current.childElementCount
       bdRef.current.style.marginTop = `${-(total - vh) / 2}px`
@@ -147,7 +156,7 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardShare, maxCardWidth])
+  }, [cardShare, maxCardWidth, fanCardWidth])
 
   useEffect(() => {
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -250,17 +259,30 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
         // at almost zero cost between scrolls)
         if (Math.abs(s.p - lastFrame.p) < 1e-4 && Math.abs(s.lean - lastFrame.lean) < 1e-3 && s.front === lastFrame.front && !lastFrame.dirty) return
         lastFrame = { p: s.p, lean: s.lean, front: s.front, dirty: false }
-        const { cw, pitch } = geom.current
+        const { cw, pitch, fan } = geom.current
         cardRefs.current.forEach((el, i) => {
           if (!el) return
           const slot = i - s.p
-          if (Math.abs(slot) > 3.2) {
+          if (Math.abs(slot) > (fan ? 3.6 : 3.2)) {
             el.style.visibility = 'hidden'
             return
           }
           el.style.visibility = 'visible'
-          const look = lookAt(slot)
-          el.style.transform = `translate(${(look.x / 100) * cw}px, ${slot * pitch}px) rotate(${look.tilt + s.lean}deg)`
+          if (fan) {
+            // the fan: the cards to come wait on the left and cross to the
+            // right through the middle, which stands upright and on top; the
+            // further out a card sits the lower it hangs, the more it leans
+            // outward and the further back it steps
+            const a = (-slot * FAN_DEG * Math.PI) / 180
+            const R = FAN_RADIUS * cw
+            const x = R * Math.sin(a)
+            const y = R * (1 - Math.cos(a))
+            const scale = 1 - 0.045 * Math.min(3, Math.abs(slot))
+            el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${(-slot * FAN_DEG + s.lean).toFixed(2)}deg) scale(${scale.toFixed(3)})`
+          } else {
+            const look = lookAt(slot)
+            el.style.transform = `translate(${(look.x / 100) * cw}px, ${slot * pitch}px) rotate(${look.tilt + s.lean}deg)`
+          }
           el.style.zIndex = N - Math.abs(i - s.front)
         })
         if (bdRef.current) bdRef.current.style.transform = `translateY(${s.bgY}px)`

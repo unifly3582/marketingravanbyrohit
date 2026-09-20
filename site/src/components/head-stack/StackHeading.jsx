@@ -11,6 +11,10 @@ import './stack-heading.css'
  * runs on a clock: the visitor's thumb drives it, like the rest of the pile.
  * While the heading is up, the giant wordmark behind the pile dims (via
  * --hs-bd-fade on the section) so cream never sits on cream.
+ *
+ * On a wide screen (1024 up) the cards fan across the stage and the heading
+ * frames them, two beats above and one below, so it stays up for the whole
+ * block instead of leaving after the first card.
  */
 const BEATS = ['Ten heads.', 'Ten jobs.', 'One Ravan.']
 const LABEL = BEATS.join(' ')
@@ -40,10 +44,11 @@ export default function StackHeading({ wrapRef }) {
       const stepPx = (STEP_VH / 100) * vh
       const intro = y / introPx // 0..1 while the statement lifts and the pile rises
       const p = (y - introPx) / stepPx // 0 = first card settled, 1 = second card
+      const stays = window.innerWidth >= 1024 // the fan: the heading frames the cards throughout
       let up = 0 // how present the heading is, for the wordmark dimmer
       beats.forEach((b, i) => {
         const enter = smooth((intro - 0.55 - i * 0.12) / 0.3)
-        const leave = smooth((p - 0.2 - i * 0.1) / 0.45)
+        const leave = stays ? 0 : smooth((p - 0.2 - i * 0.1) / 0.45)
         const o = enter * (1 - leave)
         up = Math.max(up, o)
         if (reduced) {

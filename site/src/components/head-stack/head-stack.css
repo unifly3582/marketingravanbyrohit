@@ -214,6 +214,23 @@
   .hs-hud { left: 50%; transform: translateX(-240px); }
 }
 
+/* 1024 up: the cards fan across the whole stage (CardStack lays them on an
+   arc and sizes them); the heading frames them (stack-heading.css) */
+@media (min-width: 1024px) {
+  .hs-stage { left: 0; width: 100%; transform: none; }
+  .hs-backdrop-col { font-size: min(11vw, 160px); }
+  /* the pill moves to the top left corner, clear of the gold beat at the foot */
+  .hs-hud { left: max(1.5rem, calc((100% - 76rem) / 2 + 1.5rem)); top: 5.5rem; bottom: auto; transform: none; }
+  /* the statement sits in the middle of the room above the peeking fan */
+  .hs-section .hs-statement { padding-top: clamp(7rem, 19vh, 13rem); }
+  .hs-dots { right: 1.4rem; }
+  /* the cards are larger here: the titles keep pace */
+  .hs-card h3 { font-size: 1.7rem; }
+  .hs-card.has-visual h3 { font-size: 1.25rem; bottom: 2.6rem; }
+  .hs-card.has-visual .hs-foot { bottom: 0.9rem; }
+  .hs-card.is-wa h3 { font-size: 1.9rem; bottom: 3rem; }
+}
+
 /* ---------- WhatsApp AI card: deep green, a phone and the agent's backend ---------- */
 .hs-card.is-wa {
   background: radial-gradient(120% 90% at 12% 18%, #14382a 0%, #0c1c15 52%, #07110d 100%);

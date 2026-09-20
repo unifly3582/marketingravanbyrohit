@@ -12,3 +12,4 @@ __pycache__/
 meshy-sources/
 server/data.sqlite*
 server/*.log
+scripts/*-key.txt

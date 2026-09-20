@@ -1,0 +1,500 @@
+/* ---------- the Meta Ads story page ----------
+   One sticky stage, one scene per screen of scroll. Every scene carries a
+   progress number --p (0 → 1) and the reveals below are pure arithmetic on
+   it: words come in one after another, the object settles, the whole scene
+   blurs away at the end. */
+
+.theme-ads {
+  --as-paper: #F6F1E8;
+  --as-ink: #14100C;
+  --as-ink-2: #5E554A;
+  --as-grey: #C9C2B6;
+  --as-gold: #F0A32F;
+  --color-ground: var(--as-paper);
+  --color-surface: #EEE8DC;
+  background: var(--as-paper);
+}
+
+.as-wrap {
+  position: relative;
+  height: calc(var(--n) * 100vh);
+  height: calc(var(--n) * 100svh);
+}
+.as-stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  background: var(--as-paper);
+  color: var(--as-ink);
+  font-family: var(--font-display);
+}
+.as-wrap.is-static {
+  height: auto;
+}
+.as-wrap.is-static .as-stage {
+  position: relative;
+  height: auto;
+  overflow: visible;
+}
+.as-wrap.is-static .as-scene {
+  position: relative;
+  min-height: 100vh;
+  visibility: visible;
+}
+
+/* ---- furniture: the faint dashed grid and the leaves in the corners ---- */
+.as-grid {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.as-grid line {
+  stroke: var(--as-ink);
+  stroke-opacity: 0.12;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 5 7;
+}
+.as-corner {
+  position: absolute;
+  width: clamp(150px, 28vmin, 300px);
+  aspect-ratio: 1;
+  pointer-events: none;
+  z-index: 1;
+  filter: drop-shadow(0 8px 10px rgba(20, 16, 12, 0.25));
+  /* the leaves drift a touch with the page */
+  --drift: calc(var(--s, 0) * 40px);
+}
+.as-leaves {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.as-leaves path {
+  fill: var(--as-ink);
+}
+.as-tl { top: 0; left: 0; transform: translate(calc(-42% - var(--drift) * 0.3), calc(-46% - var(--drift) * 0.5)) rotate(-8deg); }
+.as-tr { top: 0; right: 0; transform: translate(calc(42% + var(--drift) * 0.3), calc(-46% - var(--drift) * 0.5)) rotate(82deg); }
+.as-bl { bottom: 0; left: 0; transform: translate(calc(-42% - var(--drift) * 0.2), calc(46% + var(--drift) * 0.3)) rotate(-98deg); }
+.as-br { bottom: 0; right: 0; transform: translate(calc(42% + var(--drift) * 0.2), calc(46% + var(--drift) * 0.3)) rotate(172deg); }
+
+.as-head {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 4.6rem);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 0.7rem;
+  align-items: baseline;
+  z-index: 3;
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--as-ink-2);
+  pointer-events: none;
+}
+.as-head-t { color: var(--as-gold); }
+
+/* ---- a scene ---- */
+.as-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8.5rem 1.25rem 3.5rem;
+  visibility: hidden;
+  /* the blur cut at the end of every scene */
+  --out: clamp(0, (var(--p, 0) - 0.84) / 0.12, 1);
+  filter: blur(calc(var(--out) * 18px));
+  opacity: calc(1 - var(--out));
+  will-change: filter, opacity;
+}
+.as-scene.is-live {
+  visibility: visible;
+}
+.as-scene[data-tone='grey'] { background: #BEB7AB; }
+.as-scene[data-tone='dark'] { background: var(--as-ink); color: var(--as-paper); }
+@media (min-width: 768px) {
+  .as-scene { padding: 8rem 3rem 4rem; }
+}
+
+/* ---- words ---- */
+.as-words {
+  text-align: center;
+  line-height: 0.98;
+  max-width: 22ch;
+}
+.as-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 0 0.28em;
+}
+.as-w {
+  display: inline-block;
+  --t: clamp(0, (var(--p, 0) - var(--in)) / 0.1, 1);
+}
+.as-s {
+  font-size: clamp(1.25rem, 3.4vw, 2.2rem);
+  font-weight: 500;
+  color: var(--as-ink-2);
+  opacity: var(--t);
+  filter: blur(calc((1 - var(--t)) * 6px));
+  transform: translateY(calc((1 - var(--t)) * 0.35em));
+}
+.as-m {
+  font-size: clamp(1.9rem, 5.2vw, 3.6rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  opacity: var(--t);
+  filter: blur(calc((1 - var(--t)) * 6px));
+  transform: translateY(calc((1 - var(--t)) * 0.2em));
+}
+.as-b {
+  font-size: clamp(2.7rem, 8.4vw, 6rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  /* the big word types itself in: a wipe, left to right */
+  clip-path: inset(-0.2em calc((1 - var(--t)) * 101%) -0.25em -0.1em);
+  transform: translateY(calc((1 - var(--t)) * 0.06em));
+}
+[data-tone='dark'] .as-s { color: var(--as-grey); }
+.as-bottom { margin-top: 1.2rem; }
+
+/* ---- the object ---- */
+.as-obj-wrap {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  margin-top: 0.5rem;
+  --ent: clamp(0, (var(--p, 0) - 0.02) / 0.16, 1);
+}
+.as-obj {
+  height: 100%;
+  max-height: 54vh;
+  width: auto;
+  max-width: min(92vw, 640px);
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  filter: blur(calc((1 - var(--ent)) * 14px));
+  opacity: var(--ent);
+  transform: translateY(calc((0.5 - var(--p, 0)) * 7vh)) scale(calc(1.06 - var(--ent) * 0.06));
+  user-select: none;
+}
+/* the dice and the chess pieces overlap the type a little, like the reel */
+[data-key='dice'] .as-obj-wrap,
+[data-key='chess'] .as-obj-wrap { margin: -1.2rem 0; }
+
+/* ---- full-bleed photo scenes ---- */
+.as-k-cover { justify-content: flex-start; }
+.as-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  mix-blend-mode: multiply;
+  --ent: clamp(0, var(--p, 0) / 0.2, 1);
+  opacity: calc(var(--ent) * 0.92);
+  filter: blur(calc((1 - var(--ent)) * 10px));
+  transform: scale(calc(1.08 - var(--p, 0) * 0.06));
+  transform-origin: 50% 60%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 42%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 42%, #000 100%);
+  user-select: none;
+}
+[data-key='crowd'] .as-cover {
+  object-position: 50% 85%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 60%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 60%, #000 100%);
+}
+[data-key='city'] .as-cover { object-position: 50% 100%; }
+[data-key='walk'] .as-cover {
+  opacity: calc(var(--ent) * 0.85);
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.as-k-cover .as-words { position: relative; margin-top: 4vh; }
+[data-key='walk'] .as-words { margin-top: 24vh; }
+
+/* ---- the chat bubble ---- */
+.as-chat {
+  position: relative;
+  width: min(92vw, 560px);
+  --ent: clamp(0, (var(--p, 0) - 0.02) / 0.12, 1);
+  opacity: var(--ent);
+  transform: translateY(calc((1 - var(--ent)) * 24px)) scale(calc(0.96 + var(--ent) * 0.04));
+  font-family: var(--font-body);
+}
+.as-bubble {
+  position: relative;
+  background: #fff;
+  color: var(--as-ink);
+  border-radius: 1rem;
+  border-top-left-radius: 0.25rem;
+  padding: 0.95rem 3.6rem 0.95rem 1.1rem;
+  font-size: clamp(1.05rem, 2.6vw, 1.45rem);
+  line-height: 1.35;
+  box-shadow: 0 18px 40px rgba(20, 16, 12, 0.14), 0 2px 4px rgba(20, 16, 12, 0.08);
+  min-height: 3.4em;
+}
+.as-time {
+  position: absolute;
+  right: 0.8rem;
+  bottom: 0.55rem;
+  font-size: 0.68rem;
+  color: var(--as-ink-2);
+}
+.as-tail {
+  position: absolute;
+  left: -0.55rem;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-top: 0.75rem solid #fff;
+  border-left: 0.6rem solid transparent;
+}
+.as-typed { white-space: pre-wrap; }
+.as-ch {
+  opacity: clamp(0, (var(--p, 0) - var(--in)) / 0.012, 1);
+}
+.as-dots {
+  display: inline-flex;
+  gap: 5px;
+  margin: 1rem 0 0 0.3rem;
+  --typing: clamp(0, (0.66 - var(--p, 0)) / 0.06, 1);
+  opacity: var(--typing);
+}
+.as-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--as-ink-2);
+  animation: as-dot 1.1s ease-in-out infinite;
+}
+.as-dots i:nth-child(2) { animation-delay: 0.18s; }
+.as-dots i:nth-child(3) { animation-delay: 0.36s; }
+@keyframes as-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ---- the hand-drawn ring ---- */
+.as-circle-wrap { position: relative; padding: 1.5rem 2.5rem; }
+.as-ring {
+  position: absolute;
+  inset: -6% -8%;
+  width: 116%;
+  height: 112%;
+  overflow: visible;
+  pointer-events: none;
+}
+.as-ring path {
+  fill: none;
+  stroke: var(--as-gold);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - clamp(0, (var(--p, 0) - 0.34) / 0.3, 1));
+}
+
+/* ---- the old computer and its search ---- */
+.as-crt {
+  position: relative;
+  height: 100%;
+  max-height: 58vh;
+  aspect-ratio: 1;
+  max-width: 92vw;
+}
+.as-crt .as-obj { position: absolute; inset: 0; height: 100%; width: 100%; max-height: none; max-width: none; }
+/* the screen is a measured white rectangle of the picture */
+.as-screen {
+  position: absolute;
+  left: 33.2%;
+  top: 23.2%;
+  width: 33.7%;
+  height: 18.4%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6%;
+  padding: 0 4%;
+  font-family: var(--font-body);
+  color: var(--as-ink);
+  --ent: clamp(0, (var(--p, 0) - 0.16) / 0.1, 1);
+  opacity: var(--ent);
+}
+.as-search-logo {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(0.7rem, 1.9vmin, 1.1rem);
+  letter-spacing: 0.02em;
+  color: var(--as-ink-2);
+}
+.as-search-bar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  border: 1px solid #9d968a;
+  border-radius: 999px;
+  padding: 0.28em 0.7em;
+  font-size: clamp(0.5rem, 1.5vmin, 0.85rem);
+  background: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.as-caret {
+  width: 1px;
+  height: 1.1em;
+  background: var(--as-ink);
+  margin-left: 1px;
+  animation: as-caret 1s steps(2) infinite;
+}
+@keyframes as-caret { to { opacity: 0; } }
+
+/* ---- the diagonal band ---- */
+.as-k-band { padding: 0; }
+.as-band {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 190vmax;
+  height: clamp(200px, 38vmin, 420px);
+  background: var(--as-ink);
+  color: var(--as-paper);
+  --ent: clamp(0, (var(--p, 0) - 0.02) / 0.16, 1);
+  transform: translate(-50%, -50%) rotate(-32deg) translateX(calc((1 - var(--ent)) * -30vmax));
+  opacity: var(--ent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1rem, 6vmin, 5rem);
+  overflow: hidden;
+  box-shadow: 0 30px 60px rgba(20, 16, 12, 0.25);
+}
+.as-band-img {
+  height: 100%;
+  width: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+  flex: none;
+  user-select: none;
+}
+.as-band .as-words { max-width: none; }
+.as-band .as-s { color: var(--as-grey); }
+.as-band .as-b { font-size: clamp(2.2rem, 7vw, 4.6rem); }
+.as-band-top { text-align: right; }
+.as-band-bottom { text-align: left; }
+.as-band-top .as-line { justify-content: flex-end; }
+.as-band-bottom .as-line { justify-content: flex-start; }
+
+/* ---- the outro ---- */
+.as-k-outro {
+  background:
+    radial-gradient(60% 50% at 50% 50%, rgba(240, 163, 47, 0.12), transparent 70%),
+    var(--as-ink);
+}
+.as-outro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.6rem;
+  --ent: clamp(0, (var(--p, 0) - 0.05) / 0.14, 1);
+  opacity: var(--ent);
+  transform: translateY(calc((1 - var(--ent)) * 20px));
+}
+.as-outro-logo { width: clamp(72px, 12vmin, 110px); height: auto; }
+.as-outro-mark {
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  font-size: clamp(1.3rem, 4.4vw, 2.6rem);
+  background: linear-gradient(120deg, var(--as-gold), #E2571E);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.as-outro-line {
+  font-family: var(--font-body);
+  color: var(--as-grey);
+  font-size: clamp(0.95rem, 2vw, 1.15rem);
+}
+.as-outro-cta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1.4rem;
+}
+.as-outro .btn-ghost { color: var(--as-paper); border-color: rgba(246, 241, 232, 0.25); }
+.as-outro-url {
+  margin-top: 2.5rem;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  color: var(--as-ink-2);
+}
+
+/* ---- after the story: what the head does ---- */
+.as-after {
+  position: relative;
+  z-index: 3;
+  background: var(--as-paper);
+  color: var(--as-ink);
+  padding: clamp(4rem, 10vh, 7rem) 0;
+}
+.as-after-in { max-width: 48rem; }
+.as-after-h {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  font-size: clamp(2rem, 5.2vw, 3.6rem);
+  margin: 0.8rem 0 1rem;
+}
+.as-after-p {
+  font-size: clamp(1rem, 1.6vw, 1.2rem);
+  line-height: 1.55;
+  color: var(--as-ink-2);
+  max-width: 40rem;
+}
+.as-after-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.4rem 0 2.2rem;
+  padding: 0;
+  list-style: none;
+}
+.as-after .chip { color: var(--as-ink-2); border-color: rgba(20, 16, 12, 0.18); }
+.as-after-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.4rem;
+}
+.as-after-note {
+  font-size: 0.85rem;
+  color: var(--as-ink-2);
+  max-width: 24rem;
+  line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .as-dots i, .as-caret { animation: none; }
+}

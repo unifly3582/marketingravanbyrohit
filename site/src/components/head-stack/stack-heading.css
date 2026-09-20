@@ -41,3 +41,25 @@
     margin: 0 0.18em;
   }
 }
+
+/* wide screens: the heading frames the fan of cards, two beats stepping
+   down from the top and the gold one at the foot; the cards ride over the
+   words, so the heading sits under the pile */
+@media (min-width: 1024px) {
+  .hs-heading {
+    inset: 0;
+    z-index: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 7vh clamp(1.5rem, 5vw, 5rem) 6vh;
+    padding: 7svh clamp(1.5rem, 5vw, 5rem) 6svh;
+    text-align: left;
+    font-size: clamp(3.6rem, 7.2vw, 7.4rem);
+    line-height: 0.95;
+    letter-spacing: -0.035em;
+  }
+  .hs-heading-beat { display: block; margin: 0; }
+  .hs-heading-beat:nth-child(1) { margin-left: 20vw; }
+  .hs-heading-beat:nth-child(2) { margin-left: 36vw; }
+  .hs-heading-beat.is-gold { margin-top: auto; }
+}

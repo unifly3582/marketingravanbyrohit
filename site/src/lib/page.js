@@ -19,6 +19,8 @@ export function usePage() {
     const url = new URL(to, window.location.href)
     if (url.pathname !== window.location.pathname || url.hash !== window.location.hash) {
       history.pushState(null, '', url.pathname + url.search + url.hash)
+      // every usePage instance (the App's page switch included) follows
+      window.dispatchEvent(new Event('popstate'))
     }
     setPathname(url.pathname)
     const target = url.hash ? document.getElementById(url.hash.slice(1)) : null
