@@ -84,7 +84,7 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
   const bdRef = useRef(null)
   const cardRefs = useRef([])
   const engineRef = useRef(null)
-  const geom = useRef({ cw: 0, pitch: 0, vh: 800 })
+  const geom = useRef({ cw: 0, ch: 0, pitch: 0, vh: 800, peek: 0 })
   const dirty = useRef(true) // layout changed: re-measure where the wrapper sits
   const [front, setFront] = useState(0)
   // The live pieces (the two story cards and the two showcases) are the
@@ -127,11 +127,13 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
     const vh = window.innerHeight
     const wide = vw >= 768
     // 1024 up the cards fan across the full width (head-stack.css), sized
-    // from the height so the heading above and below the fan keeps its room
+    // from the height so the heading above and below the fan keeps its room:
+    // its three beats and their padding take about 290px on a short screen
+    // (a 1366×768 laptop shows some 630px), and the fan gets the rest
     const fan = vw >= 1024
     const stageW = fan ? vw : wide ? 480 : vw
     const cw = fan
-      ? Math.min(fanCardWidth, Math.round(vh * 0.6), Math.round(vw * 0.3))
+      ? Math.min(fanCardWidth, Math.round(vh - 290), Math.round(vw * 0.3))
       : Math.min(maxCardWidth, Math.round(stageW * cardShare))
     const ch = Math.round(cw / 1.32)
     const pitch = Math.round(ch * 1.09)
@@ -141,7 +143,7 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
     // inner width (cw minus the 1px borders); one write here instead of a
     // measuring layout effect in every visual
     for (const w of [320, 408, 420]) stage.style.setProperty(`--hs-s${w}`, ((cw - 2) / w).toFixed(4))
-    geom.current = { cw, pitch, vh, fan }
+    geom.current = { cw, ch, pitch, vh, fan, peek: geom.current.peek || (PEEK_VH / 100) * vh }
     dirty.current = true
     const row = 0.86 * (fan ? Math.min(0.11 * vw, 160) : wide ? 96 : Math.min(0.19 * vw, 128))
     if (bdRef.current) {
@@ -209,12 +211,32 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
     let cachedY = 0
     const onResize = () => { dirty.current = true }
     window.addEventListener('resize', onResize)
+    // Where the pile waits during the intro: PEEK_VH below its place, or
+    // lower still when the statement above needs the room (a wide screen
+    // that is not tall), so the cards never rise into its last line. The
+    // statement's height is read here, in a frame, like the wrapper's
+    // position; it is laid out untransformed, so offsetHeight is its size
+    // whatever the intro has done to it.
+    const measurePeek = () => {
+      const { ch, vh } = geom.current
+      const stmt = wrapRef?.current?.querySelector('.hs-statement')
+      let peek = (PEEK_VH / 100) * vh
+      if (stmt) {
+        const fanTop = vh / 2 - ch / 2 - 16 // the tilted neighbours' corners rise a touch above the middle card
+        peek = Math.max(peek, stmt.offsetHeight + 24 - fanTop)
+      }
+      if (peek !== geom.current.peek) {
+        geom.current.peek = peek
+        lastIntro = -1 // the pile's intro position moved: write it again
+      }
+    }
     const readScroll = () => {
       const now = performance.now()
       const sy = window.scrollY
       if (sy !== lastY || dirty.current) {
         const wrap = wrapRef?.current
         cachedY = wrap ? Math.max(0, -wrap.getBoundingClientRect().top) : 0
+        if (dirty.current) measurePeek()
         dirty.current = false
       }
       if (landing) {
@@ -231,14 +253,14 @@ export default function CardStack({ heads, wrapRef, cardShare = 0.85, maxCardWid
         lastChange = now
       }
 
-      const { vh } = geom.current
+      const { vh, peek } = geom.current
       const y = cachedY
       const introPx = (INTRO_VH / 100) * vh
       const stepPx = (STEP_VH / 100) * vh
       const intro = easeInOut(Math.min(1, y / introPx))
       if (intro !== lastIntro) {
         lastIntro = intro
-        if (pileRef.current) pileRef.current.style.transform = `translateY(${(PEEK_VH / 100) * vh * (1 - intro)}px)`
+        if (pileRef.current) pileRef.current.style.transform = `translateY(${(peek * (1 - intro)).toFixed(1)}px)`
         if (bdRef.current) bdRef.current.style.opacity = intro.toFixed(3)
         onIntro?.(intro)
       }
