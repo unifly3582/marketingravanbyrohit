@@ -48,6 +48,7 @@
 .es-flip {
   perspective: 1600px;
   perspective-origin: 50% 45%;
+  overflow: visible;
   display: grid;
   place-items: center;
   width: 100%;
@@ -70,12 +71,17 @@
 .es-frame.is-in { animation: es-in var(--in) cubic-bezier(0.2, 0.9, 0.25, 1.12) both; }
 .es-frame.is-out { animation: es-out var(--out) cubic-bezier(0.6, 0, 0.9, 0.4) both; }
 @keyframes es-in {
-  from { transform: rotateY(-92deg); filter: brightness(0.8); }
-  to { transform: rotateY(0deg); filter: brightness(1); }
+  from { transform: translateZ(-120px) rotateY(-95deg); filter: brightness(0.75); }
+  to { transform: translateZ(0) rotateY(0deg); filter: brightness(1); }
 }
 @keyframes es-out {
-  from { transform: rotateY(0deg); filter: brightness(1); }
-  to { transform: rotateY(92deg); filter: brightness(0.78); }
+  from { transform: translateZ(0) rotateY(0deg); filter: brightness(1); }
+  to { transform: translateZ(-120px) rotateY(95deg); filter: brightness(0.72); }
+}
+/* phones: the frame is narrow, so a close camera and a slower turn make
+   the rotation unmistakable */
+@media (max-width: 767px) {
+  .es-flip { perspective: 520px; perspective-origin: 50% 50%; }
 }
 
 /* ---------- dots ---------- */

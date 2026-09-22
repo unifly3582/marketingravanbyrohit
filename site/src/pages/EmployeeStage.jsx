@@ -16,8 +16,8 @@ import './employee-stage.css'
  * screen and the tab is visible; a dot jumps; hovering the frame holds.
  */
 const HOLD = 1000 // ms a frame stays before turning
-const OUT = 240 // ms for the frame to turn away
-const IN = 340 // ms for the next to turn in
+const OUT = { wide: 240, tall: 320 } // ms for the frame to turn away
+const IN = { wide: 340, tall: 460 } // ms for the next to turn in
 
 const useWide = () => {
   const [wide, setWide] = useState(() => matchMedia('(min-width: 768px)').matches)
@@ -61,12 +61,13 @@ export default function EmployeeStage({ children }) {
     })
   }, [wide])
 
+  const shape = isWide ? 'wide' : 'tall'
   const go = (next) => {
     setPhase('out')
     setTimeout(() => {
       setI(next)
       setPhase('in')
-    }, OUT)
+    }, OUT[shape])
   }
 
   useEffect(() => {
@@ -93,7 +94,7 @@ export default function EmployeeStage({ children }) {
           <img
             key={a.key + (isWide ? '-w' : '-t')}
             className={`es-frame${phase === 'out' ? ' is-out' : ' is-in'}`}
-            style={{ '--out': `${OUT}ms`, '--in': `${IN}ms` }}
+            style={{ '--out': `${OUT[shape]}ms`, '--in': `${IN[shape]}ms` }}
             src={frame.src}
             alt={`${a.name}'s ${a.role}`}
             draggable="false"
