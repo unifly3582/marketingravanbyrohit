@@ -3,7 +3,6 @@ import Nav from './components/Nav.jsx'
 import Footer from './components/Footer.jsx'
 import Home from './pages/Home.jsx'
 import { RAVAN_OPEN, openRavan } from './lib/ravan.js'
-import { usePage } from './lib/page.js'
 
 /*
  * The agent panel (Motion, the WhatsApp demos, the audio client) is the
@@ -12,14 +11,6 @@ import { usePage } from './lib/page.js'
  * visitor asks for it first. Until then a look-alike corner button stands in.
  */
 const VoiceAgent = lazy(() => import('./components/VoiceAgent.jsx'))
-
-/* the one other page: the Website Development story, its own chunk */
-const WebsiteDev = lazy(() => import('./pages/WebsiteDev.jsx'))
-const isWebsiteDev = (path) => /^\/(website-development|heads\/uiux)\/?$/.test(path)
-
-/* the Meta Ads story, told like a monochrome reel, at /heads/ads (and /ads) */
-const AdsStory = lazy(() => import('./pages/AdsStory.jsx'))
-const isAdsStory = (path) => /^\/(heads\/)?ads\/?$/.test(path)
 
 const idle = (fn) => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 2500 }) : setTimeout(fn, 1200))
 
@@ -47,7 +38,6 @@ function LauncherFallback() {
 export default function App() {
   const [agent, setAgent] = useState(false) // the agent's code is wanted
   const [wantOpen, setWantOpen] = useState(false) // ...and its panel open on arrival
-  const { pathname } = usePage()
 
   // Smooth wheel scrolling is a mouse-and-trackpad nicety: phones scroll
   // natively, so they never download Lenis at all.
@@ -107,17 +97,7 @@ export default function App() {
     <>
       <Nav />
       <main>
-        {isWebsiteDev(pathname) ? (
-          <Suspense fallback={<div style={{ height: '100vh' }} />}>
-            <WebsiteDev />
-          </Suspense>
-        ) : isAdsStory(pathname) ? (
-          <Suspense fallback={<div style={{ height: '100vh' }} />}>
-            <AdsStory />
-          </Suspense>
-        ) : (
-          <Home />
-        )}
+        <Home />
       </main>
       <Footer />
       {agent ? (

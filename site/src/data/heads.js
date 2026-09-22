@@ -11,7 +11,6 @@ export const HEADS = [
     metric: 'Make an impression. Earn their confidence.',
     icon: 'uiux',
     href: '/heads/uiux',
-    page: '/website-development', // the story page: the card opens it
     desc: 'Fast, interactive websites in the Linear, Apple and Stripe school — designed to convert, built to load instantly, and kept fresh every month.',
     tags: ['Conversion-first design', '3D / SVG motion', 'Instant loads', 'Monthly updates'],
     group: 'grow',
@@ -23,7 +22,6 @@ export const HEADS = [
     metric: 'Attention. Interest. Enquiries.',
     icon: 'ads',
     href: '/heads/ads',
-    page: '/heads/ads', // the story page: the card opens it
     desc: 'Meta campaigns run end to end — AI-generated creatives, audience testing, retargeting and landing pages tuned for every segment in real time.',
     tags: ['Creative testing', 'Audience targeting', 'Retargeting', 'Landing pages'],
     group: 'grow',
