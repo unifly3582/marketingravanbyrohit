@@ -3,6 +3,7 @@ import Nav from './components/Nav.jsx'
 import Footer from './components/Footer.jsx'
 import Home from './pages/Home.jsx'
 import { RAVAN_OPEN, openRavan } from './lib/ravan.js'
+import { usePage } from './lib/page.js'
 
 /*
  * The agent panel (Motion, the WhatsApp demos, the audio client) is the
@@ -11,6 +12,10 @@ import { RAVAN_OPEN, openRavan } from './lib/ravan.js'
  * visitor asks for it first. Until then a look-alike corner button stands in.
  */
 const VoiceAgent = lazy(() => import('./components/VoiceAgent.jsx'))
+
+/* the WhatsApp Business API provider page, its own chunk */
+const WhatsAppApi = lazy(() => import('./pages/WhatsAppApi.jsx'))
+const isWhatsAppApi = (path) => /^\/(whatsapp-api|whatsapp-business-api|heads\/sdr)\/?$/.test(path)
 
 const idle = (fn) => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 2500 }) : setTimeout(fn, 1200))
 
@@ -38,6 +43,7 @@ function LauncherFallback() {
 export default function App() {
   const [agent, setAgent] = useState(false) // the agent's code is wanted
   const [wantOpen, setWantOpen] = useState(false) // ...and its panel open on arrival
+  const { pathname } = usePage()
 
   // Smooth wheel scrolling is a mouse-and-trackpad nicety: phones scroll
   // natively, so they never download Lenis at all.
@@ -97,7 +103,13 @@ export default function App() {
     <>
       <Nav />
       <main>
-        <Home />
+        {isWhatsAppApi(pathname) ? (
+          <Suspense fallback={<div style={{ height: '100vh' }} />}>
+            <WhatsAppApi />
+          </Suspense>
+        ) : (
+          <Home />
+        )}
       </main>
       <Footer />
       {agent ? (

@@ -34,6 +34,7 @@ export const HEADS = [
     metric: 'Replies in Under 5s, 24/7',
     icon: 'sdr',
     href: '/heads/sdr',
+    page: '/whatsapp-api', // the WhatsApp Business API page: the card opens it
     desc: 'An AI agent on your WhatsApp number that answers enquiries, qualifies leads, books appointments and follows up — and hands over to a human when it should.',
     tags: ['Instant replies', 'Lead qualification', 'Bookings & follow-ups', 'Human handoff'],
     group: 'automate',
