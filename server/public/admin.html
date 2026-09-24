@@ -156,6 +156,19 @@
   .m .btnreply { display:inline-block; border:1px solid rgba(240,163,47,.5); color:var(--gold); border-radius:999px; padding:3px 12px; font-weight:600; }
   .m .tpl { font-size:10px; color:var(--gold); text-transform:uppercase; letter-spacing:.12em; font-weight:700; margin-bottom:4px; }
   .m.voice { border-left:3px solid var(--gold); }
+  .m.media { padding:4px 4px 6px; }
+  .m.media .cap { padding:4px 8px 0; }
+  .m.media .meta { padding:0 8px; }
+  .m .thumb { display:block; width:260px; max-width:100%; height:auto; max-height:320px; object-fit:cover; border-radius:10px; cursor:zoom-in; background:rgba(244,234,219,.06); }
+  .m .thumb.sticker { width:140px; object-fit:contain; background:none; }
+  .m .thumb.wait { height:180px; display:grid; place-items:center; color:var(--faint); font-size:12px; cursor:default; }
+  .m video.thumb { cursor:auto; }
+  .m audio { display:block; width:260px; max-width:100%; }
+  .lightbox { position:fixed; inset:0; z-index:1000; background:rgba(13,9,7,.92); display:flex; align-items:center; justify-content:center; padding:48px 16px 16px; cursor:zoom-out; }
+  .lightbox[hidden] { display:none; }
+  .lightbox img { max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; box-shadow:0 30px 80px rgba(0,0,0,.6); }
+  .lightbox .x { position:absolute; top:12px; right:12px; }
+  .lightbox .dl { position:absolute; top:12px; right:64px; }
   .m.form { border-left:3px solid var(--blue); }
   .m .src { font-size:10px; color:var(--faint); }
   .m.voice .src { color:var(--gold); }
@@ -406,6 +419,12 @@
       <div class="tablewrap"><table><thead><tr><th>Title</th><th>Category</th><th>Embedded</th><th></th></tr></thead><tbody id="pbrows"></tbody></table></div>
     </div>
   </div>
+</div>
+
+<div class="lightbox" id="lightbox" hidden onclick="closeLightbox()">
+  <a class="btn sm dl" id="lbdl" download onclick="event.stopPropagation()">Download</a>
+  <button class="btn sm x" onclick="closeLightbox()" aria-label="Close">✕</button>
+  <img id="lbimg" alt="">
 </div>
 
 <dialog id="dlg">
@@ -737,13 +756,64 @@ async function loadLineThread(jump = false) {
   $("lnochat").hidden = true; $("lhead").hidden = false; $("lmsgs").hidden = false; $("lcompose").hidden = false;
   $("lhead").innerHTML = `<button class="btn sm back" onclick="closeLineChat()">←</button>${avatar({ contact_name: c.contact_name, phone10: c.phone || id })}
     <div class="who"><b>${esc(chatTitle(c))}</b><span>${c.phone ? "+" + esc(c.phone) : esc(id)} · on ${esc(lineLabel(lines.find(l => l.id === line) || { id: line }))}</span></div>`;
-  const msgs = (r.messages || []).map(m => ({ ...m, source: m.source === "dashboard" ? "dashboard" : m.source === "phone" ? "phone-echo" : m.source }));
-  const el = $("lmsgs"), atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-  const html = renderThread(msgs);
-  if (el.innerHTML !== html) el.innerHTML = html;
-  if (jump || atBottom) el.scrollTop = el.scrollHeight;
+  lineMsgs = (r.messages || []).map(m => ({ ...m, source: m.source === "phone" ? "phone-echo" : m.source }));
+  drawLineThread(jump);
   const lc = lineChats.find(x => x.chat_id === id); if (lc && lc.unread) { lc.unread = 0; drawLineChats(); }
 }
+// Media is served only to a signed-in admin, so it is fetched with the token
+// and shown from a blob URL. Cached per message so polling never refetches.
+let lineMsgs = [];
+const mediaUrls = new Map(); // message id -> blob URL | "loading" | "error"
+function lineMedia(id) {
+  const have = mediaUrls.get(id);
+  if (have) return have;
+  mediaUrls.set(id, "loading");
+  fetch(`/api/admin/lines/${encodeURIComponent(currentLine)}/media/${id}`, { headers: { Authorization: "Bearer " + TOKEN } })
+    .then(r => r.ok ? r.blob() : Promise.reject(r.status))
+    .then(b => mediaUrls.set(id, URL.createObjectURL(b)))
+    .catch(() => mediaUrls.set(id, "error"))
+    .finally(() => drawLineThread(false, true));
+  return "loading";
+}
+function lineBubble(m) {
+  const visual = m.type === "image" || m.type === "sticker" || m.type === "video";
+  if (!m.has_file || !(visual || m.type === "audio" || m.type === "document")) return bubble(m);
+  const url = lineMedia(m.id), ready = url !== "loading" && url !== "error";
+  const out = m.direction === "out";
+  let media;
+  if (!ready) media = url === "error" ? `<div class="kind">${esc(TYPE_ICON[m.type] || m.type)} · could not load</div>`
+                   : visual ? `<div class="thumb wait">Loading…</div>` : `<div class="kind">${esc(TYPE_ICON[m.type] || m.type)} · loading…</div>`;
+  else if (m.type === "image" || m.type === "sticker") media = `<img class="thumb ${m.type === "sticker" ? "sticker" : ""}" src="${url}" alt="" onclick="openLightbox(${m.id})">`;
+  else if (m.type === "video") media = `<video class="thumb" src="${url}" controls preload="metadata"></video>`;
+  else if (m.type === "audio") media = `<audio src="${url}" controls preload="metadata"></audio>`;
+  else media = `<a class="kind" href="${url}" download="${esc(m.filename || "file")}">📄 ${esc(m.filename || "Document")} · download</a>`;
+  // A photo's "text" is its caption; a document's is just its filename.
+  const cap = m.text && m.type !== "document" ? `<div class="cap">${esc(m.text)}</div>` : "";
+  const tick = out ? (m.status === "read" ? '<span class="tick read">✓✓</span>' : m.status === "delivered" ? '<span class="tick">✓✓</span>' : '<span class="tick">✓</span>') : "";
+  return `<div class="m media ${out ? "out" : "in"}">${media}${cap}<div class="meta"><span>${esc(fmtTime(m.timestamp))}</span>${tick}</div></div>`;
+}
+function drawLineThread(jump = false, keepScroll = false) {
+  const el = $("lmsgs"), atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  let html = "", lastDay = null;
+  for (const m of lineMsgs) {
+    const day = dayLabel(m.timestamp);
+    if (day !== lastDay) { html += `<div class="day">${esc(day)}</div>`; lastDay = day; }
+    html += lineBubble(m);
+  }
+  html = html || `<div class="day">No messages yet</div>`;
+  if (el.innerHTML !== html) el.innerHTML = html;
+  if (jump || (atBottom && !keepScroll) || (keepScroll && atBottom)) el.scrollTop = el.scrollHeight;
+}
+function openLightbox(id) {
+  const url = mediaUrls.get(id), m = lineMsgs.find(x => x.id === id);
+  if (!url || url === "loading" || url === "error") return;
+  $("lbimg").src = url;
+  $("lbdl").href = url; $("lbdl").download = (m?.filename) || `photo-${id}.${(m?.mime_type || "image/jpeg").split("/")[1] || "jpg"}`;
+  $("lightbox").hidden = false;
+}
+function closeLightbox() { $("lightbox").hidden = true; $("lbimg").removeAttribute("src"); }
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("lightbox").hidden) closeLightbox(); });
+
 async function sendLineReply() {
   const text = $("lreply").value.trim();
   if (!text || !currentLineChat) return;

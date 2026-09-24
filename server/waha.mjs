@@ -62,6 +62,17 @@ function messageType(p) {
   return "document";
 }
 
+/** Keep only the path of WAHA's file URL; the host is whatever WAHA_URL says. */
+function mediaPath(url) {
+  if (!url) return null;
+  try {
+    const path = new URL(url, "http://waha").pathname;
+    return path.startsWith("/api/files/") ? path : null;
+  } catch {
+    return null;
+  }
+}
+
 const ACK = { "-1": "failed", 0: "pending", 1: "sent", 2: "delivered", 3: "read", 4: "read" };
 
 async function upsertLine(session, me, status) {
@@ -100,6 +111,7 @@ async function storeMessage(session, p) {
     has_media: !!p.hasMedia,
     mime_type: p.media?.mimetype ?? null,
     filename: p.media?.filename ?? null,
+    media_url: mediaPath(p.media?.url),
     status: direction === "out" ? (ACK[p.ack] ?? "sent") : null,
     source: p.source === "api" ? "dashboard" : direction === "out" ? "phone" : null,
     wa_timestamp: at,
@@ -174,8 +186,25 @@ export async function lineThread(line, chatId) {
     messages: rows.map((m) => ({
       id: m.id, direction: m.direction, type: m.type, text: m.body, status: m.status,
       source: m.source, filename: m.filename, timestamp: m.wa_timestamp,
+      mime_type: m.mime_type, has_file: !!m.media_url,
     })),
   };
+}
+
+/**
+ * The file behind a media message, fetched from WAHA with its API key so the
+ * key never reaches the browser. Returns the upstream Response, or null.
+ */
+export async function lineMedia(line, messageId) {
+  const row = unwrap(
+    await sb.from("line_messages").select("media_url, mime_type, line_chats!inner(line_id)")
+      .eq("id", messageId).eq("line_chats.line_id", line).maybeSingle(),
+    "line media"
+  );
+  if (!row?.media_url) return null;
+  const res = await fetch(`${wahaUrl()}${row.media_url}`, { headers: { "X-Api-Key": env("WAHA_API_KEY", "") } });
+  if (!res.ok) return null;
+  return { res, mime: row.mime_type || res.headers.get("content-type") || "application/octet-stream" };
 }
 
 /**

@@ -20,7 +20,7 @@ import { engineCatalog, defaultEngineId, engineFor, ENGINE_IDS } from "./agent/e
 import { modelCatalog, modelInfo, demoModel, productionModel, MODELS } from "./agent/models.mjs";
 import { embed, EMBED_DIMS, searchPlaybook } from "./agent/tools.mjs";
 import * as voice from "./voice/index.mjs";
-import { webhookTokenOk as wahaTokenOk, ingestWaha, listLines, listLineChats, lineThread, sendFromLine } from "./waha.mjs";
+import { webhookTokenOk as wahaTokenOk, ingestWaha, listLines, listLineChats, lineThread, sendFromLine, lineMedia } from "./waha.mjs";
 
 const dir = dirname(fileURLToPath(import.meta.url));
 
@@ -888,6 +888,15 @@ app.get("/api/admin/lines/:line/messages", admin, wrap(async (req, res) => {
   const chat = String(req.query.chat ?? "");
   if (!chat) return res.status(400).json({ error: "chat required" });
   res.json(await lineThread(req.params.line, chat));
+}));
+
+app.get("/api/admin/lines/:line/media/:id", admin, wrap(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "bad id" });
+  const m = await lineMedia(req.params.line, id);
+  if (!m) return res.status(404).json({ error: "no file" });
+  res.set({ "Content-Type": m.mime, "Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff" });
+  res.send(Buffer.from(await m.res.arrayBuffer()));
 }));
 
 app.post("/api/admin/lines/:line/send", admin, wrap(async (req, res) => {
