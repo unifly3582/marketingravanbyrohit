@@ -20,6 +20,7 @@ import { engineCatalog, defaultEngineId, engineFor, ENGINE_IDS } from "./agent/e
 import { modelCatalog, modelInfo, demoModel, productionModel, MODELS } from "./agent/models.mjs";
 import { embed, EMBED_DIMS, searchPlaybook } from "./agent/tools.mjs";
 import * as voice from "./voice/index.mjs";
+import { webhookTokenOk as wahaTokenOk, ingestWaha, listLines, listLineChats, lineThread, sendFromLine } from "./waha.mjs";
 
 const dir = dirname(fileURLToPath(import.meta.url));
 
@@ -859,6 +860,42 @@ app.post("/api/admin/offers", admin, wrap(async (req, res) => {
   if (id) unwrap(await sb.from("offers").update(row).eq("id", id), "update offer");
   else unwrap(await sb.from("offers").insert(row), "insert offer");
   res.json({ ok: true });
+}));
+
+// ---------------- linked numbers (WAHA) ----------------
+//
+// Numbers linked at waha.marketingravan.com post every message here; the
+// dashboard shows them under "Linked numbers". Viewing and manual replies
+// only — the agent does not answer on these numbers.
+
+app.post("/api/webhooks/waha", (req, res) => {
+  if (!wahaTokenOk(req)) {
+    console.warn("waha webhook rejected: bad token from", req.ip);
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  res.json({ ok: true });
+  ingestWaha(req.body ?? {})
+    .then((r) => { if (r.stored) console.log("waha", req.body?.session, r.kind); })
+    .catch((e) => console.error("waha webhook error", e.message));
+});
+
+app.get("/api/admin/lines", admin, wrap(async (req, res) => res.json(await listLines())));
+
+app.get("/api/admin/lines/:line/chats", admin, wrap(async (req, res) =>
+  res.json(await listLineChats(req.params.line))));
+
+app.get("/api/admin/lines/:line/messages", admin, wrap(async (req, res) => {
+  const chat = String(req.query.chat ?? "");
+  if (!chat) return res.status(400).json({ error: "chat required" });
+  res.json(await lineThread(req.params.line, chat));
+}));
+
+app.post("/api/admin/lines/:line/send", admin, wrap(async (req, res) => {
+  const chat = String(req.body?.chat ?? "");
+  const text = String(req.body?.text ?? "").trim();
+  if (!chat || !text) return res.status(400).json({ error: "chat and text required" });
+  try { res.json({ ok: true, ...(await sendFromLine(req.params.line, chat, text)) }); }
+  catch (e) { res.status(502).json({ error: e.message }); }
 }));
 
 // ---------------- dashboard page ----------------

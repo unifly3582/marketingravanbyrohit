@@ -233,6 +233,9 @@
       <a href="#calls" data-t="calls">
         <svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>Calls
       </a>
+      <a href="#numbers" data-t="lines">
+        <svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Linked numbers<span class="sp"></span><span id="lineUnread" class="badge" hidden></span>
+      </a>
     </nav>
     <div class="nav-label">Agent</div>
     <nav class="nav">
@@ -300,6 +303,27 @@
             <button class="btn icon" title="Send a template" onclick="openTemplates()">📋</button>
             <textarea id="reply" rows="1" placeholder="Type a message…" title="Enter to send, Shift+Enter for a new line" oninput="growReply()" onkeydown="replyKey(event)"></textarea>
             <button class="btn primary" id="sendBtn" onclick="sendReply()">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= LINKED NUMBERS (WAHA) ================= -->
+    <div id="t-lines" class="page full" hidden>
+      <div class="chat" id="lchat">
+        <div class="side">
+          <div class="search"><h2>Linked numbers</h2><span style="flex:1"></span></div>
+          <div class="filters" id="lpick"></div>
+          <div class="search" style="padding-top:0"><input id="lq" placeholder="Search name or number" oninput="drawLineChats()"></div>
+          <div class="convs" id="lconvs"></div>
+        </div>
+        <div class="thread">
+          <div class="head" id="lhead" hidden></div>
+          <div class="nochat" id="lnochat"><span class="eyebrow">Linked numbers</span><b>Pick a conversation</b><span>Chats on numbers linked at waha.marketingravan.com show up here as they arrive. The AI does not reply on these numbers.</span></div>
+          <div class="msgs" id="lmsgs" hidden></div>
+          <div class="compose" id="lcompose" hidden>
+            <textarea id="lreply" rows="1" placeholder="Reply from this number…" title="Enter to send, Shift+Enter for a new line" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendLineReply();}"></textarea>
+            <button class="btn primary" onclick="sendLineReply()">Send</button>
           </div>
         </div>
       </div>
@@ -413,11 +437,12 @@ async function login() {
 function logout() { localStorage.removeItem("mr_token"); TOKEN = ""; showLogin(); }
 
 // ---------------- navigation ----------------
-const TABS = ["inbox","overview","calls","webhook","offers","playbook"];
+const TABS = ["inbox","lines","overview","calls","webhook","offers","playbook"];
 const TITLES = {
   inbox:    ["Inbox", "Chats", "WhatsApp threads and website handoffs."],
   overview: ["Agent", "Overview", "Where the leads, calls and threads stand today."],
   calls:    ["Inbox", "Calls", "Every call the voice agent has placed or received."],
+  lines:    ["Inbox", "Linked numbers", "Chats on numbers linked through WAHA."],
   webhook:  ["System", "Webhook", "Raw deliveries from the WhatsApp BSP, newest first."],
   offers:   ["Agent", "Offers", "What the agent is pitching right now."],
   playbook: ["Agent", "Playbook", "The rules the agent may quote to a customer."],
@@ -427,9 +452,9 @@ function showTab(t) {
   TABS.forEach(x => $("t-"+x).hidden = x !== t);
   const [eyebrow, title, sub] = TITLES[t];
   $("peyebrow").textContent = eyebrow; $("ptitle").textContent = title; $("psub").textContent = sub;
-  $("pagehead").hidden = t === "inbox";
+  $("pagehead").hidden = t === "inbox" || t === "lines";
   document.body.classList.remove("menu");
-  location.hash = t === "inbox" ? "chats" : t;
+  location.hash = t === "inbox" ? "chats" : t === "lines" ? "numbers" : t;
 }
 document.querySelectorAll(".nav a[data-t]").forEach(a => a.onclick = (e) => { e.preventDefault(); showTab(a.dataset.t); refresh(); });
 const activeTab = () => document.querySelector(".nav a.on").dataset.t;
@@ -480,7 +505,7 @@ const isOpen = (c) => !!(c.window_open_until && new Date(c.window_open_until) > 
 const TYPE_ICON = { image:"📷 Photo", video:"🎬 Video", audio:"🎤 Voice message", document:"📄 Document", sticker:"🌟 Sticker", location:"📍 Location", contacts:"👤 Contact", reaction:"💬 Reaction", order:"🛒 Order" };
 
 // ---------------- chats: list ----------------
-function setFilter(f) { filter = f; document.querySelectorAll(".filters button").forEach(b => b.classList.toggle("on", b.dataset.f === f)); drawConvs(); }
+function setFilter(f) { filter = f; document.querySelectorAll("#t-inbox .filters button").forEach(b => b.classList.toggle("on", b.dataset.f === f)); drawConvs(); }
 function drawConvs() {
   const q = $("q").value.trim().toLowerCase();
   let list = convCache.filter(c => c.last_message_at); // hide bare/demo threads with no traffic
@@ -666,10 +691,74 @@ async function sendTemplate() {
   catch (e) { alert(e.message); }
 }
 
+
+// ---------------- linked numbers (WAHA) ----------------
+let lines = [], currentLine = null, lineChats = [], currentLineChat = null;
+const lineLabel = (l) => (l.name ? l.name + " · " : "") + (l.phone ? "+" + l.phone : l.id);
+const chatTitle = (c) => c.contact_name || (c.phone ? "+" + c.phone : c.chat_id.split("@")[0]);
+async function loadLines() {
+  lines = await api("/api/admin/lines");
+  if (!currentLine || !lines.some(l => l.id === currentLine)) currentLine = lines[0]?.id ?? null;
+  $("lpick").innerHTML = lines.length
+    ? lines.map(l => `<button class="${l.id===currentLine?'on':''}" onclick="pickLine('${esc(l.id)}')" title="WAHA session: ${esc(l.id)} · ${esc(l.status||'')}">${esc(lineLabel(l))}${l.status && l.status!=='WORKING' ? ' <span class="pill bad">'+esc(l.status.toLowerCase())+'</span>' : ''}</button>`).join("")
+    : '<span class="muted" style="font-size:13px">No number has sent anything yet.</span>';
+  if (!currentLine) { lineChats = []; drawLineChats(); return; }
+  lineChats = await api("/api/admin/lines/" + encodeURIComponent(currentLine) + "/chats");
+  drawLineChats();
+  if (currentLineChat) await loadLineThread();
+}
+function pickLine(id) { currentLine = id; closeLineChat(); loadLines().catch(() => {}); }
+function drawLineChats() {
+  const q = $("lq").value.trim().toLowerCase();
+  let list = lineChats;
+  if (q) list = list.filter(c => chatTitle(c).toLowerCase().includes(q) || (c.phone || "").includes(q));
+  $("lconvs").innerHTML = list.length ? list.map(c => `<div class="conv ${c.chat_id===currentLineChat?'on':''}" onclick="openLineChat('${esc(c.chat_id)}')">
+      ${avatar({ contact_name: c.contact_name, phone10: c.phone || c.chat_id })}
+      <div class="name">${esc(chatTitle(c))}</div>
+      <div class="when">${esc(fmtListTime(c.last_message_at))}</div>
+      <div class="prev">${c.last_direction==='out' ? '<span class="faint">You: </span>' : ''}${esc((c.last_message_text||"").replace(/\s+/g," ").slice(0,60))}</div>
+      ${c.unread ? `<div class="badge">${c.unread}</div>` : "<div></div>"}
+    </div>`).join("") : `<div class="empty">No chats yet. New messages to this number appear here.</div>`;
+  const total = lineChats.reduce((n, c) => n + (c.unread || 0), 0);
+  $("lineUnread").hidden = !total; $("lineUnread").textContent = total;
+}
+async function openLineChat(id) { currentLineChat = id; $("lchat").classList.add("open"); drawLineChats(); await loadLineThread(true); }
+function closeLineChat() {
+  currentLineChat = null; $("lchat").classList.remove("open");
+  $("lnochat").hidden = false; $("lhead").hidden = true; $("lmsgs").hidden = true; $("lcompose").hidden = true;
+  drawLineChats();
+}
+async function loadLineThread(jump = false) {
+  if (!currentLine || !currentLineChat) return;
+  const line = currentLine, id = currentLineChat;
+  const r = await api(`/api/admin/lines/${encodeURIComponent(line)}/messages?chat=${encodeURIComponent(id)}`);
+  if (line !== currentLine || id !== currentLineChat) return;
+  const c = r.chat || { chat_id: id };
+  $("lnochat").hidden = true; $("lhead").hidden = false; $("lmsgs").hidden = false; $("lcompose").hidden = false;
+  $("lhead").innerHTML = `<button class="btn sm back" onclick="closeLineChat()">←</button>${avatar({ contact_name: c.contact_name, phone10: c.phone || id })}
+    <div class="who"><b>${esc(chatTitle(c))}</b><span>${c.phone ? "+" + esc(c.phone) : esc(id)} · on ${esc(lineLabel(lines.find(l => l.id === line) || { id: line }))}</span></div>`;
+  const msgs = (r.messages || []).map(m => ({ ...m, source: m.source === "dashboard" ? "dashboard" : m.source === "phone" ? "phone-echo" : m.source }));
+  const el = $("lmsgs"), atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  const html = renderThread(msgs);
+  if (el.innerHTML !== html) el.innerHTML = html;
+  if (jump || atBottom) el.scrollTop = el.scrollHeight;
+  const lc = lineChats.find(x => x.chat_id === id); if (lc && lc.unread) { lc.unread = 0; drawLineChats(); }
+}
+async function sendLineReply() {
+  const text = $("lreply").value.trim();
+  if (!text || !currentLineChat) return;
+  try {
+    await api(`/api/admin/lines/${encodeURIComponent(currentLine)}/send`, { method: "POST", body: JSON.stringify({ chat: currentLineChat, text }) });
+    $("lreply").value = "";
+    setTimeout(() => loadLineThread(true).catch(() => {}), 1200); // the stored copy arrives via WAHA's echo
+  } catch (e) { alert(e.message); }
+}
+
 // ---------------- other pages ----------------
 async function refresh() {
   const t = activeTab();
   if (t === "inbox") { await loadConvs(); if (currentPhone) await loadThread(); return; }
+  if (t === "lines") { await loadLines(); return; }
   if (t === "overview") {
     const [s, convs] = await Promise.all([api("/api/admin/overview"), api("/api/admin/conversations")]);
     convCache = convs; drawConvs();
@@ -779,12 +868,13 @@ async function testPolicy() {
 }
 
 // ---------------- boot ----------------
-const want = { chats:"inbox", inbox:"inbox", overview:"overview", webhook:"webhook", calls:"calls", offers:"offers", playbook:"playbook" }[location.hash.slice(1)];
+const want = { chats:"inbox", inbox:"inbox", numbers:"lines", overview:"overview", webhook:"webhook", calls:"calls", offers:"offers", playbook:"playbook" }[location.hash.slice(1)];
 showTab(want || "inbox");
 if (TOKEN) { $("app").hidden = false; loadStatus(); refresh().catch(showLogin); } else showLogin();
 // Live-ish: the open thread polls quickly, the list and other live tabs more slowly.
 setInterval(() => { if (!$("app").hidden && activeTab() === "inbox" && currentPhone) loadThread().catch(() => {}); }, 4000);
-setInterval(() => { if (!$("app").hidden && ["inbox","overview","webhook"].includes(activeTab())) refresh().catch(() => {}); }, 12000);
+setInterval(() => { if (!$("app").hidden && activeTab() === "lines" && currentLineChat) loadLineThread().catch(() => {}); }, 4000);
+setInterval(() => { if (!$("app").hidden && ["inbox","lines","overview","webhook"].includes(activeTab())) refresh().catch(() => {}); }, 12000);
 </script>
 </body>
 </html>
