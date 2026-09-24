@@ -68,9 +68,11 @@ How you reply:
 - Warm, direct and brief — this is a chat. One to three short sentences. No bullet lists unless they ask for options, no email sign-offs, no "As an AI".
 - Mirror the customer's language and script exactly: Hindi in Devanagari, Hinglish in Latin script, English in English.
 - Any claim about pricing, deliverables, timelines, guarantees or terms must come from THE PLAYBOOK below. If it is not there, say you will confirm with the team and get back — never estimate or invent a number.
+- Answer the customer's latest message. Earlier photos, files, locations and polls are background only — never a reason to hand off on their own.
+- A greeting ("hi", "hello", "namaste") gets a short friendly greeting back and a question about what they need.
 - Move the conversation forward: understand what they sell and what they want, and suggest the next step (a call, a demo, sharing details).
 - Never claim something was done (a call booked, a message sent, a payment received) — you cannot do those things.
-- Hand the chat to a person instead of replying when: they are upset or complaining, ask for a refund or anything legal/payment-related, ask for a human, the message is clearly personal (friends, family, not about business), or you cannot tell what they want.
+- Hand the chat to a person instead of replying when: they are upset or complaining, ask for a refund or anything legal/payment-related, ask for a human, the message is clearly personal (friends, family, not about business), or their latest message makes no sense even after asking.
 
 Answer with JSON only: {"reply": "<the message to send, or empty>", "handoff": <true|false>, "reason": "<why, when handoff is true>"}.
 When handoff is true, reply must be empty.`;
@@ -101,7 +103,9 @@ async function askGemini(system, contents) {
       contents,
       generationConfig: {
         temperature: 0.6,
-        maxOutputTokens: 400,
+        // Gemini 3.x spends part of this on thinking before it writes; too low
+        // and the JSON is cut off mid-string.
+        maxOutputTokens: 4096,
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
@@ -114,7 +118,9 @@ async function askGemini(system, contents) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error?.message || `Gemini ${res.status}`);
   const raw = data?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-  const out = JSON.parse(raw);
+  let out;
+  try { out = JSON.parse(raw); }
+  catch { throw new Error(`unreadable model output (${data?.candidates?.[0]?.finishReason ?? "?"}): ${raw.slice(0, 80)}`); }
   return { reply: String(out.reply ?? "").trim(), handoff: !!out.handoff, reason: out.reason ?? null, model, usage: data.usageMetadata ?? null };
 }
 
@@ -171,7 +177,16 @@ async function replyTurn(session, chatId) {
     return;
   }
 
-  const out = await draft(session, chat, rows);
+  let out;
+  try { out = await draft(session, chat, rows); }
+  catch (e) {
+    console.warn("line-ai retry", chatId, e.message);
+    try { out = await draft(session, chat, rows); }
+    catch (e2) {
+      await flagHuman(chat.id, "the AI could not produce a reply — answer this one yourself");
+      throw e2;
+    }
+  }
   console.log("line-ai", session, chatId, out.handoff ? `handoff: ${out.reason}` : `reply ${out.reply.length} chars`, out.model, out.usage?.totalTokenCount ?? "");
   if (out.handoff || !out.reply) {
     await flagHuman(chat.id, out.reason || "the AI chose not to answer");
