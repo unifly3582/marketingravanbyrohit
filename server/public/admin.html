@@ -176,6 +176,26 @@
   .m.loc .info span { display:block; font-size:12px; color:var(--muted); }
   .m.loc .info em { display:block; font-style:normal; font-size:12px; color:var(--gold); margin-top:4px; }
   .m.loc .meta { padding:0 8px; }
+  .m.doc { padding:4px 4px 0; width:300px; max-width:100%; white-space:normal; }
+  .m.doc .pv { height:110px; border-radius:10px 10px 0 0; overflow:hidden; background:#fff; }
+  .m.doc .pv img { width:100%; height:100%; object-fit:cover; object-position:top; display:block; }
+  .m.doc .file { display:flex; gap:10px; align-items:center; padding:10px; background:rgba(244,234,219,.06); border-radius:0 0 10px 10px; }
+  .m.doc .pv + .file { border-radius:0 0 10px 10px; }
+  .m.doc .file:first-child { border-radius:10px; }
+  .m.doc .ic { flex:none; width:34px; height:40px; border-radius:4px; display:grid; place-items:center; color:#fff; font-size:9.5px; font-weight:800; letter-spacing:.02em; background:#8a8a8a; }
+  .m.doc .ic.pdf { background:#d9252f; } .m.doc .ic.doc { background:#2b6fd6; } .m.doc .ic.xls { background:#1d8a4a; } .m.doc .ic.ppt { background:#d9642b; } .m.doc .ic.zip { background:#7b5ea7; }
+  .m.doc .fn { min-width:0; }
+  .m.doc .fn b { display:block; font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .m.doc .fn span { display:block; font-size:12px; color:var(--muted); margin-top:2px; }
+  .m.doc .cap { padding:6px 8px 0; white-space:pre-wrap; }
+  .m.doc .meta { padding:0 8px; }
+  .m.doc .acts { display:flex; border-top:1px solid var(--line); margin:6px -4px 0; }
+  .m.doc .acts button { flex:1; background:none; border:0; color:var(--gold); font:inherit; font-weight:600; font-size:13.5px; padding:10px 0; cursor:pointer; }
+  .m.doc .acts button + button { border-left:1px solid var(--line); }
+  .m.doc .acts button:hover { background:rgba(240,163,47,.08); }
+  .m.doc .acts button:disabled { color:var(--faint); cursor:wait; }
+  .lightbox iframe { width:min(1000px,100%); height:100%; border:0; border-radius:8px; background:#fff; }
+  .lightbox.doc { cursor:default; }
   .lightbox { position:fixed; inset:0; z-index:1000; background:rgba(13,9,7,.92); display:flex; align-items:center; justify-content:center; padding:48px 16px 16px; cursor:zoom-out; }
   .lightbox[hidden] { display:none; }
   .lightbox img { max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; box-shadow:0 30px 80px rgba(0,0,0,.6); }
@@ -437,6 +457,7 @@
   <a class="btn sm dl" id="lbdl" download onclick="event.stopPropagation()">Download</a>
   <button class="btn sm x" onclick="closeLightbox()" aria-label="Close">✕</button>
   <img id="lbimg" alt="">
+  <iframe id="lbdoc" title="Document" hidden></iframe>
 </div>
 
 <dialog id="dlg">
@@ -802,8 +823,68 @@ function locationBubble(m) {
     + `<div class="info"><b>📍 ${esc(title)}</b><span>${esc(sub)}</span>${l.description ? `<span>${esc(l.description)}</span>` : ""}<em>Open in Google Maps ↗</em></div></a>`
     + `<div class="meta"><span>${esc(fmtTime(m.timestamp))}</span>${tick}</div></div>`;
 }
+/** The blob URL for a message's file, fetched once and shared. */
+const mediaFetches = new Map();
+function mediaBlobUrl(id) {
+  const have = mediaUrls.get(id);
+  if (have && have !== "loading" && have !== "error") return Promise.resolve(have);
+  if (!mediaFetches.has(id)) mediaFetches.set(id,
+    fetch(`/api/admin/lines/${encodeURIComponent(currentLine)}/media/${id}`, { headers: { Authorization: "Bearer " + TOKEN } })
+      .then(r => r.ok ? r.blob() : Promise.reject(new Error("Could not load the file (" + r.status + ")")))
+      .then(b => { const u = URL.createObjectURL(b); mediaUrls.set(id, u); return u; })
+      .finally(() => mediaFetches.delete(id)));
+  return mediaFetches.get(id);
+}
+const DOC_KIND = [[/pdf/, "PDF", "pdf"], [/msword|wordprocessing|opendocument\.text|rtf/, "DOC", "doc"], [/excel|spreadsheet|csv/, "XLS", "xls"], [/powerpoint|presentation/, "PPT", "ppt"], [/zip|rar|7z|compressed|tar/, "ZIP", "zip"]];
+function docKind(m) {
+  const mt = m.mime_type || "";
+  for (const [re, label, cls] of DOC_KIND) if (re.test(mt)) return { label, cls };
+  const ext = ((m.filename || "").split(".").pop() || "").toUpperCase();
+  return { label: ext && ext.length <= 4 && ext !== (m.filename || "").toUpperCase() ? ext : "FILE", cls: "" };
+}
+function fmtSize(n) {
+  if (!n) return "";
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return Math.round(n / 1024) + " kB";
+  return (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + " MB";
+}
+function docBubble(m) {
+  const out = m.direction === "out", meta = m.meta || {}, k = docKind(m);
+  const name = m.filename || (meta.title ? meta.title + "." + k.label.toLowerCase() : "Document");
+  const facts = [meta.pages ? meta.pages + (meta.pages === 1 ? " page" : " pages") : "", k.label, fmtSize(meta.size)].filter(Boolean).join(" • ");
+  const preview = meta.thumb ? `<div class="pv"><img src="data:image/jpeg;base64,${meta.thumb}" alt=""></div>` : "";
+  const cap = m.text && m.text !== m.filename ? `<div class="cap">${esc(m.text)}</div>` : "";
+  const tick = out ? (m.status === "read" ? '<span class="tick read">✓✓</span>' : m.status === "delivered" ? '<span class="tick">✓✓</span>' : '<span class="tick">✓</span>') : "";
+  const canView = /pdf|^image\/|^text\//.test(m.mime_type || "");
+  const acts = m.has_file
+    ? `<div class="acts">${canView ? `<button onclick="viewDoc(${m.id}, this)">View</button>` : ""}<button onclick="saveDoc(${m.id}, this)">Save as…</button></div>`
+    : `<div class="acts"><button disabled>File not available</button></div>`;
+  return `<div class="m doc ${out ? "out" : "in"}">${preview}<div class="file"><div class="ic ${k.cls}">${esc(k.label)}</div><div class="fn"><b title="${esc(name)}">${esc(name)}</b><span>${esc(facts)}</span></div></div>${cap}<div class="meta"><span>${esc(fmtTime(m.timestamp))}</span>${tick}</div>${acts}</div>`;
+}
+async function withFile(id, btn, fn) {
+  const label = btn.textContent; btn.disabled = true; btn.textContent = "Loading…";
+  try { fn(await mediaBlobUrl(id)); } catch (e) { alert(e.message); }
+  finally { btn.disabled = false; btn.textContent = label; }
+}
+function viewDoc(id, btn) {
+  withFile(id, btn, (url) => {
+    const m = lineMsgs.find(x => x.id === id);
+    if (/^image\//.test(m?.mime_type || "")) { mediaUrls.set(id, url); openLightbox(id); return; }
+    $("lbimg").hidden = true; $("lbdoc").hidden = false; $("lbdoc").src = url;
+    $("lbdl").href = url; $("lbdl").download = m?.filename || "document";
+    $("lightbox").classList.add("doc"); $("lightbox").hidden = false;
+  });
+}
+function saveDoc(id, btn) {
+  withFile(id, btn, (url) => {
+    const m = lineMsgs.find(x => x.id === id);
+    const a = document.createElement("a"); a.href = url; a.download = m?.filename || "document";
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+}
 function lineBubble(m) {
   if (m.type === "location" && m.location) return locationBubble(m);
+  if (m.type === "document") return docBubble(m);
   const visual = m.type === "image" || m.type === "sticker" || m.type === "video";
   if (!m.has_file || !(visual || m.type === "audio" || m.type === "document")) return bubble(m);
   const url = lineMedia(m.id), ready = url !== "loading" && url !== "error";
@@ -835,11 +916,15 @@ function drawLineThread(jump = false, keepScroll = false) {
 function openLightbox(id) {
   const url = mediaUrls.get(id), m = lineMsgs.find(x => x.id === id);
   if (!url || url === "loading" || url === "error") return;
+  $("lbdoc").hidden = true; $("lbimg").hidden = false; $("lightbox").classList.remove("doc");
   $("lbimg").src = url;
   $("lbdl").href = url; $("lbdl").download = (m?.filename) || `photo-${id}.${(m?.mime_type || "image/jpeg").split("/")[1] || "jpg"}`;
   $("lightbox").hidden = false;
 }
-function closeLightbox() { $("lightbox").hidden = true; $("lbimg").removeAttribute("src"); }
+function closeLightbox() {
+  $("lightbox").hidden = true; $("lightbox").classList.remove("doc");
+  $("lbimg").removeAttribute("src"); $("lbdoc").removeAttribute("src"); $("lbdoc").hidden = true;
+}
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("lightbox").hidden) closeLightbox(); });
 
 async function sendLineReply() {

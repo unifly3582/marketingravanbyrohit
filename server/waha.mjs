@@ -87,6 +87,24 @@ export function locationOf(p) {
   };
 }
 
+/**
+ * What WhatsApp tells us about a document: size, page count and its own small
+ * first-page preview. Read from the raw message GOWS forwards in `_data`.
+ */
+export function docMeta(p) {
+  const m = p._data?.Message ?? p._data?.message ?? {};
+  const d = m.documentMessage ?? m.documentWithCaptionMessage?.message?.documentMessage;
+  if (!d) return null;
+  const thumb = d.JPEGThumbnail ?? d.jpegThumbnail;
+  const out = {
+    size: Number(d.fileLength) || null,
+    pages: Number(d.pageCount) || null,
+    title: typeof d.title === "string" ? d.title : null,
+    thumb: typeof thumb === "string" && thumb.length < 200_000 && /^[A-Za-z0-9+/=]+$/.test(thumb) ? thumb : null,
+  };
+  return Object.values(out).some((v) => v != null) ? out : null;
+}
+
 const ACK = { "-1": "failed", 0: "pending", 1: "sent", 2: "delivered", 3: "read", 4: "read" };
 
 async function upsertLine(session, me, status) {
@@ -140,6 +158,7 @@ export async function storeMessage(session, p, me = null) {
     filename: p.media?.filename ?? null,
     media_url: mediaPath(p.media?.url),
     location: loc,
+    meta: docMeta(p),
     status: direction === "out" ? (ACK[p.ack] ?? "sent") : null,
     source: p.source === "api" ? "dashboard" : direction === "out" ? "phone" : null,
     wa_timestamp: at,
@@ -214,7 +233,7 @@ export async function lineThread(line, chatId) {
     messages: rows.map((m) => ({
       id: m.id, direction: m.direction, type: m.type, text: m.body, status: m.status,
       source: m.source, filename: m.filename, timestamp: m.wa_timestamp,
-      mime_type: m.mime_type, has_file: !!m.media_url, location: m.location ?? null,
+      mime_type: m.mime_type, has_file: !!m.media_url, location: m.location ?? null, meta: m.meta ?? null,
     })),
   };
 }
