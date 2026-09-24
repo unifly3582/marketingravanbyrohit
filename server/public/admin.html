@@ -377,7 +377,9 @@
         </div>
         <div class="thread">
           <div class="head" id="lhead" hidden></div>
-          <div class="nochat" id="lnochat"><span class="eyebrow">Linked numbers</span><b>Pick a conversation</b><span>Chats on numbers linked at waha.marketingravan.com show up here as they arrive. The AI does not reply on these numbers.</span></div>
+          <div class="bar handoff" id="lhandoff" hidden></div>
+          <div class="bar modebar" id="lmode" hidden></div>
+          <div class="nochat" id="lnochat"><span class="eyebrow">Linked numbers</span><b>Pick a conversation</b><span>Chats on numbers linked at waha.marketingravan.com show up here as they arrive. The AI replies only in chats where you switch it on.</span></div>
           <div class="msgs" id="lmsgs" hidden></div>
           <div class="compose" id="lcompose" hidden>
             <textarea id="lreply" rows="1" placeholder="Reply from this number…" title="Enter to send, Shift+Enter for a new line" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendLineReply();}"></textarea>
@@ -783,6 +785,7 @@ function drawLineChats() {
       <div class="when">${esc(fmtListTime(c.last_message_at))}</div>
       <div class="prev">${c.last_direction==='out' ? '<span class="faint">You: </span>' : ''}${esc((c.last_message_text||"").replace(/\s+/g," ").slice(0,60))}</div>
       ${c.unread ? `<div class="badge">${c.unread}</div>` : "<div></div>"}
+      ${c.needs_human || c.ai_enabled ? `<div class="flags">${c.needs_human ? '<span class="pill bad">needs you</span>' : ""}${c.ai_enabled ? '<span class="pill ok">AI</span>' : ""}</div>` : ""}
     </div>`).join("") : `<div class="empty">No chats yet. New messages to this number appear here.</div>`;
   const total = lineChats.reduce((n, c) => n + (c.unread || 0), 0);
   $("lineUnread").hidden = !total; $("lineUnread").textContent = total;
@@ -791,6 +794,7 @@ async function openLineChat(id) { currentLineChat = id; $("lchat").classList.add
 function closeLineChat() {
   currentLineChat = null; $("lchat").classList.remove("open");
   $("lnochat").hidden = false; $("lhead").hidden = true; $("lmsgs").hidden = true; $("lcompose").hidden = true;
+  $("lhandoff").hidden = true; $("lmode").hidden = true;
   drawLineChats();
 }
 async function loadLineThread(jump = false) {
@@ -801,8 +805,21 @@ async function loadLineThread(jump = false) {
   const c = r.chat || { chat_id: id };
   $("lnochat").hidden = true; $("lhead").hidden = false; $("lmsgs").hidden = false; $("lcompose").hidden = false;
   $("lhead").innerHTML = `<button class="btn sm back" onclick="closeLineChat()">←</button>${avatar({ contact_name: c.contact_name, phone10: c.phone || id })}
-    <div class="who"><b>${esc(chatTitle(c))}</b><span>${c.phone ? "+" + esc(c.phone) : esc(id)} · on ${esc(lineLabel(lines.find(l => l.id === line) || { id: line }))}</span></div>`;
-  lineMsgs = (r.messages || []).map(m => ({ ...m, source: m.source === "phone" ? "phone-echo" : m.source }));
+    <div class="who"><b>${esc(chatTitle(c))}</b><span>${c.phone ? "+" + esc(c.phone) : esc(id)} · on ${esc(lineLabel(lines.find(l => l.id === line) || { id: line }))}</span></div>
+    <span class="sp"></span>
+    ${c.ai_enabled
+      ? `<button class="btn sm" onclick="setLineAi(false)" title="Stop the AI replying in this chat">🙋<span class="lbl"> Take over</span></button>`
+      : `<button class="btn sm primary" onclick="setLineAi(true)" title="Let the AI answer this customer from the playbook">🤖<span class="lbl"> Turn AI on</span></button>`}`;
+  const hb = $("lhandoff");
+  hb.hidden = !c.needs_human;
+  if (c.needs_human) hb.innerHTML = `<b>Needs you</b><span>${esc(c.handoff_reason || "")}</span><span class="muted">${esc(fmtTime(c.handoff_at))}</span><span class="sp"></span><button class="btn sm" onclick="resolveLine()">Mark handled</button>`;
+  const mb = $("lmode");
+  mb.hidden = !(c.ai_enabled || c.ai_paused_reason);
+  mb.className = "bar modebar" + (c.ai_enabled ? "" : " human");
+  mb.innerHTML = c.ai_enabled
+    ? `<span>🤖</span><span><b>AI is replying in this chat</b> from the Marketing Ravan playbook. Replying yourself pauses it.</span>`
+    : `<span>⏸</span><span><b>AI paused</b> — ${esc(c.ai_paused_reason || "")}.</span><span class="sp"></span><button class="btn sm" onclick="setLineAi(true)">Hand back to AI</button>`;
+  lineMsgs = (r.messages || []).map(m => ({ ...m, source: m.source === "phone" ? "phone-echo" : m.source === "ai" ? "agent" : m.source }));
   drawLineThread(jump);
   const lc = lineChats.find(x => x.chat_id === id); if (lc && lc.unread) { lc.unread = 0; drawLineChats(); }
 }
@@ -957,6 +974,21 @@ function closeLightbox() {
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("lightbox").hidden) closeLightbox(); });
 
+async function setLineAi(enabled) {
+  if (!currentLineChat) return;
+  if (enabled && !confirm("Let the AI reply to this customer from the Marketing Ravan playbook? It stops as soon as you reply yourself.")) return;
+  try {
+    await api(`/api/admin/lines/${encodeURIComponent(currentLine)}/ai`, { method: "POST", body: JSON.stringify({ chat: currentLineChat, enabled }) });
+    await loadLines();
+  } catch (e) { alert(e.message); }
+}
+async function resolveLine() {
+  // Handled = the flag goes away; the AI stays as it is.
+  try {
+    await api(`/api/admin/lines/${encodeURIComponent(currentLine)}/resolve`, { method: "POST", body: JSON.stringify({ chat: currentLineChat }) });
+    await loadLines();
+  } catch (e) { alert(e.message); }
+}
 async function sendLineReply() {
   const text = $("lreply").value.trim();
   if (!text || !currentLineChat) return;

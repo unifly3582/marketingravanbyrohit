@@ -20,7 +20,7 @@ import { engineCatalog, defaultEngineId, engineFor, ENGINE_IDS } from "./agent/e
 import { modelCatalog, modelInfo, demoModel, productionModel, MODELS } from "./agent/models.mjs";
 import { embed, EMBED_DIMS, searchPlaybook } from "./agent/tools.mjs";
 import * as voice from "./voice/index.mjs";
-import { webhookTokenOk as wahaTokenOk, ingestWaha, listLines, listLineChats, lineThread, sendFromLine, lineMedia } from "./waha.mjs";
+import { webhookTokenOk as wahaTokenOk, ingestWaha, listLines, listLineChats, lineThread, sendFromLine, lineMedia, setLineChatAi } from "./waha.mjs";
 
 const dir = dirname(fileURLToPath(import.meta.url));
 
@@ -865,8 +865,8 @@ app.post("/api/admin/offers", admin, wrap(async (req, res) => {
 // ---------------- linked numbers (WAHA) ----------------
 //
 // Numbers linked at waha.marketingravan.com post every message here; the
-// dashboard shows them under "Linked numbers". Viewing and manual replies
-// only — the agent does not answer on these numbers.
+// dashboard shows them under "Linked numbers", with manual replies and an
+// opt-in AI per chat (line-agent.mjs).
 
 app.post("/api/webhooks/waha", (req, res) => {
   if (!wahaTokenOk(req)) {
@@ -897,6 +897,21 @@ app.get("/api/admin/lines/:line/media/:id", admin, wrap(async (req, res) => {
   if (!m) return res.status(404).json({ error: "no file" });
   res.set({ "Content-Type": m.mime, "Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff" });
   res.send(Buffer.from(await m.res.arrayBuffer()));
+}));
+
+app.post("/api/admin/lines/:line/ai", admin, wrap(async (req, res) => {
+  const chat = String(req.body?.chat ?? "");
+  if (!chat) return res.status(400).json({ error: "chat required" });
+  const row = await setLineChatAi(req.params.line, chat, !!req.body?.enabled);
+  if (!row) return res.status(404).json({ error: "no such chat" });
+  res.json({ ok: true, ai_enabled: row.ai_enabled });
+}));
+
+app.post("/api/admin/lines/:line/resolve", admin, wrap(async (req, res) => {
+  const chat = String(req.body?.chat ?? "");
+  if (!chat) return res.status(400).json({ error: "chat required" });
+  unwrap(await sb.from("line_chats").update({ needs_human: false }).eq("line_id", req.params.line).eq("chat_id", chat), "resolve line chat");
+  res.json({ ok: true });
 }));
 
 app.post("/api/admin/lines/:line/send", admin, wrap(async (req, res) => {

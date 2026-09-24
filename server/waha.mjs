@@ -4,11 +4,13 @@
 // Deliberately separate from wa.mjs and the conversations/messages tables:
 // those are the BSP inbox, keyed on the customer's phone10 alone, and the
 // agent answers them. A linked number is someone's own WhatsApp, so a
-// customer can talk to several of them, and nothing here replies on its own.
+// customer can talk to several of them. The AI answers only chats a person
+// switched on (see line-agent.mjs).
 //
 // Env: WAHA_URL (e.g. http://127.0.0.1:3300), WAHA_API_KEY, and
 // WAHA_WEBHOOK_TOKEN — the shared secret WAHA sends in X-Webhook-Token.
 import { sb, unwrap } from "./db.mjs";
+import { isAiEcho, scheduleReply } from "./line-agent.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 const wahaUrl = () => String(env("WAHA_URL", "http://127.0.0.1:3300")).replace(/\/+$/, "");
@@ -164,6 +166,9 @@ export async function storeMessage(session, p, me = null) {
     console.log("waha unsupported message", kind);
   }
   const direction = p.fromMe ? "out" : "in";
+  const source = direction === "in" ? null
+    : p.source === "api" ? (isAiEcho(chatId, p.id) ? "ai" : "dashboard")
+    : "phone";
   const at = p.timestamp ? new Date(p.timestamp * 1000).toISOString() : new Date().toISOString();
   const phone = await phoneFor(session, chatId, p._data);
   const name = direction === "in" ? (p._data?.Info?.PushName || p._data?.notifyName || null) : null;
@@ -189,16 +194,27 @@ export async function storeMessage(session, p, me = null) {
     location: loc,
     meta: poll ? { poll, votes: {} } : docMeta(p),
     status: direction === "out" ? (ACK[p.ack] ?? "sent") : null,
-    source: p.source === "api" ? "dashboard" : direction === "out" ? "phone" : null,
+    source,
     wa_timestamp: at,
   });
   if (error?.code === "23505") return null; // a redelivery of a message we already have
   if (error) throw new Error(`line message: ${error.message}`);
 
-  unwrap(await sb.rpc("touch_line_chat", {
+  const touched = unwrap(await sb.rpc("touch_line_chat", {
     p_line: session, p_chat: chatId, p_phone: phone, p_name: name,
     p_text: text || `Unsupported message: ${unsupported}`, p_direction: direction, p_at: at, p_bump_unread: direction === "in",
   }), "touch_line_chat");
+
+  if (direction === "in" && touched?.ai_enabled) scheduleReply(session, chatId);
+  // A person answered (dashboard or phone): they own the chat now. The AI
+  // pauses and the needs-a-person flag is cleared.
+  if (direction === "out" && source !== "ai" && (touched?.ai_enabled || touched?.needs_human)) {
+    await sb.from("line_chats").update({
+      ai_enabled: false,
+      ai_paused_reason: touched.ai_enabled ? (source === "phone" ? "You replied from the phone" : "You replied from the dashboard") : touched.ai_paused_reason,
+      needs_human: false,
+    }).eq("id", touched.id);
+  }
   return { chatId, direction };
 }
 
@@ -314,6 +330,20 @@ export async function lineMedia(line, messageId) {
   const res = await fetch(`${wahaUrl()}${row.media_url}`, { headers: { "X-Api-Key": env("WAHA_API_KEY", "") } });
   if (!res.ok) return null;
   return { res, mime: row.mime_type || res.headers.get("content-type") || "application/octet-stream" };
+}
+
+/** Switch AI replies on or off for one chat. Switching on clears any pause note. */
+export async function setLineChatAi(line, chatId, enabled) {
+  const patch = enabled
+    ? { ai_enabled: true, ai_paused_reason: null, needs_human: false }
+    : { ai_enabled: false, ai_paused_reason: null };
+  const row = unwrap(
+    await sb.from("line_chats").update(patch).eq("line_id", line).eq("chat_id", chatId).select().maybeSingle(),
+    "line chat ai"
+  );
+  // Switched on with the customer's message still unanswered: answer it now.
+  if (row && enabled && row.last_direction === "in") scheduleReply(line, chatId);
+  return row;
 }
 
 /**
