@@ -196,6 +196,19 @@
   .m.doc .acts button:disabled { color:var(--faint); cursor:wait; }
   .lightbox iframe { width:min(1000px,100%); height:100%; border:0; border-radius:8px; background:#fff; }
   .lightbox.doc { cursor:default; }
+  .m.poll { width:300px; max-width:100%; white-space:normal; }
+  .m.poll .q { font-weight:700; font-size:14.5px; margin-bottom:2px; }
+  .m.poll .how { font-size:12px; color:var(--muted); margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+  .m.poll .opt { margin:0 0 10px; }
+  .m.poll .opt .row { display:flex; align-items:center; gap:8px; font-size:13.5px; }
+  .m.poll .opt .row .n { margin-left:auto; font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .m.poll .opt .box { flex:none; width:16px; height:16px; border:2px solid var(--faint); border-radius:50%; }
+  .m.poll.multi .opt .box { border-radius:4px; }
+  .m.poll .opt.top .box { border-color:var(--gold); background:var(--gold); }
+  .m.poll .bar { height:5px; border-radius:999px; background:rgba(244,234,219,.1); margin:6px 0 0 24px; overflow:hidden; }
+  .m.poll .bar i { display:block; height:100%; background:var(--gold); border-radius:inherit; transition:width .3s; }
+  .m.poll .tot { border-top:1px solid var(--line); margin:4px -12px 0; padding:8px 12px 0; font-size:12.5px; color:var(--muted); text-align:center; }
+  .m.unsup { font-style:italic; color:var(--muted); }
   .lightbox { position:fixed; inset:0; z-index:1000; background:rgba(13,9,7,.92); display:flex; align-items:center; justify-content:center; padding:48px 16px 16px; cursor:zoom-out; }
   .lightbox[hidden] { display:none; }
   .lightbox img { max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; box-shadow:0 30px 80px rgba(0,0,0,.6); }
@@ -882,7 +895,24 @@ function saveDoc(id, btn) {
     document.body.appendChild(a); a.click(); a.remove();
   });
 }
+function pollBubble(m) {
+  const { poll, votes = {} } = m.meta, out = m.direction === "out";
+  const counts = Object.fromEntries(poll.options.map(o => [o, 0]));
+  for (const picked of Object.values(votes)) for (const o of picked) if (o in counts) counts[o]++;
+  const voters = Object.keys(votes).length, max = Math.max(0, ...Object.values(counts));
+  const opts = poll.options.map(o => {
+    const n = counts[o], pct = voters ? Math.round(n / voters * 100) : 0;
+    return `<div class="opt ${n && n === max ? "top" : ""}"><div class="row"><span class="box"></span><span>${esc(o)}</span><span class="n">${n}</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`;
+  }).join("");
+  const tick = out ? (m.status === "read" ? '<span class="tick read">✓✓</span>' : m.status === "delivered" ? '<span class="tick">✓✓</span>' : '<span class="tick">✓</span>') : "";
+  return `<div class="m poll ${poll.multi ? "multi" : ""} ${out ? "out" : "in"}"><div class="q">📊 ${esc(poll.name)}</div>`
+    + `<div class="how">${poll.multi ? "Select one or more" : "Select one"}</div>${opts}`
+    + `<div class="meta"><span>${esc(fmtTime(m.timestamp))}</span>${tick}</div>`
+    + `<div class="tot">${voters ? voters + (voters === 1 ? " vote" : " votes") : "No votes yet"}</div></div>`;
+}
 function lineBubble(m) {
+  if (m.type === "poll" && m.meta?.poll) return pollBubble(m);
+  if (m.type === "unsupported") return `<div class="m unsup ${m.direction === "out" ? "out" : "in"}">${esc(m.text || "Unsupported message")}<div class="meta"><span>${esc(fmtTime(m.timestamp))}</span></div></div>`;
   if (m.type === "location" && m.location) return locationBubble(m);
   if (m.type === "document") return docBubble(m);
   const visual = m.type === "image" || m.type === "sticker" || m.type === "video";

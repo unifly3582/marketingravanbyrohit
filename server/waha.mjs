@@ -52,7 +52,24 @@ async function phoneFor(session, chatId, data) {
   }
 }
 
+const NOT_CHAT = new Set([
+  "messageContextInfo", "protocolMessage", "senderKeyDistributionMessage", "pollUpdateMessage",
+  "reactionMessage", "encReactionMessage", "keepInChatMessage", "editedMessage", "deviceSentMessage",
+]);
+const rawMessage = (p) => p._data?.Message ?? p._data?.message ?? {};
+
+/** A poll's question and options, from whichever pollCreation version was used. */
+export function pollOf(p) {
+  const m = rawMessage(p);
+  const c = m.pollCreationMessageV3 ?? m.pollCreationMessageV2 ?? m.pollCreationMessage ?? m.pollCreationMessageV5 ?? m.pollCreationMessageV4;
+  if (!c?.name) return null;
+  const options = (c.options ?? []).map((o) => o?.optionName).filter((o) => typeof o === "string");
+  // selectableOptionsCount 1 = pick one; 0 = pick any number.
+  return { name: c.name, options, multi: Number(c.selectableOptionsCount) !== 1 };
+}
+
 function messageType(p) {
+  if (!p.hasMedia && pollOf(p)) return "poll";
   if (!p.hasMedia) return p.location ? "location" : p.vCards?.length ? "contacts" : "text";
   const mt = p.media?.mimetype ?? "";
   if (mt.startsWith("image/webp")) return "sticker";
@@ -131,9 +148,21 @@ export async function storeMessage(session, p, me = null) {
   if (!isPersonalChat(chatId)) return null;
   const type = messageType(p);
   const loc = locationOf(p);
+  const poll = pollOf(p);
   const text = p.body || p.media?.filename
+    || (poll ? "📊 " + poll.name : "")
     || (loc ? (loc.live ? "📍 Live location" : "📍 " + (loc.name || loc.address || "Location")) + (loc.description ? " · " + loc.description : "") : "")
     || "";
+  // Something WhatsApp sent that we do not render yet: say so, never a blank
+  // bubble. Housekeeping (key shares, edits, deletes, poll votes, reactions)
+  // is not a chat message at all and is skipped.
+  let unsupported = null;
+  if (!text && type === "text") {
+    const kind = Object.keys(rawMessage(p)).find((k) => !NOT_CHAT.has(k));
+    if (!kind) return null;
+    unsupported = kind.replace(/Message(V\d+)?$/, "").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+    console.log("waha unsupported message", kind);
+  }
   const direction = p.fromMe ? "out" : "in";
   const at = p.timestamp ? new Date(p.timestamp * 1000).toISOString() : new Date().toISOString();
   const phone = await phoneFor(session, chatId, p._data);
@@ -151,14 +180,14 @@ export async function storeMessage(session, p, me = null) {
     chat_id: chat.id,
     wa_message_id: p.id,
     direction,
-    type,
-    body: text || null,
+    type: unsupported ? "unsupported" : type,
+    body: text || (unsupported ? `Unsupported message: ${unsupported}` : null),
     has_media: !!p.hasMedia,
     mime_type: p.media?.mimetype ?? null,
     filename: p.media?.filename ?? null,
     media_url: mediaPath(p.media?.url),
     location: loc,
-    meta: docMeta(p),
+    meta: poll ? { poll, votes: {} } : docMeta(p),
     status: direction === "out" ? (ACK[p.ack] ?? "sent") : null,
     source: p.source === "api" ? "dashboard" : direction === "out" ? "phone" : null,
     wa_timestamp: at,
@@ -168,9 +197,28 @@ export async function storeMessage(session, p, me = null) {
 
   unwrap(await sb.rpc("touch_line_chat", {
     p_line: session, p_chat: chatId, p_phone: phone, p_name: name,
-    p_text: text || `[${type}]`, p_direction: direction, p_at: at, p_bump_unread: direction === "in",
+    p_text: text || `Unsupported message: ${unsupported}`, p_direction: direction, p_at: at, p_bump_unread: direction === "in",
   }), "touch_line_chat");
   return { chatId, direction };
+}
+
+/**
+ * One person's vote on a poll. WhatsApp sends their full current selection
+ * each time (empty when they take their vote back), so it replaces, not adds.
+ */
+async function storeVote(payload) {
+  const pollId = payload?.poll?.id, v = payload?.vote;
+  if (!pollId || !v) return;
+  const row = unwrap(
+    await sb.from("line_messages").select("id, meta").eq("wa_message_id", pollId).maybeSingle(),
+    "poll"
+  );
+  if (!row?.meta?.poll) return;
+  const voter = v.fromMe ? "me" : String(v.participant || v.from || "unknown");
+  const votes = { ...(row.meta.votes ?? {}) };
+  const picked = (v.selectedOptions ?? []).filter((o) => typeof o === "string");
+  if (picked.length) votes[voter] = picked; else delete votes[voter];
+  unwrap(await sb.from("line_messages").update({ meta: { ...row.meta, votes } }).eq("id", row.id), "poll vote");
 }
 
 async function storeAck(p) {
@@ -193,6 +241,10 @@ export async function ingestWaha(body) {
   if (event === "message.any" || event === "message") {
     const r = await storeMessage(session, body.payload ?? {}, body.me);
     return { kind: event, stored: !!r };
+  }
+  if (event === "poll.vote") {
+    await storeVote(body.payload);
+    return { kind: event, stored: true };
   }
   if (event === "message.ack") {
     await storeAck(body.payload ?? {});
