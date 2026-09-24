@@ -83,9 +83,19 @@ async function upsertLine(session, me, status) {
   unwrap(await sb.from("wa_lines").upsert(row, { onConflict: "id" }), "upsertLine");
 }
 
-async function storeMessage(session, p) {
-  // For our own messages the conversation partner is the recipient.
-  const chatId = p.fromMe ? p.to : p.from;
+/**
+ * The customer's chat id. Engines disagree on our own messages: GOWS puts the
+ * chat in `from` and leaves `to` empty, WEBJS/NOWEB put us in `from` and the
+ * chat in `to`. So for our messages take whichever side is not us.
+ */
+function chatIdOf(p, me) {
+  if (!p.fromMe) return p.from;
+  const mine = [me?.id, me?.lid].filter(Boolean).map((id) => digits(String(id).split("@")[0].split(":")[0]));
+  return [p.to, p.from].find((id) => id && !mine.includes(digits(String(id).split("@")[0].split(":")[0])));
+}
+
+export async function storeMessage(session, p, me = null) {
+  const chatId = chatIdOf(p, me);
   if (!isPersonalChat(chatId)) return null;
   const type = messageType(p);
   const text = p.body || p.media?.filename || (p.location ? [p.location.description, `${p.location.latitude},${p.location.longitude}`].filter(Boolean).join(" ") : "") || "";
@@ -144,7 +154,7 @@ export async function ingestWaha(body) {
   // Keep the line's phone/name fresh from any event that carries them.
   if (body.me) await upsertLine(session, body.me);
   if (event === "message.any" || event === "message") {
-    const r = await storeMessage(session, body.payload ?? {});
+    const r = await storeMessage(session, body.payload ?? {}, body.me);
     return { kind: event, stored: !!r };
   }
   if (event === "message.ack") {
