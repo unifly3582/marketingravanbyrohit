@@ -73,6 +73,20 @@ function mediaPath(url) {
   }
 }
 
+/** A location message's details, or null. A live location is marked as such. */
+export function locationOf(p) {
+  const l = p.location;
+  if (!l) return null;
+  const lat = Number(l.latitude), lng = Number(l.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const pick = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  return {
+    lat, lng, live: !!l.live,
+    name: pick(l.name), address: pick(l.address), description: pick(l.description),
+    url: /^https?:\/\//.test(l.url ?? "") ? l.url : null,
+  };
+}
+
 const ACK = { "-1": "failed", 0: "pending", 1: "sent", 2: "delivered", 3: "read", 4: "read" };
 
 async function upsertLine(session, me, status) {
@@ -98,7 +112,10 @@ export async function storeMessage(session, p, me = null) {
   const chatId = chatIdOf(p, me);
   if (!isPersonalChat(chatId)) return null;
   const type = messageType(p);
-  const text = p.body || p.media?.filename || (p.location ? [p.location.description, `${p.location.latitude},${p.location.longitude}`].filter(Boolean).join(" ") : "") || "";
+  const loc = locationOf(p);
+  const text = p.body || p.media?.filename
+    || (loc ? (loc.live ? "📍 Live location" : "📍 " + (loc.name || loc.address || "Location")) + (loc.description ? " · " + loc.description : "") : "")
+    || "";
   const direction = p.fromMe ? "out" : "in";
   const at = p.timestamp ? new Date(p.timestamp * 1000).toISOString() : new Date().toISOString();
   const phone = await phoneFor(session, chatId, p._data);
@@ -122,6 +139,7 @@ export async function storeMessage(session, p, me = null) {
     mime_type: p.media?.mimetype ?? null,
     filename: p.media?.filename ?? null,
     media_url: mediaPath(p.media?.url),
+    location: loc,
     status: direction === "out" ? (ACK[p.ack] ?? "sent") : null,
     source: p.source === "api" ? "dashboard" : direction === "out" ? "phone" : null,
     wa_timestamp: at,
@@ -196,7 +214,7 @@ export async function lineThread(line, chatId) {
     messages: rows.map((m) => ({
       id: m.id, direction: m.direction, type: m.type, text: m.body, status: m.status,
       source: m.source, filename: m.filename, timestamp: m.wa_timestamp,
-      mime_type: m.mime_type, has_file: !!m.media_url,
+      mime_type: m.mime_type, has_file: !!m.media_url, location: m.location ?? null,
     })),
   };
 }

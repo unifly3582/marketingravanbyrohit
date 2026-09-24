@@ -164,6 +164,18 @@
   .m .thumb.wait { height:180px; display:grid; place-items:center; color:var(--faint); font-size:12px; cursor:default; }
   .m video.thumb { cursor:auto; }
   .m audio { display:block; width:260px; max-width:100%; }
+  .m.loc { padding:4px 4px 6px; width:280px; max-width:100%; }
+  .m.loc a.card { display:block; color:inherit; text-decoration:none; border-radius:10px; overflow:hidden; background:rgba(244,234,219,.05); }
+  .m.loc .map { position:relative; height:150px; }
+  .m.loc .map iframe { width:100%; height:100%; border:0; pointer-events:none; display:block; filter:saturate(.85); }
+  .m.loc .map .live { position:absolute; top:8px; left:8px; background:#1faa59; color:#fff; font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; display:flex; align-items:center; gap:5px; }
+  .m.loc .map .live i { width:7px; height:7px; border-radius:50%; background:#fff; animation:livepulse 1.4s infinite; }
+  @keyframes livepulse { 50% { opacity:.25; } }
+  .m.loc .info { padding:8px 10px 2px; white-space:normal; }
+  .m.loc .info b { display:block; font-size:13.5px; }
+  .m.loc .info span { display:block; font-size:12px; color:var(--muted); }
+  .m.loc .info em { display:block; font-style:normal; font-size:12px; color:var(--gold); margin-top:4px; }
+  .m.loc .meta { padding:0 8px; }
   .lightbox { position:fixed; inset:0; z-index:1000; background:rgba(13,9,7,.92); display:flex; align-items:center; justify-content:center; padding:48px 16px 16px; cursor:zoom-out; }
   .lightbox[hidden] { display:none; }
   .lightbox img { max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; box-shadow:0 30px 80px rgba(0,0,0,.6); }
@@ -775,7 +787,23 @@ function lineMedia(id) {
     .finally(() => drawLineThread(false, true));
   return "loading";
 }
+function locationBubble(m) {
+  const l = m.location, out = m.direction === "out";
+  const ll = `${l.lat},${l.lng}`, d = 0.004;
+  const map = `https://www.openstreetmap.org/export/embed.html?bbox=${l.lng - d},${l.lat - d},${l.lng + d},${l.lat + d}&layer=mapnik&marker=${ll}`;
+  const open = l.url || `https://www.google.com/maps/search/?api=1&query=${ll}`;
+  const title = l.live ? "Live location" : (l.name || l.address || "Location");
+  const sub = l.live
+    ? `Shared at ${fmtTime(m.timestamp)} · last position we received`
+    : (l.name && l.address ? l.address : `${l.lat.toFixed(5)}, ${l.lng.toFixed(5)}`);
+  const tick = out ? (m.status === "read" ? '<span class="tick read">✓✓</span>' : m.status === "delivered" ? '<span class="tick">✓✓</span>' : '<span class="tick">✓</span>') : "";
+  return `<div class="m loc ${out ? "out" : "in"}"><a class="card" href="${esc(open)}" target="_blank" rel="noopener noreferrer" title="Open in Google Maps">`
+    + `<div class="map"><iframe src="${esc(map)}" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>${l.live ? '<span class="live"><i></i>LIVE</span>' : ""}</div>`
+    + `<div class="info"><b>📍 ${esc(title)}</b><span>${esc(sub)}</span>${l.description ? `<span>${esc(l.description)}</span>` : ""}<em>Open in Google Maps ↗</em></div></a>`
+    + `<div class="meta"><span>${esc(fmtTime(m.timestamp))}</span>${tick}</div></div>`;
+}
 function lineBubble(m) {
+  if (m.type === "location" && m.location) return locationBubble(m);
   const visual = m.type === "image" || m.type === "sticker" || m.type === "video";
   if (!m.has_file || !(visual || m.type === "audio" || m.type === "document")) return bubble(m);
   const url = lineMedia(m.id), ready = url !== "loading" && url !== "error";
