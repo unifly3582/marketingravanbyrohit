@@ -209,11 +209,21 @@ export async function storeMessage(session, p, me = null) {
 async function storeVote(payload) {
   const pollId = payload?.poll?.id, v = payload?.vote;
   if (!pollId || !v) return;
-  const row = unwrap(
-    await sb.from("line_messages").select("id, meta").eq("wa_message_id", pollId).maybeSingle(),
+  // The vote names the poll as fromMe_chat_ID, but its chat half can be the
+  // phone JID while the poll was stored under the lid (or the reverse). The
+  // WhatsApp message ID — the third part — is the same either way.
+  const waId = String(pollId).split("_")[2];
+  if (!waId) return;
+  const rows = unwrap(
+    await sb.from("line_messages").select("id, meta, wa_message_id").eq("type", "poll")
+      .like("wa_message_id", `%\\_${waId}`).limit(2),
     "poll"
   );
-  if (!row?.meta?.poll) return;
+  const row = rows.find((r) => r.wa_message_id.split("_")[2] === waId);
+  if (!row?.meta?.poll) {
+    console.warn("waha vote for unknown poll", pollId);
+    return;
+  }
   const voter = v.fromMe ? "me" : String(v.participant || v.from || "unknown");
   const votes = { ...(row.meta.votes ?? {}) };
   const picked = (v.selectedOptions ?? []).filter((o) => typeof o === "string");
